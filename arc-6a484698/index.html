@@ -4,15 +4,15 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Arc | Simple Websites for Everett Businesses</title>
-  <meta name="description" content="Arc creates simple, bold websites for local businesses seeking more calls, quote requests, trust, and a better mobile presence." />
-  <meta name="theme-color" content="#1565D8" />
+  <title>Arc | Websites for Local Businesses</title>
+  <meta name="description" content="Simple, bold, clean websites for local businesses seeking more calls, quote requests, trust, and a better mobile site." />
+  <meta name="theme-color" content="#0066FF" />
   <meta name="color-scheme" content="light dark" />
   <meta name="format-detection" content="telephone=yes" />
   <meta name="robots" content="index,follow" />
   <meta name="referrer" content="strict-origin-when-cross-origin" />
-  <meta property="og:title" content="Arc | Simple Websites for Everett Businesses" />
-  <meta property="og:description" content="Arc creates simple, bold websites for local businesses seeking more calls, quote requests, trust, and a better mobile presence." />
+  <meta property="og:title" content="Arc | Websites for Local Businesses" />
+  <meta property="og:description" content="Simple, bold, clean websites for local businesses seeking more calls, quote requests, trust, and a better mobile site." />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Arc" />
   <meta name="author" content="Arc" />
@@ -23,11 +23,11 @@
   <style>
     :root {
       --bg: #FFFFFF;
-      --surface: #F2F5F9;
+      --surface: #F3F4F6;
       --ink: #080908;
-      --muted: #5B6470;
-      --primary: #1565D8;
-      --accent: #1565D8;
+      --muted: #5F6368;
+      --primary: #0066FF;
+      --accent: #0066FF;
       --primary-button-text: #FFFFFF;
       --line: color-mix(in srgb, var(--ink) 13%, transparent);
       --line-soft: color-mix(in srgb, var(--ink) 8%, transparent);
@@ -103,7 +103,7 @@
     a { color: inherit; text-decoration: none; }
     button, input, textarea, select { font: inherit; }
     img, video, picture, svg { display: block; max-width: 100%; }
-    h1, h2, h3, p { overflow-wrap: anywhere; }
+    h1, h2, h3, p { overflow-wrap: break-word; word-break: normal; hyphens: none; }
     section { scroll-margin-top: 106px; }
     [hidden] { display: none !important; }
     .wrap { width: min(var(--max), calc(100% - 36px)); margin-inline: auto; }
@@ -133,8 +133,11 @@
       box-shadow: var(--shadow-sm);
     }
     .brand { display: inline-flex; align-items: center; gap: 11px; min-width: 0; width: max-content; font-weight: 900; letter-spacing: -.03em; }
-    .brand-mark { width: 38px; height: 38px; flex: 0 0 auto; display: grid; place-items: center; overflow: hidden; border-radius: 12px; color: var(--bg); background: var(--ink); font-size: 11px; letter-spacing: .08em; }
-    .brand-mark img, .brand-mark svg { width: 72%; height: 72%; object-fit: contain; }
+    .brand-mark { width: 42px; height: 42px; flex: 0 0 auto; display: grid; place-items: center; overflow: hidden; border-radius: 12px; color: var(--bg); background: var(--ink); font-size: 11px; letter-spacing: .08em; }
+    .brand-mark:empty, .brand-mark.is-empty { display: none; }
+    .brand-mark:has(img), .brand-mark:has(picture) { background: transparent; border-radius: 10px; }
+    .brand-mark img, .brand-mark picture, .brand-mark svg { width: 100%; height: 100%; object-fit: contain; }
+    .brand-name { min-width: 0; }
     .brand-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .nav-links { display: flex; justify-content: center; align-items: center; gap: 2px; }
     .nav-links a { padding: 10px 12px; border-radius: 999px; color: var(--muted); font-size: 13px; font-weight: 750; transition: .25s ease; }
@@ -236,7 +239,8 @@
     .section-title { max-width: 780px; margin-bottom: 0; font-size: clamp(43px, 5.5vw, 76px); line-height: .98; letter-spacing: -.055em; }
     .section-intro { max-width: 560px; margin: 0; color: var(--muted); font-size: clamp(16px, 1.5vw, 19px); line-height: 1.55; }
 
-    .services-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: clamp(13px, 1.7vw, 22px); }
+    .services-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: clamp(13px, 1.7vw, 22px); }
+    .services-grid > *, .process-grid > *, .proof-grid > * { min-width: 0; }
     .service-card { position: relative; grid-column: span 4; min-height: 310px; overflow: hidden; padding: clamp(24px, 3vw, 36px); border: 1px solid var(--line); border-radius: var(--radius-lg); background: color-mix(in srgb, var(--surface) 84%, transparent); transition: transform .35s var(--ease), box-shadow .35s var(--ease), border-color .35s ease; }
     .service-card:first-child { grid-column: span 7; color: #fff; background: var(--ink); }
     .service-card:nth-child(2) { grid-column: span 5; }
@@ -298,7 +302,7 @@
     .about-quote small { display: block; margin-bottom: 10px; opacity: .62; font-size: 10px; letter-spacing: .16em; text-transform: uppercase; font-weight: 850; }
     .about-quote strong { display: block; max-width: 600px; font-family: var(--heading); font-size: clamp(30px, 4vw, 54px); line-height: 1; letter-spacing: -.045em; }
 
-    .process-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 14px; counter-reset: steps; }
+    .process-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 14px; counter-reset: steps; }
     .process-card { position: relative; grid-column: span 4; min-height: 270px; padding: 28px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); counter-increment: steps; }
     .process-card::before { content: "0" counter(steps); display: block; margin-bottom: 54px; color: var(--primary); font-size: 12px; font-weight: 900; letter-spacing: .08em; }
     .process-card h3 { margin-bottom: 10px; font-size: clamp(25px, 2.7vw, 36px); line-height: 1; letter-spacing: -.04em; }
@@ -306,7 +310,7 @@
     .process-card:nth-child(2) { transform: translateY(24px); }
     .process-card:nth-child(3) { transform: translateY(48px); }
 
-    .proof-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 16px; }
+    .proof-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 16px; }
     .proof-card { grid-column: span 4; min-height: 300px; display: flex; flex-direction: column; justify-content: space-between; padding: 28px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: color-mix(in srgb, var(--surface) 84%, transparent); }
     .proof-card blockquote { margin: 0; font-family: var(--heading); font-size: clamp(24px, 2.6vw, 34px); line-height: 1.15; letter-spacing: -.035em; }
     .proof-card footer { margin-top: 32px; color: var(--muted); font-size: 13px; font-weight: 700; }
@@ -441,6 +445,34 @@
       .footer-links { justify-content: flex-start; }
       .mobile-conversion-bar { display: flex; }
       body { padding-bottom: 76px; }
+
+      /* v5.2 mobile layout hardening */
+      .brand { min-width: 0; }
+      .brand-mark { width: 44px; height: 44px; }
+      .brand-name { max-width: min(46vw, 190px); }
+      .hero-visual { min-height: 520px; margin-top: 4px; }
+      .visual-stage { position: relative; display: flex; flex-direction: column; padding: 20px; overflow: hidden; }
+      .visual-top { position: relative; inset: auto; z-index: 5; padding-bottom: 14px; }
+      .priority-card { position: relative; z-index: 6; top: auto; left: auto; width: 100%; margin: 18px 0 0; transform: none; }
+      .visual-content { position: relative; z-index: 5; inset: auto; margin-top: auto; padding-top: 110px; }
+      .visual-content > small { margin-bottom: 9px; }
+      .visual-content h2 { max-width: 100%; margin-bottom: 14px; font-size: clamp(36px, 10.2vw, 46px); line-height: .96; }
+      .visual-chips { gap: 6px; }
+      .visual-chip { padding: 7px 9px; font-size: 10px; }
+      .proof-pill { position: relative; z-index: 7; left: auto; right: auto; bottom: auto; width: 100%; margin: 14px 0 0; }
+      .hero-media-slot:not(:empty)::after { background: linear-gradient(180deg, color-mix(in srgb, #000 18%, transparent), color-mix(in srgb, #000 62%, transparent)); }
+
+      .services-grid, .process-grid, .proof-grid { grid-template-columns: minmax(0, 1fr); }
+      .services-grid > *, .process-grid > *, .proof-grid > *,
+      .service-card, .service-card:first-child, .service-card:nth-child(2), .service-card:nth-child(4), .service-card:nth-child(5),
+      .process-card, .proof-card { grid-column: 1 / -1 !important; width: 100%; min-width: 0; transform: none !important; }
+      .process-card h3, .process-card p, .proof-card blockquote, .proof-card footer,
+      .service-card h3, .service-card p { max-width: 100%; overflow-wrap: break-word; word-break: normal; }
+      .process-card { min-height: auto; padding: 24px 20px; }
+      .process-card::before { margin-bottom: 28px; }
+      .proof-card { min-height: auto; padding: 24px 20px; }
+      .proof-card blockquote { font-size: clamp(23px, 7vw, 31px); }
+      .section-title { overflow-wrap: break-word; word-break: normal; }
     }
 
     @media print {
@@ -456,14 +488,14 @@
     }
   </style>
 </head>
-<body data-style="bold" data-template-version="5.1-final-production">
+<body data-style="bold" data-template-version="5.2-mobile-production">
   <a class="skip-link" href="#main">Skip to content</a>
   <div class="progress" aria-hidden="true"><span id="scrollProgress"></span></div>
   <div class="grain" aria-hidden="true"></div>
 
   <header class="nav-shell" aria-label="Primary navigation">
     <a class="brand" href="#top" aria-label="Arc home">
-      <span class="brand-mark" aria-hidden="true"><span>ARC</span></span>
+      <span class="brand-mark" aria-hidden="true"></span>
       <span class="brand-name">Arc</span>
     </a>
     <nav class="nav-links" id="navLinks">
@@ -485,45 +517,45 @@
       <div class="wrap hero-grid">
         <div class="hero-copy-wrap reveal">
           <p class="eyebrow">Websites for local businesses</p>
-          <h1>Simple websites built to win more business.</h1>
-          <p class="hero-copy">Arc helps Everett business owners look trusted, work better on mobile, and turn visits into calls and quote requests.</p>
+          <h1>A better website built to grow your business</h1>
+          <p class="hero-copy">Simple, bold, mobile-friendly websites designed to drive more calls and quote requests.</p>
           <div class="hero-actions">
             <a class="btn btn-primary" data-cta href="#contact"><span>Request a Quote</span><span class="arrow">↗</span></a>
             <a class="btn btn-secondary" data-cta href="#services"><span>Explore Services</span></a>
           </div>
-          <div class="trust-line dynamic-slot" data-optional><span>Simple</span><span>Bold</span><span>Mobile-ready</span></div>
+          <div class="trust-line dynamic-slot" data-optional>Built for local business owners</div>
         </div>
 
         <div class="hero-visual reveal" aria-label="Arc visual showcase">
           <div class="visual-stage">
             <div class="hero-media-slot dynamic-slot"></div>
-            <div class="visual-top"><strong>Website Agency</strong><span>Everett</span></div>
+            <div class="visual-top"><strong>Agency</strong><span>Everett</span></div>
             <div class="visual-content">
               <small>Focused on what matters</small>
-              <h2>Clear design. Stronger first impressions.</h2>
+              <h2>Simple websites. Stronger first impressions.</h2>
               <div class="visual-chips dynamic-slot" data-optional><span>More calls</span><span>Quote requests</span><span>Better mobile site</span></div>
             </div>
           </div>
           <div class="priority-card" data-optional>
             <small>Priority service</small>
-            <strong class="dynamic-slot">Simple Websites</strong>
+            <strong class="dynamic-slot">Simple websites</strong>
           </div>
-          <div class="proof-pill dynamic-slot" data-optional>Designed around the actions that matter to local businesses.</div>
+          <div class="proof-pill dynamic-slot" data-optional>Designed to help local businesses look more trusted.</div>
         </div>
       </div>
     </section>
 
     <div class="ticker" data-optional aria-hidden="true">
-      <div class="ticker-track dynamic-slot"><span>Simple websites</span><span>Bold design</span><span>Clear calls to action</span><span>Mobile-first experience</span><span>Simple websites</span><span>Bold design</span><span>Clear calls to action</span><span>Mobile-first experience</span></div>
+      <div class="ticker-track dynamic-slot"><span>Simple</span><span>Bold</span><span>Clean</span><span>Simple</span><span>Bold</span><span>Clean</span></div>
     </div>
 
     <section class="section" id="services">
       <div class="wrap">
         <header class="section-header reveal">
-          <div><p class="kicker">Services</p><h2 class="section-title">Websites focused on business goals</h2></div>
-          <p class="section-intro">A clear online presence that helps customers understand your business and take action.</p>
+          <div><p class="kicker">Services</p><h2 class="section-title">Websites built around your goals</h2></div>
+          <p class="section-intro">Focused website solutions for local businesses.</p>
         </header>
-        <div class="services-grid dynamic-slot reveal-group"><article><h3>Simple Websites</h3><p>Focused pages with clear messaging, bold presentation, and an easy path to contact.</p></article><article><h3>Mobile Experience</h3><p>A cleaner experience for customers browsing and reaching out from their phones.</p></article><article><h3>Conversion Focus</h3><p>Strategic calls to action built around calls and quote requests.</p></article></div>
+        <div class="services-grid dynamic-slot reveal-group"><article><h3>Simple Websites</h3><p>Clean, mobile-friendly websites designed to support calls and quote requests.</p></article></div>
       </div>
     </section>
 
@@ -531,10 +563,10 @@
       <div class="wrap why-grid">
         <div class="why-sticky reveal">
           <p class="kicker">Why choose us</p>
-          <h2 class="section-title">Built for clarity and action</h2>
-          <p class="section-intro">Every choice supports a stronger first impression and an easier customer journey.</p>
+          <h2 class="section-title">Why Arc</h2>
+          <p class="section-intro">A focused approach to building a stronger online presence.</p>
         </div>
-        <div class="why-list dynamic-slot reveal-group"><article><h3>Simple by design</h3><p>No unnecessary clutter—just the information customers need.</p></article><article><h3>Bold presentation</h3><p>Confident black, white, and blue visuals help the business stand out.</p></article><article><h3>Goal focused</h3><p>Pages guide visitors toward calling or requesting a quote.</p></article></div>
+        <div class="why-list dynamic-slot reveal-group"><article><h3>Mobile focused</h3><p>A better experience on mobile devices.</p></article><article><h3>Clear and simple</h3><p>Clean presentation without unnecessary complexity.</p></article><article><h3>Built for action</h3><p>Focused on calls and quote requests.</p></article></div>
       </div>
     </div>
 
@@ -542,15 +574,15 @@
       <div class="wrap about-grid">
         <article class="about-panel reveal">
           <p class="kicker">About</p>
-          <h2>A practical website partner for local business</h2>
-          <p>Arc creates straightforward websites for Everett business owners who want to look more trusted, improve their mobile presence, and generate more customer inquiries.</p>
+          <h2>Websites for local business growth</h2>
+          <p>Arc sells simple websites to local businesses in Everett, helping owners look more trusted and create a better mobile experience.</p>
           <div class="stats-grid dynamic-slot" data-optional></div>
         </article>
         <div class="about-visual reveal">
           <div class="about-media-slot dynamic-slot"></div>
           <div class="about-quote" data-optional>
             <small>About Arc</small>
-            <strong>A better website should make the next step obvious.</strong>
+            <strong>Simple, bold, clean websites for local businesses.</strong>
           </div>
         </div>
       </div>
@@ -559,28 +591,28 @@
     <section class="section" id="process">
       <div class="wrap">
         <header class="section-header reveal">
-          <div><p class="kicker">How it works</p><h2 class="section-title">A straightforward path to a stronger website</h2></div>
-          <p class="section-intro">The work stays focused on your business, customers, and desired actions.</p>
+          <div><p class="kicker">How it works</p><h2 class="section-title">A straightforward website experience</h2></div>
+          <p class="section-intro">Focused on clarity, trust, and mobile performance.</p>
         </header>
-        <div class="process-grid dynamic-slot reveal-group"><article><span>01</span><h3>Define</h3><p>Clarify the audience, offer, and website goals.</p></article><article><span>02</span><h3>Shape</h3><p>Organize clear messaging and a bold visual direction.</p></article><article><span>03</span><h3>Refine</h3><p>Create a polished, mobile-friendly customer journey.</p></article></div>
+        <div class="process-grid dynamic-slot reveal-group"></div>
       </div>
     </section>
 
     <section class="section optional-proof" id="proof" data-optional-section>
       <div class="wrap">
         <header class="section-header reveal">
-          <div><p class="kicker">Proof</p><h2 class="section-title dynamic-slot">Designed around what your business needs</h2></div>
-          <p class="section-intro dynamic-slot">The website strategy centers on trust, clarity, mobile usability, and customer action.</p>
+          <div><p class="kicker">Proof</p><h2 class="section-title dynamic-slot">Built around practical business outcomes</h2></div>
+          <p class="section-intro dynamic-slot">More calls, more quote requests, and a more trusted online presence.</p>
         </header>
-        <div class="proof-grid dynamic-slot reveal-group"><article><h3>More calls</h3><p>Make contact options easy to find.</p></article><article><h3>More quote requests</h3><p>Give interested visitors a clear next step.</p></article><article><h3>More trust</h3><p>Present the business with clarity and confidence.</p></article></div>
+        <div class="proof-grid dynamic-slot reveal-group"></div>
       </div>
     </section>
 
     <section class="section optional-gallery" id="gallery" data-optional-section>
       <div class="wrap">
         <header class="section-header reveal">
-          <div><p class="kicker">Selected work</p><h2 class="section-title dynamic-slot">Simple, bold, clean</h2></div>
-          <p class="section-intro dynamic-slot">A focused visual direction using black, white, and blue.</p>
+          <div><p class="kicker">Selected work</p><h2 class="section-title dynamic-slot">Website Work</h2></div>
+          <p class="section-intro dynamic-slot">Explore simple, bold, clean website design.</p>
         </header>
         <div class="gallery-grid dynamic-slot reveal-group"></div>
       </div>
@@ -590,10 +622,10 @@
       <div class="wrap faq-grid">
         <div class="faq-copy reveal">
           <p class="kicker">Questions</p>
-          <h2 class="section-title">Common questions</h2>
-          <p class="section-intro">What to know about Arc websites.</p>
+          <h2 class="section-title">Frequently Asked Questions</h2>
+          <p class="section-intro">Helpful information about Arc websites.</p>
         </div>
-        <div class="faq-list dynamic-slot reveal"><details><summary>What does Arc create?</summary><p>Arc creates simple websites for local businesses.</p></details><details><summary>What goals can the website support?</summary><p>The site can focus on more calls, quote requests, trust, and a better mobile experience.</p></details><details><summary>Who are the websites for?</summary><p>They are designed for business owners who need a clear, professional online presence.</p></details></div>
+        <div class="faq-list dynamic-slot reveal"></div>
       </div>
     </section>
 
@@ -602,14 +634,14 @@
         <div class="wrap contact-grid">
           <div>
             <p class="kicker">Next step</p>
-            <h2>Ready for a website that works harder?</h2>
-            <p>Tell Arc what your business needs and start a conversation about a simple, bold website.</p>
+            <h2>Ready for a better website?</h2>
+            <p>Tell Arc what your local business needs from its website.</p>
             <div class="contact-actions">
               <a class="btn btn-primary" data-cta href="#contact"><span>Request a Quote</span><span class="arrow">↗</span></a>
               <a class="btn btn-secondary" data-cta href="#services"><span>Explore Services</span></a>
             </div>
-            <div class="contact-proof dynamic-slot" data-optional>Designed around the actions that matter to local businesses.</div>
-            <div class="contact-action-slot dynamic-slot"><a href="#contact">Request a Quote</a></div>
+            <div class="contact-proof dynamic-slot" data-optional>Designed to help local businesses look more trusted.</div>
+            <div class="contact-action-slot dynamic-slot"><a href='#contact'>Request a Quote</a></div>
           </div>
           <div class="contact-details dynamic-slot" data-optional><span>Everett</span></div>
         </div>
@@ -625,7 +657,7 @@
   <footer class="footer">
     <div class="wrap footer-row">
       <div class="footer-brand"><strong>Arc</strong><span>Simple websites for local businesses.</span></div>
-      <nav class="footer-links dynamic-slot" aria-label="Footer navigation"><a href="#services">Services</a><a href="#contact">Contact</a></nav>
+      <nav class="footer-links dynamic-slot" aria-label="Footer navigation"><a href='#services'>Services</a><a href='#contact'>Contact</a></nav>
     </div>
   </footer>
 
@@ -638,6 +670,22 @@
       const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
       const clean = value => String(value || '').replace(TOKEN, '').replace(/\s+/g, ' ').trim();
       const businessName = clean(document.querySelector('.brand-name')?.textContent) || 'Business';
+      const brandMark = document.querySelector('.brand-mark');
+      if (brandMark) {
+        const logoImage = brandMark.querySelector('img,picture,svg');
+        if (!logoImage) {
+          brandMark.textContent = '';
+          brandMark.classList.add('is-empty');
+        } else {
+          brandMark.classList.remove('is-empty');
+          const image = brandMark.querySelector('img');
+          if (image) {
+            image.alt = image.alt || `${businessName} logo`;
+            image.loading = 'eager';
+            image.decoding = 'async';
+          }
+        }
+      }
       const meaningful = element => {
         if (!element) return false;
         if (clean(element.textContent)) return true;
@@ -681,6 +729,9 @@
       document.querySelectorAll('.dynamic-slot').forEach(slot => {
         slot.innerHTML = slot.innerHTML.replace(TOKEN, '');
       });
+      document.querySelectorAll('.services-grid > *').forEach(card => card.classList.add('service-card'));
+      document.querySelectorAll('.process-grid > *').forEach(card => card.classList.add('process-card'));
+      document.querySelectorAll('.proof-grid > *').forEach(card => card.classList.add('proof-card'));
       document.querySelectorAll('a[target="_blank"]').forEach(link => link.setAttribute('rel','noopener noreferrer'));
       document.querySelectorAll('img').forEach((image, index) => {
         if (!image.hasAttribute('decoding')) image.setAttribute('decoding','async');

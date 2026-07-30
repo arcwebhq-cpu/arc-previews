@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- ARC Client Master Template v9.2 | conversion editorial system | exact 58-key production contract -->
+<!-- ARC Client Master Template v9.3 | conversion editorial system | exact 58-key production contract -->
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -790,7 +790,8 @@
       position:relative;
       grid-column:span 6;
       margin:0;
-      min-height:390px;
+      height:clamp(380px,34vw,480px);
+      min-height:0;
       overflow:hidden;
       border:1px solid rgba(255,255,255,.14);
       border-radius:var(--radius-sm);
@@ -799,8 +800,7 @@
     .gallery-grid>*:first-child{grid-column:span 8}
     .gallery-grid>*:nth-child(2){grid-column:span 4}
     .gallery-grid>*:last-child:nth-child(odd){
-      grid-column:span 12;
-      min-height:480px
+      grid-column:span 12
     }
     .gallery-grid img,
     .gallery-grid picture,
@@ -1165,7 +1165,8 @@
       .gallery-grid>*:first-child,
       .gallery-grid>*:nth-child(2){
         grid-column:auto;
-        min-height:290px
+        height:310px;
+        min-height:0
       }
       .contact-actions form{grid-template-columns:1fr;padding:16px}
       .contact-actions form>*{grid-column:1}

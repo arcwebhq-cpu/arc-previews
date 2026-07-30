@@ -1,20 +1,21 @@
 <!DOCTYPE html>
-<!-- ARC Client Master Template v9.4 | conversion editorial system | exact 58-key production contract -->
+<!-- ARC Client Master Template v9.5 | conversion editorial system | exact 58-key production contract -->
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Summit Ridge Roofing | Roofing in Everett, WA</title>
-  <meta name="description" content="A polished ARC roofing showcase for repair, replacement, and inspection services in Everett, Washington.">
+  <meta name="description" content="A polished roofing website for repair, replacement, and inspection services across Everett, Washington.">
   <meta name="theme-color" content="#FFFDF7">
   <meta name="robots" content="index,follow">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta property="og:title" content="Summit Ridge Roofing | Roofing in Everett, WA">
-  <meta property="og:description" content="A polished ARC roofing showcase for repair, replacement, and inspection services in Everett, Washington.">
+  <meta property="og:description" content="A polished roofing website for repair, replacement, and inspection services across Everett, Washington.">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Summit Ridge Roofing">
   <meta name="twitter:card" content="summary_large_image">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' https: data:; img-src 'self' https: data: blob:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; font-src 'self' https: data:; connect-src 'none'; object-src 'none'; base-uri 'none'; frame-src 'none'; form-action 'self' mailto: tel:; upgrade-insecure-requests">
+  <script>document.documentElement.classList.add("js");</script>
   <style>
     :root{
       --bg:#FFFDF7;
@@ -185,11 +186,19 @@
       width:46px;
       height:46px;
       overflow:hidden;
+      padding:5px;
       border:1px solid color-mix(in srgb,var(--ink) 12%,transparent);
       border-radius:11px;
-      background:#0a0a0a
+      background:linear-gradient(145deg,color-mix(in srgb,var(--surface) 88%,#fff),color-mix(in srgb,var(--bg) 84%,var(--surface)));
+      box-shadow:0 8px 24px color-mix(in srgb,var(--ink) 8%,transparent);
+      transition:width .25s var(--ease),background .25s,border-color .25s
     }
     .brand-logo:empty{display:none}
+    .brand-logo.is-wide{
+      width:82px;
+      padding:3px 6px;
+      border-color:color-mix(in srgb,var(--ink) 8%,transparent)
+    }
     .brand-logo img,
     .brand-logo picture,
     .brand-logo svg{
@@ -330,8 +339,9 @@
       overflow:hidden;
       padding:clamp(116px,12vw,166px) 0 clamp(58px,7vw,92px);
       background:
-        radial-gradient(circle at 8% 18%,var(--brand-wash),transparent 32%),
-        radial-gradient(circle at 92% 74%,var(--accent-wash),transparent 31%),
+        radial-gradient(circle at 7% 14%,color-mix(in srgb,var(--brand) 15%,transparent),transparent 31%),
+        radial-gradient(circle at 94% 18%,color-mix(in srgb,var(--accent) 11%,transparent),transparent 27%),
+        radial-gradient(circle at 72% 88%,color-mix(in srgb,var(--brand) 8%,transparent),transparent 30%),
         linear-gradient(180deg,var(--bg),color-mix(in srgb,var(--surface) 28%,var(--bg)))
     }
     .hero:after{
@@ -403,7 +413,7 @@
       border:1px solid var(--line);
       border-radius:var(--radius);
       background:var(--paper);
-      box-shadow:var(--shadow);
+      box-shadow:var(--shadow),0 0 0 9px color-mix(in srgb,var(--surface) 28%,transparent);
       isolation:isolate
     }
     .hero-visual:before{
@@ -520,6 +530,7 @@
       background:#0a0a0a
     }
     .fallback-logo:empty{display:none}
+    .fallback-logo.is-wide{width:110px}
     .fallback-logo img,
     .fallback-logo picture,
     .fallback-logo svg{
@@ -617,25 +628,40 @@
         linear-gradient(180deg,var(--bg),color-mix(in srgb,var(--surface) 36%,var(--bg)))
     }
     .service-grid{
+      counter-reset:service;
       display:grid;
       grid-template-columns:repeat(3,1fr);
-      border-top:1px solid var(--line);
-      border-left:1px solid var(--line)
+      gap:14px
     }
     .service-grid>*{
-      min-height:305px;
+      counter-increment:service;
+      position:relative;
+      min-height:255px;
       display:flex;
       flex-direction:column;
       padding:clamp(25px,3vw,36px);
-      border-right:1px solid var(--line);
-      border-bottom:1px solid var(--line);
-      background:color-mix(in srgb,var(--surface) 30%,transparent);
+      overflow:hidden;
+      border:1px solid var(--line);
+      border-radius:var(--radius-sm);
+      background:
+        radial-gradient(circle at 100% 0,color-mix(in srgb,var(--brand) 10%,transparent),transparent 38%),
+        linear-gradient(145deg,color-mix(in srgb,var(--surface) 58%,var(--bg)),var(--bg));
+      box-shadow:0 12px 34px color-mix(in srgb,var(--ink) 4%,transparent);
       transition:transform .25s var(--ease),background .25s,color .25s,box-shadow .25s
+    }
+    .service-grid>*:before{
+      content:"0" counter(service);
+      display:block;
+      margin-bottom:clamp(44px,5vw,68px);
+      color:var(--brand);
+      font-size:11px;
+      font-weight:900;
+      letter-spacing:.14em
     }
     .service-grid>*:hover{
       z-index:2;
       transform:translateY(-4px);
-      background:linear-gradient(150deg,var(--paper),color-mix(in srgb,var(--brand) 8%,var(--paper)));
+      background:linear-gradient(150deg,var(--paper),color-mix(in srgb,var(--brand) 10%,var(--paper)));
       box-shadow:var(--shadow-soft)
     }
     .service-grid h3{
@@ -674,12 +700,30 @@
     .why-grid{
       display:grid;
       grid-template-columns:repeat(3,1fr);
-      gap:clamp(26px,4vw,54px)
+      gap:14px
     }
     .why-grid>*{
-      min-height:220px;
-      padding-top:24px;
-      border-top:1px solid rgba(255,255,255,.24)
+      position:relative;
+      min-height:215px;
+      padding:clamp(25px,3vw,34px);
+      border:1px solid rgba(255,255,255,.15);
+      border-radius:var(--radius-sm);
+      background:linear-gradient(145deg,rgba(255,255,255,.075),rgba(255,255,255,.025));
+      box-shadow:0 20px 55px rgba(0,0,0,.12)
+    }
+    .why-grid>*:before{
+      content:"✓";
+      display:grid;
+      place-items:center;
+      width:30px;
+      height:30px;
+      margin-bottom:42px;
+      border:1px solid color-mix(in srgb,var(--brand) 55%,transparent);
+      border-radius:50%;
+      color:var(--brand);
+      background:color-mix(in srgb,var(--brand) 10%,transparent);
+      font-size:12px;
+      font-weight:900
     }
     .why-grid h3{
       margin-bottom:13px;
@@ -780,17 +824,16 @@
       counter-reset:step;
       display:grid;
       grid-template-columns:repeat(3,1fr);
-      gap:0;
-      border-top:1px solid var(--line);
-      border-left:1px solid var(--line)
+      gap:14px
     }
     .process-list>*{
       counter-increment:step;
-      min-height:270px;
+      min-height:250px;
       padding:clamp(25px,3vw,34px);
-      border-right:1px solid var(--line);
-      border-bottom:1px solid var(--line);
-      background:var(--bg)
+      border:1px solid var(--line);
+      border-radius:var(--radius-sm);
+      background:linear-gradient(145deg,var(--bg),color-mix(in srgb,var(--brand) 6%,var(--bg)));
+      box-shadow:0 14px 42px color-mix(in srgb,var(--ink) 5%,transparent)
     }
     .process-list>*:before{
       content:"0" counter(step);
@@ -857,26 +900,26 @@
     .visual-direction figcaption{
       position:absolute;
       z-index:2;
-      right:16px;
+      right:auto;
       bottom:16px;
       left:16px;
       display:flex;
       align-items:center;
-      justify-content:space-between;
+      justify-content:flex-start;
       gap:16px;
       padding:12px 14px;
-      border:1px solid rgba(255,255,255,.2);
-      border-radius:10px;
+      border:1px solid rgba(255,255,255,.18);
+      border-radius:999px;
       color:rgba(255,255,255,.88);
       background:rgba(8,8,9,.62);
       backdrop-filter:blur(14px);
-      font-size:10px;
+      font-size:9px;
       font-weight:800;
       letter-spacing:.06em;
       text-transform:uppercase
     }
     .visual-direction figcaption a{
-      color:rgba(255,255,255,.62);
+      color:rgba(255,255,255,.7);
       text-decoration:underline;
       text-underline-offset:3px
     }
@@ -1150,6 +1193,27 @@
       opacity:1;
       transform:none
     }
+    .service-grid.reveal>*,
+    .why-grid.reveal>*,
+    .process-list.reveal>*{
+      transition:transform .62s var(--ease),opacity .62s var(--ease),box-shadow .25s
+    }
+    .service-grid.reveal:not(.is-visible)>*,
+    .why-grid.reveal:not(.is-visible)>*,
+    .process-list.reveal:not(.is-visible)>*{
+      opacity:0;
+      transform:translateY(20px) scale(.985)
+    }
+    .service-grid.reveal.is-visible>*:nth-child(2),
+    .why-grid.reveal.is-visible>*:nth-child(2),
+    .process-list.reveal.is-visible>*:nth-child(2){transition-delay:.07s}
+    .service-grid.reveal.is-visible>*:nth-child(3),
+    .why-grid.reveal.is-visible>*:nth-child(3),
+    .process-list.reveal.is-visible>*:nth-child(3){transition-delay:.14s}
+    .js .hero-copy-column{animation:arcHeroCopy .72s var(--ease) both}
+    .js .hero-visual{animation:arcHeroVisual .86s var(--ease) .08s both}
+    @keyframes arcHeroCopy{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
+    @keyframes arcHeroVisual{from{opacity:0;transform:translateY(28px) scale(.98)}to{opacity:1;transform:none}}
 
     @media(max-width:1000px){
       .nav{grid-template-columns:1fr auto}
@@ -1192,6 +1256,7 @@
       .nav{min-height:64px}
       .brand-location{display:none}
       .brand-logo{width:39px;height:39px}
+      .brand-logo.is-wide{width:68px}
       .hero{padding:94px 0 46px}
       .hero-grid{gap:28px}
       .hero h1{font-size:clamp(40px,11.8vw,54px);line-height:.96}
@@ -1214,7 +1279,9 @@
       .service-grid>*:last-child:nth-child(odd),
       .why-grid>*:last-child:nth-child(odd){grid-column:auto}
       .service-grid>*{min-height:205px;padding:23px}
+      .service-grid>*:before{margin-bottom:34px}
       .why-grid>*{min-height:0}
+      .why-grid>*:before{margin-bottom:28px}
       .stats{grid-template-columns:1fr}
       .about-grid{gap:32px}
       .about-media{min-height:330px}
@@ -1250,7 +1317,8 @@
         animation-duration:.01ms!important;
         transition-duration:.01ms!important
       }
-      .reveal{opacity:1;transform:none}
+      .reveal,.reveal>*{opacity:1;transform:none}
+      .js .hero-copy-column,.js .hero-visual{animation:none}
     }
   </style>
   <script>
@@ -1302,7 +1370,7 @@
         <div class="hero-copy-column">
           <p class="eyebrow">Roofing in Everett, Washington</p>
           <h1>A stronger roof starts with clarity.</h1>
-          <p class="hero-copy">Roof repair, replacement, and inspection presented through a clear estimate and a straightforward plan.</p>
+          <p class="hero-copy">Roof repair, replacement, and inspection with a clear estimate and a straightforward plan.</p>
           <div class="hero-actions">
             <a class="btn btn-primary" href="#contact">Request Estimate <span aria-hidden="true">→</span></a>
             <a class="btn btn-secondary" href="#services">Explore Services</a>
@@ -1343,7 +1411,7 @@
         <p class="eyebrow">Services</p>
         <div class="section-head">
           <h2>Roofing services without the runaround</h2>
-          <p>Choose the right scope, understand the next step, and move forward with a clearer plan.</p>
+          <p>Choose the right scope and move forward with a clearer plan.</p>
         </div>
         <div class="service-grid"><article><h3>Roof Repair</h3><p>Focused work for leaks, storm damage, and worn roof areas.</p></article><article><h3>Roof Replacement</h3><p>A complete plan for an aging roof ready for a new system.</p></article><article><h3>Roof Inspection</h3><p>A practical review before deciding what the property needs next.</p></article></div>
       </div>
@@ -1354,7 +1422,7 @@
         <p class="eyebrow">Why choose us</p>
         <div class="section-head">
           <h2>A clearer way to plan roofing work</h2>
-          <p>Simple communication keeps the project easy to understand from estimate through completion.</p>
+          <p>Simple communication from estimate through completion.</p>
         </div>
         <div class="why-grid"><article><h3>Clear Scope</h3><p>Know what the estimate covers before work begins.</p></article><article><h3>Property Focused</h3><p>Recommendations stay centered on the roof in front of us.</p></article><article><h3>Responsive Process</h3><p>Questions and next steps remain easy to follow.</p></article></div>
       </div>
@@ -1366,7 +1434,7 @@
         <div class="about-copy">
           <p class="eyebrow">About Summit Ridge</p>
           <h2>Roofing built around the property</h2>
-          <div class="about-body">Summit Ridge Roofing helps property owners understand the condition of their roof and choose a practical next step. The process stays focused on the work, the scope, and what the property needs.</div>
+          <div class="about-body"><p>Summit Ridge Roofing helps property owners understand their roof and choose a practical next step. The process stays focused on the work, scope, and property.</p></div>
           <div class="about-quote">Start with clarity. Build from there.</div>
           <div class="stats"></div>
         </div>
@@ -1378,9 +1446,9 @@
         <p class="eyebrow">How it works</p>
         <div class="section-head">
           <h2>From first look to finished roof</h2>
-          <p>A simple three-step path keeps every project moving.</p>
+          <p>A simple path keeps every project moving.</p>
         </div>
-        <div class="process-list"><article><h3>1. Request an estimate</h3><p>Share the property and the roofing issue.</p></article><article><h3>2. Review the scope</h3><p>Understand the recommended work and next steps.</p></article><article><h3>3. Schedule the project</h3><p>Choose the right timing for the work.</p></article></div>
+        <div class="process-list"><article><h3>Request an estimate</h3><p>Share the property and roofing issue.</p></article><article><h3>Review the scope</h3><p>Understand the recommended work and next steps.</p></article><article><h3>Schedule the project</h3><p>Choose the right timing for the work.</p></article></div>
       </div>
     </section>
 
@@ -1389,7 +1457,7 @@
         <p class="eyebrow">Work</p>
         <div class="section-head">
           <h2>A closer look at the work</h2>
-          <p>Industry imagery shows the visual direction; real project photos replace it at launch.</p>
+          <p>Curated imagery sets the direction. Real project photos can replace it at launch.</p>
         </div>
         <div class="gallery-grid"></div>
       </div>
@@ -1411,9 +1479,9 @@
         <div class="faq-copy">
           <p class="eyebrow">FAQ</p>
           <h2>Roofing questions, answered</h2>
-          <p>Quick answers before you request an estimate.</p>
+          <p>Quick answers before requesting an estimate.</p>
         </div>
-        <div class="faq-list"><details><summary>How do I know whether I need repair or replacement?</summary><p>An inspection can identify whether the issue is isolated or part of broader roof wear.</p></details><details><summary>What should I include in my estimate request?</summary><p>Share the property location, the problem you noticed, and any helpful photos.</p></details><details><summary>How quickly can the work begin?</summary><p>Timing depends on the scope, materials, and current schedule. Request an estimate for the next available options.</p></details></div>
+        <div class="faq-list"><details><summary>How do I know whether I need repair or replacement?</summary><p>An inspection can identify whether the issue is isolated or part of broader roof wear.</p></details><details><summary>What should I include in my estimate request?</summary><p>Share the property location, the problem you noticed, and any helpful photos.</p></details><details><summary>How quickly can the work begin?</summary><p>Timing depends on the scope, materials, and schedule. Request an estimate for current availability.</p></details></div>
       </div>
     </section>
 
@@ -1425,7 +1493,7 @@
               <p class="eyebrow">Next step</p>
               <h2>Request your roofing estimate</h2>
               <p class="contact-body">Tell us what is happening with the roof and where the property is located.</p>
-              <div class="contact-actions"><form name="client-lead" method="POST" data-netlify="true" netlify-honeypot="bot-field" action="/?submitted=1"><input type="hidden" name="form-name" value="client-lead"><p hidden><label>Do not fill this out: <input name="bot-field"></label></p><label for="name">Name</label><input id="name" name="name" type="text" required><label for="email">Email</label><input id="email" name="email" type="email" required><label for="phone">Phone</label><input id="phone" name="phone" type="tel"><label for="project_details">Project details</label><textarea id="project_details" name="project_details" required></textarea><button type="submit">Request Estimate</button></form></div>
+              <div class="contact-actions"><form name="client-lead" method="POST" data-netlify="true" netlify-honeypot="bot-field" action="/?submitted=1"><input type="hidden" name="form-name" value="client-lead"><p hidden><label>Do not fill this out: <input name="bot-field"></label></p><div class="form-field"><label for="name">Name</label><input id="name" name="name" type="text" required></div><div class="form-field"><label for="email">Email</label><input id="email" name="email" type="email" required></div><div class="form-field"><label for="phone">Phone</label><input id="phone" name="phone" type="tel"></div><div class="form-field form-wide"><label for="project_details">Project details</label><textarea id="project_details" name="project_details" required></textarea></div><button type="submit">Request Estimate</button></form></div>
             </div>
             <div class="contact-details"><p>Everett, Washington</p></div>
           </div>
@@ -1459,6 +1527,17 @@
       const industry = (document.body.dataset.industry || "").toLowerCase();
 
       if (year) year.textContent = new Date().getFullYear();
+
+      const fitLogo = container => {
+        const image = container?.querySelector("img");
+        if (!image) return;
+        const apply = () => {
+          if (image.naturalWidth > image.naturalHeight * 1.45) container.classList.add("is-wide");
+        };
+        if (image.complete) apply();
+        else image.addEventListener("load",apply,{once:true});
+      };
+      $$(".brand-logo,.fallback-logo").forEach(fitLogo);
 
       menu?.addEventListener("click", () => {
         const open = menu.getAttribute("aria-expanded") !== "true";
@@ -1537,7 +1616,7 @@
       const mediaPresets = [
         {
           match:/roof|siding|gutter|exterior/,
-          label:"Industry imagery",
+          label:"Preview imagery",
           creditUrl:"https://unsplash.com/photos/-uvuU43FAwQ",
           images:[
             unsplash("photo-1755114203680-d39d95efa82c"),
@@ -1550,7 +1629,7 @@
         },
         {
           match:/dent|medical|clinic|health|orthodont/,
-          label:"Industry imagery",
+          label:"Preview imagery",
           creditUrl:"https://unsplash.com/photos/vVKh9xeLub4",
           images:[
             unsplash("photo-1629909615957-be38d48fbbe6"),
@@ -1563,7 +1642,7 @@
         },
         {
           match:/restaurant|food|hospitality|cafe|bakery|cater/,
-          label:"Industry imagery",
+          label:"Preview imagery",
           creditUrl:"https://unsplash.com/photos/jwPuIQTa3qE",
           images:[
             unsplash("photo-1773100699991-b7e6bf89a6a1"),
@@ -1576,7 +1655,7 @@
         },
         {
           match:/real estate|realtor|property|builder|architect/,
-          label:"Industry imagery",
+          label:"Preview imagery",
           creditUrl:"https://unsplash.com/photos/7qD-iDyrdHY",
           images:[
             unsplash("photo-1756435292384-1bf32eff7baf"),
@@ -1589,7 +1668,7 @@
         },
         {
           match:/fitness|gym|wellness|trainer|yoga/,
-          label:"Industry imagery",
+          label:"Preview imagery",
           creditUrl:"https://unsplash.com/photos/fuyulf8cNmg",
           images:[
             unsplash("photo-1758448756350-3d0eec02ba37"),
@@ -1602,7 +1681,7 @@
         },
         {
           match:/auto|car|mechanic|collision|detail/,
-          label:"Industry imagery",
+          label:"Preview imagery",
           creditUrl:"https://unsplash.com/photos/1771340012378-3c86cb649193",
           images:[
             unsplash("photo-1771340012378-3c86cb649193"),
@@ -1615,7 +1694,7 @@
         },
         {
           match:/beauty|salon|barber|spa|cosmetic/,
-          label:"Industry imagery",
+          label:"Preview imagery",
           creditUrl:"https://unsplash.com/photos/1521590832167-7bcbfaa6381f",
           images:[
             unsplash("photo-1521590832167-7bcbfaa6381f"),
@@ -1628,7 +1707,7 @@
         },
         {
           match:/software|technology|saas|consult|agency/,
-          label:"Industry imagery",
+          label:"Preview imagery",
           creditUrl:"https://unsplash.com/photos/n3DNE1aN31M",
           images:[
             unsplash("photo-1760346546767-95b89356a6bb"),
@@ -1641,7 +1720,7 @@
         },
         {
           match:/law|legal|account|finance|insurance|professional/,
-          label:"Industry imagery",
+          label:"Preview imagery",
           creditUrl:"https://unsplash.com/photos/MhqUBTxQ3Hw",
           images:[
             unsplash("photo-1775163024488-e88e4a71179f"),
@@ -1654,7 +1733,7 @@
         },
         {
           match:/.*/,
-          label:"Industry imagery",
+          label:"Preview imagery",
           creditUrl:"https://unsplash.com",
           images:[
             unsplash("photo-1497366811353-6870744d04b2"),
@@ -1713,12 +1792,12 @@
         root.classList.add("visual-direction");
         const caption=document.createElement("figcaption");
         const label=document.createElement("span");
-        label.textContent="Industry imagery · replace with real work";
+        label.textContent="Curated preview imagery";
         caption.appendChild(label);
         if(media.creditUrl){
           const credit=document.createElement("a");
           credit.href=media.creditUrl;
-          credit.textContent="Photo source";
+          credit.textContent="Image credit";
           caption.appendChild(credit);
         }
         root.appendChild(caption);
@@ -1867,7 +1946,7 @@
           "@context":"https://schema.org",
           "@type":"LocalBusiness",
           "name":"Summit Ridge Roofing",
-          "description":"A polished ARC roofing showcase for repair, replacement, and inspection services in Everett, Washington.",
+          "description":"A polished roofing website for repair, replacement, and inspection services across Everett, Washington.",
           "areaServed":"Everett, Washington"
         };
         const node = document.createElement("script");

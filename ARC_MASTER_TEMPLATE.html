@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- ARC Client Master Template v9.0 | conversion editorial system | exact 58-key production contract -->
+<!-- ARC Client Master Template v9.1 | conversion editorial system | exact 58-key production contract -->
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -1405,6 +1405,34 @@
       };
       addEventListener("scroll",onScroll,{passive:true});
       onScroll();
+
+      /*
+       * AI output is the content contract, while this template owns layout.
+       * Flatten a single redundant list/grid wrapper so generated classes can
+       * never create a nested grid, one-column cards, or oversized sections.
+       */
+      const flattenGeneratedGroup = selector => {
+        const outer = $(selector);
+        const wrapper = outer?.firstElementChild;
+        if (
+          !outer ||
+          outer.children.length !== 1 ||
+          !wrapper ||
+          !["DIV","UL","OL","NAV"].includes(wrapper.tagName) ||
+          !wrapper.children.length
+        ) return;
+        outer.replaceChildren(...wrapper.children);
+      };
+      [
+        ".ticker-track",
+        ".service-grid",
+        ".why-grid",
+        ".process-list",
+        ".gallery-grid",
+        ".proof-grid",
+        ".faq-list",
+        ".footer-links"
+      ].forEach(flattenGeneratedGroup);
 
       const markEmpty = selector => {
         $$(selector).forEach(element => {

@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- ARC Client Master Template v7.0 | conversion editorial system | exact 58-key contract -->
+<!-- ARC Client Master Template v8.0 | conversion editorial system | exact 58-key production contract -->
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -895,6 +895,75 @@
       border-color:rgba(255,255,255,.26);
       color:#fff
     }
+    .contact-actions:has(form){display:block}
+    .contact-actions form{
+      display:grid;
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:12px;
+      width:min(100%,720px);
+      margin-top:8px;
+      padding:20px;
+      border:1px solid rgba(255,255,255,.16);
+      border-radius:var(--radius-sm);
+      background:rgba(255,255,255,.055)
+    }
+    .contact-actions form>*{min-width:0}
+    .contact-actions form label{
+      display:grid;
+      gap:7px;
+      color:rgba(255,255,255,.76);
+      font-size:11px;
+      font-weight:800;
+      letter-spacing:.04em;
+      text-transform:uppercase
+    }
+    .contact-actions form label:has(textarea),
+    .contact-actions form .form-wide,
+    .contact-actions form button,
+    .contact-actions form .btn,
+    .contact-actions form [type="submit"],
+    .contact-actions form .form-status{grid-column:1/-1}
+    .contact-actions form input,
+    .contact-actions form textarea,
+    .contact-actions form select{
+      width:100%;
+      min-height:50px;
+      padding:12px 14px;
+      border:1px solid rgba(255,255,255,.22);
+      border-radius:10px;
+      outline:0;
+      color:#fff;
+      background:rgba(0,0,0,.22);
+      font:600 15px/1.4 var(--body);
+      text-transform:none
+    }
+    .contact-actions form textarea{
+      min-height:112px;
+      resize:vertical
+    }
+    .contact-actions form input::placeholder,
+    .contact-actions form textarea::placeholder{color:rgba(255,255,255,.42)}
+    .contact-actions form input:focus,
+    .contact-actions form textarea:focus,
+    .contact-actions form select:focus{
+      border-color:rgba(255,255,255,.62);
+      box-shadow:0 0 0 4px rgba(255,255,255,.08)
+    }
+    .contact-actions form [type="submit"]{
+      min-height:52px;
+      border:1px solid var(--brand);
+      border-radius:999px;
+      color:var(--button-ink);
+      background:var(--brand);
+      font-weight:850;
+      cursor:pointer
+    }
+    .form-status{
+      margin:0;
+      color:rgba(255,255,255,.72);
+      font-size:13px;
+      line-height:1.5
+    }
     .contact-details{
       display:grid;
       gap:13px;
@@ -1004,6 +1073,8 @@
         grid-column:auto;
         min-height:290px
       }
+      .contact-actions form{grid-template-columns:1fr;padding:16px}
+      .contact-actions form>*{grid-column:1}
       .footer-row{display:grid}
       .footer-links{justify-content:flex-start}
     }
@@ -1016,6 +1087,21 @@
       .reveal{opacity:1;transform:none}
     }
   </style>
+  <script>
+    (() => {
+      const raw=getComputedStyle(document.documentElement).getPropertyValue("--brand").trim();
+      const short=/^#([0-9a-f]{3})$/i.exec(raw);
+      const full=/^#([0-9a-f]{6})$/i.exec(raw);
+      const hex=full?.[1]||short?.[1].split("").map(value=>value+value).join("");
+      if(!hex)return;
+      const channels=[0,2,4].map(index=>parseInt(hex.slice(index,index+2),16)/255)
+        .map(value=>value<=.03928?value/12.92:Math.pow((value+.055)/1.055,2.4));
+      const luminance=.2126*channels[0]+.7152*channels[1]+.0722*channels[2];
+      const white=1.05/(luminance+.05);
+      const dark=(luminance+.05)/.05;
+      document.documentElement.style.setProperty("--button-ink",white>=dark?"#FFFFFF":"#0B0B0C");
+    })();
+  </script>
 </head>
 <body data-style="[[STYLE_MODE]]">
   <a class="skip" href="#content">Skip to content</a>
@@ -1272,6 +1358,29 @@
       $$('a[href^="http"]').forEach(link => {
         link.target="_blank";
         link.rel="noopener noreferrer";
+      });
+
+      const previewHost=location.hostname.endsWith(".github.io");
+      const submitted=new URLSearchParams(location.search).has("submitted");
+      $$(".contact-actions form").forEach(form => {
+        if(submitted){
+          const status=document.createElement("p");
+          status.className="form-status";
+          status.setAttribute("role","status");
+          status.textContent="Thank you — your request was sent. The team will follow up using the details you provided.";
+          form.replaceWith(status);
+          return;
+        }
+        if(previewHost){
+          const note=document.createElement("p");
+          note.className="form-status";
+          note.textContent="Preview mode — this form will send real leads after the website is launched.";
+          form.append(note);
+          form.addEventListener("submit",event=>{
+            event.preventDefault();
+            note.textContent="Preview confirmed. Live submissions will be delivered after launch.";
+          });
+        }
       });
 
       if ("IntersectionObserver" in window && !matchMedia("(prefers-reduced-motion: reduce)").matches) {

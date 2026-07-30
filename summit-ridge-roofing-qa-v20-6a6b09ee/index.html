@@ -1,28 +1,28 @@
-<!doctype html>
-<!-- ARC Client Master Template v9.3 | conversion editorial system | exact 58-key production contract -->
+<!DOCTYPE html>
+<!-- ARC Client Master Template v9.4 | conversion editorial system | exact 58-key production contract -->
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Summit Ridge Roofing QA v20 | Roofing in Everett, WA</title>
-  <meta name="description" content="Roof replacement, roof repair, storm damage inspections, emergency tarping, and gutter installation for Everett and nearby Snohomish County.">
+  <title>Summit Ridge Roofing | Roofing in Everett, WA</title>
+  <meta name="description" content="A polished ARC roofing showcase for repair, replacement, and inspection services in Everett, Washington.">
   <meta name="theme-color" content="#FFFDF7">
   <meta name="robots" content="index,follow">
   <meta name="referrer" content="strict-origin-when-cross-origin">
-  <meta property="og:title" content="Summit Ridge Roofing QA v20 | Roofing in Everett, WA">
-  <meta property="og:description" content="Roof replacement, roof repair, storm damage inspections, emergency tarping, and gutter installation for Everett and nearby Snohomish County.">
+  <meta property="og:title" content="Summit Ridge Roofing | Roofing in Everett, WA">
+  <meta property="og:description" content="A polished ARC roofing showcase for repair, replacement, and inspection services in Everett, Washington.">
   <meta property="og:type" content="website">
-  <meta property="og:site_name" content="Summit Ridge Roofing QA v20">
+  <meta property="og:site_name" content="Summit Ridge Roofing">
   <meta name="twitter:card" content="summary_large_image">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' https: data:; img-src 'self' https: data: blob:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; font-src 'self' https: data:; connect-src 'none'; object-src 'none'; base-uri 'none'; frame-src 'none'; form-action 'self' mailto: tel:; upgrade-insecure-requests">
   <style>
     :root{
       --bg:#FFFDF7;
-      --surface:#F5F1E8;
-      --ink:#10202F;
-      --muted:#52606D;
-      --brand:#102A43;
-      --accent:#E85D04;
+      --surface:#F0EBDF;
+      --ink:#111713;
+      --muted:#5A635D;
+      --brand:#19392F;
+      --accent:#C46B3E;
       --button-ink:#FFFFFF;
       --white:#fff;
       --black:#0b0b0c;
@@ -30,6 +30,8 @@
       --line-soft:color-mix(in srgb,var(--ink) 7%,transparent);
       --wash:color-mix(in srgb,var(--surface) 70%,var(--bg));
       --paper:color-mix(in srgb,var(--surface) 88%,var(--bg));
+      --brand-wash:color-mix(in srgb,var(--brand) 11%,transparent);
+      --accent-wash:color-mix(in srgb,var(--accent) 10%,transparent);
       --display:Arial,"Helvetica Neue",Helvetica,sans-serif;
       --body:Arial,"Helvetica Neue",Helvetica,sans-serif;
       --max:1200px;
@@ -325,7 +327,12 @@
       min-height:100svh;
       display:grid;
       align-items:center;
-      padding:clamp(116px,12vw,166px) 0 clamp(58px,7vw,92px)
+      overflow:hidden;
+      padding:clamp(116px,12vw,166px) 0 clamp(58px,7vw,92px);
+      background:
+        radial-gradient(circle at 8% 18%,var(--brand-wash),transparent 32%),
+        radial-gradient(circle at 92% 74%,var(--accent-wash),transparent 31%),
+        linear-gradient(180deg,var(--bg),color-mix(in srgb,var(--surface) 28%,var(--bg)))
     }
     .hero:after{
       content:"";
@@ -396,7 +403,17 @@
       border:1px solid var(--line);
       border-radius:var(--radius);
       background:var(--paper);
-      box-shadow:var(--shadow)
+      box-shadow:var(--shadow);
+      isolation:isolate
+    }
+    .hero-visual:before{
+      content:"";
+      position:absolute;
+      z-index:3;
+      inset:0;
+      border:1px solid color-mix(in srgb,#fff 22%,transparent);
+      border-radius:inherit;
+      pointer-events:none
     }
     .hero-media{
       position:absolute;
@@ -592,7 +609,13 @@
     .services,.why,.about,.process,.proof,.gallery,.faq,.contact{
       padding:var(--section) 0
     }
-    .services{background:var(--bg)}
+    .services{
+      position:relative;
+      overflow:hidden;
+      background:
+        radial-gradient(circle at 96% 10%,var(--brand-wash),transparent 27%),
+        linear-gradient(180deg,var(--bg),color-mix(in srgb,var(--surface) 36%,var(--bg)))
+    }
     .service-grid{
       display:grid;
       grid-template-columns:repeat(3,1fr);
@@ -606,11 +629,14 @@
       padding:clamp(25px,3vw,36px);
       border-right:1px solid var(--line);
       border-bottom:1px solid var(--line);
-      background:transparent;
-      transition:background .25s,color .25s
+      background:color-mix(in srgb,var(--surface) 30%,transparent);
+      transition:transform .25s var(--ease),background .25s,color .25s,box-shadow .25s
     }
     .service-grid>*:hover{
-      background:var(--paper)
+      z-index:2;
+      transform:translateY(-4px);
+      background:linear-gradient(150deg,var(--paper),color-mix(in srgb,var(--brand) 8%,var(--paper)));
+      box-shadow:var(--shadow-soft)
     }
     .service-grid h3{
       margin:0 0 15px;
@@ -632,8 +658,13 @@
     }
 
     .why{
+      position:relative;
+      overflow:hidden;
       color:#fff;
-      background:color-mix(in srgb,var(--ink) 96%,#000)
+      background:
+        radial-gradient(circle at 84% 16%,color-mix(in srgb,var(--brand) 26%,transparent),transparent 30%),
+        radial-gradient(circle at 12% 92%,color-mix(in srgb,var(--accent) 13%,transparent),transparent 34%),
+        color-mix(in srgb,var(--ink) 96%,#000)
     }
     .why .eyebrow,
     .why .section-head p{
@@ -660,6 +691,11 @@
       line-height:1.68
     }
 
+    .about{
+      background:
+        radial-gradient(circle at 5% 82%,var(--accent-wash),transparent 29%),
+        linear-gradient(180deg,var(--bg),color-mix(in srgb,var(--surface) 26%,var(--bg)))
+    }
     .about-grid{
       display:grid;
       grid-template-columns:minmax(360px,.88fr) minmax(0,1.12fr);
@@ -736,7 +772,9 @@
 
     .process{
       border-block:1px solid var(--line);
-      background:var(--wash)
+      background:
+        radial-gradient(circle at 88% 20%,var(--brand-wash),transparent 30%),
+        linear-gradient(135deg,var(--wash),color-mix(in srgb,var(--accent) 6%,var(--wash)))
     }
     .process-list{
       counter-reset:step;
@@ -774,8 +812,13 @@
     }
 
     .gallery{
+      position:relative;
+      overflow:hidden;
       color:#fff;
-      background:color-mix(in srgb,var(--ink) 96%,#000)
+      background:
+        radial-gradient(circle at 12% 8%,color-mix(in srgb,var(--brand) 24%,transparent),transparent 28%),
+        radial-gradient(circle at 94% 88%,color-mix(in srgb,var(--accent) 16%,transparent),transparent 30%),
+        color-mix(in srgb,var(--ink) 96%,#000)
     }
     .gallery .eyebrow,
     .gallery .section-head p{
@@ -855,7 +898,7 @@
       padding:clamp(26px,3.5vw,42px);
       border:1px solid var(--line);
       border-radius:var(--radius-sm);
-      background:var(--paper)
+      background:linear-gradient(145deg,var(--paper),color-mix(in srgb,var(--accent) 6%,var(--paper)))
     }
     .proof-grid blockquote{
       margin:0;
@@ -926,7 +969,10 @@
       padding:clamp(34px,6vw,78px);
       border-radius:var(--radius);
       color:#fff;
-      background:color-mix(in srgb,var(--ink) 97%,#000);
+      background:
+        radial-gradient(circle at 82% 10%,color-mix(in srgb,var(--brand) 25%,transparent),transparent 31%),
+        radial-gradient(circle at 12% 96%,color-mix(in srgb,var(--accent) 13%,transparent),transparent 32%),
+        color-mix(in srgb,var(--ink) 97%,#000);
       box-shadow:var(--shadow)
     }
     .contact-card:after{
@@ -1141,39 +1187,61 @@
       }
     }
     @media(max-width:660px){
-      :root{--section:72px}
+      :root{--section:56px}
       .wrap{width:min(100% - 28px,var(--max))}
-      .nav{min-height:70px}
+      .nav{min-height:64px}
       .brand-location{display:none}
-      .brand-logo{width:42px;height:42px}
-      .hero{padding-top:106px}
-      .hero-grid{gap:34px}
-      .hero h1{font-size:clamp(47px,14.4vw,66px)}
-      .hero-visual{min-height:480px}
-      .hero-fallback{padding:24px}
-      .fallback-logo{width:60px;height:60px}
+      .brand-logo{width:39px;height:39px}
+      .hero{padding:94px 0 46px}
+      .hero-grid{gap:28px}
+      .hero h1{font-size:clamp(40px,11.8vw,54px);line-height:.96}
+      .hero-copy{margin-top:18px;font-size:17px;line-height:1.48}
+      .hero-actions{margin-top:24px}
+      .hero-actions .btn{width:100%}
+      .trust-line{margin-top:19px}
+      .hero-visual{min-height:388px}
+      .hero-fallback{padding:20px}
+      .fallback-logo{width:54px;height:54px}
+      .fallback-main{padding:27px 0}
+      .fallback-main h2{font-size:clamp(36px,11vw,48px)}
       .fallback-bottom{display:grid}
       .hero-proof{text-align:left}
+      .ticker-track{gap:30px;padding:14px 20px}
+      .section-head{gap:12px;margin-bottom:30px}
+      .section-head h2{font-size:clamp(34px,10.5vw,48px);line-height:1}
+      .section-head p{font-size:15px;line-height:1.55}
       .service-grid,.why-grid,.proof-grid,.gallery-grid{grid-template-columns:1fr}
       .service-grid>*:last-child:nth-child(odd),
       .why-grid>*:last-child:nth-child(odd){grid-column:auto}
-      .service-grid>*{min-height:250px}
+      .service-grid>*{min-height:205px;padding:23px}
       .why-grid>*{min-height:0}
       .stats{grid-template-columns:1fr}
-      .about-media{min-height:400px}
+      .about-grid{gap:32px}
+      .about-media{min-height:330px}
+      .about-copy h2,.faq-copy h2{font-size:clamp(36px,10.5vw,48px)}
+      .about-body{font-size:16px;line-height:1.62}
+      .process-list>*{padding:23px}
+      .process-list>*:before{margin-bottom:24px}
       .gallery-grid>*,
       .gallery-grid>*:first-child,
       .gallery-grid>*:nth-child(2){
         grid-column:auto;
-        height:310px;
+        height:246px;
         min-height:0
       }
+      .visual-direction figcaption{right:10px;bottom:10px;left:10px;padding:10px;font-size:9px}
+      .faq-list summary{padding:19px 0;font-size:16px}
+      .faq-list details>*:not(summary){padding:0 26px 20px 0;line-height:1.6}
+      .contact-card{padding:26px;border-radius:16px}
+      .contact-grid{gap:32px}
+      .contact h2{font-size:clamp(39px,11.6vw,54px);line-height:.97}
+      .contact-body{font-size:16px;line-height:1.55}
       .contact-actions form{grid-template-columns:1fr;padding:16px}
       .contact-actions form>*{grid-column:1}
       .footer-row{display:grid}
       .footer-links{justify-content:flex-start}
       .mobile-cta{display:inline-flex}
-      footer{padding-bottom:102px}
+      footer{padding-bottom:86px}
       .media-disclosure{top:13px;right:13px}
     }
     @media(prefers-reduced-motion:reduce){
@@ -1201,17 +1269,17 @@
     })();
   </script>
 </head>
-<body data-style="bold-professional" data-industry="Roofing">
+<body data-style="Bold" data-industry="Roofing">
   <a class="skip" href="#content">Skip to content</a>
   <div class="progress" aria-hidden="true"><span></span></div>
 
   <header class="site-header" aria-label="Primary navigation">
     <div class="wrap nav">
-      <a class="brand" href="#top" aria-label="Summit Ridge Roofing QA v20 home">
+      <a class="brand" href="#top" aria-label="Summit Ridge Roofing home">
         <span class="brand-logo"></span>
         <span class="brand-text">
-          <span class="brand-name">Summit Ridge Roofing QA v20</span>
-          <span class="brand-location">Everett, WA</span>
+          <span class="brand-name">Summit Ridge Roofing</span>
+          <span class="brand-location">Everett, Washington</span>
         </span>
       </a>
       <nav class="nav-links" aria-label="Main menu">
@@ -1232,21 +1300,21 @@
     <section class="hero" id="top">
       <div class="wrap hero-grid">
         <div class="hero-copy-column">
-          <p class="eyebrow">Local Roofing Team Serving Everett, WA</p>
-          <h1>Clear Roofing Solutions for Your Home or Property</h1>
-          <p class="hero-copy">Get a free roof inspection and written estimate from a local team focused on clear communication and dependable residential work.</p>
+          <p class="eyebrow">Roofing in Everett, Washington</p>
+          <h1>A stronger roof starts with clarity.</h1>
+          <p class="hero-copy">Roof repair, replacement, and inspection presented through a clear estimate and a straightforward plan.</p>
           <div class="hero-actions">
             <a class="btn btn-primary" href="#contact">Request Estimate <span aria-hidden="true">→</span></a>
             <a class="btn btn-secondary" href="#services">Explore Services</a>
           </div>
-          <div class="trust-line"><p>Free roof inspection and written estimate for homeowners and property managers in Everett and nearby Snohomish County.</p></div>
+          <div class="trust-line"><span>Clear project scope</span><span>Repair and replacement</span><span>Everett service area</span></div>
         </div>
 
         <div class="hero-visual">
           <div class="hero-media"></div>
           <div class="hero-photo-caption">
             <small>Roofing</small>
-            <strong>A simpler path from inspection to written estimate.</strong>
+            <strong>Built to protect what matters.</strong>
           </div>
           <div class="hero-fallback">
             <div class="fallback-top">
@@ -1255,29 +1323,29 @@
             </div>
             <div class="fallback-main">
               <small>Roofing</small>
-              <h2>A simpler path from inspection to written estimate.</h2>
+              <h2>Built to protect what matters.</h2>
             </div>
             <div class="fallback-bottom">
-              <div class="chips"><ul><li>Roof replacement</li><li>Fast inspections</li><li>Clear written scopes</li><li>Emergency tarping</li></ul></div>
-              <div class="hero-proof">Fast inspections, clear written scopes, and a simple estimate process.</div>
+              <div class="chips"><span>Roof Repair</span><span>Replacement</span><span>Inspections</span></div>
+              <div class="hero-proof">Start with an estimate shaped around the property.</div>
             </div>
           </div>
         </div>
       </div>
     </section>
 
-    <div class="ticker" aria-label="Highlights">
-      <div class="ticker-track"><p>Roof replacement • Roof repair • Storm damage inspections • Emergency tarping • Gutter installation</p></div>
+    <div class="ticker" role="region" aria-label="Highlights">
+      <div class="ticker-track"><span>Roof repair</span><span>Roof replacement</span><span>Roof inspection</span><span>Everett service area</span></div>
     </div>
 
     <section class="services" id="services">
       <div class="wrap">
         <p class="eyebrow">Services</p>
         <div class="section-head">
-          <h2>Roofing Services Built Around Clear Next Steps</h2>
-          <p>Explore residential roofing support for replacement needs, repairs, storm concerns, emergency protection, and gutters.</p>
+          <h2>Roofing services without the runaround</h2>
+          <p>Choose the right scope, understand the next step, and move forward with a clearer plan.</p>
         </div>
-        <div class="service-grid"><div class="services-list"><article><h3>Roof Replacement</h3><p>Start with an inspection and receive a clear written scope and estimate for your replacement project.</p></article><article><h3>Roof Repair</h3><p>Address roofing concerns with an inspection focused on identifying the work your property needs.</p></article><article><h3>Storm Damage Inspections</h3><p>Have your roof inspected after storm damage and receive clear information about the proposed scope.</p></article><article><h3>Emergency Tarping</h3><p>Emergency tarping is available for roofing situations that need immediate temporary protection.</p></article><article><h3>Gutter Installation</h3><p>Add gutter installation to support your home or property's exterior drainage needs.</p></article></div></div>
+        <div class="service-grid"><article><h3>Roof Repair</h3><p>Focused work for leaks, storm damage, and worn roof areas.</p></article><article><h3>Roof Replacement</h3><p>A complete plan for an aging roof ready for a new system.</p></article><article><h3>Roof Inspection</h3><p>A practical review before deciding what the property needs next.</p></article></div>
       </div>
     </section>
 
@@ -1285,21 +1353,21 @@
       <div class="wrap">
         <p class="eyebrow">Why choose us</p>
         <div class="section-head">
-          <h2>Why Property Owners Choose a Clearer Roofing Process</h2>
-          <p>Summit Ridge Roofing QA v20 focuses on responsive inspections, straightforward written information, and dependable residential work.</p>
+          <h2>A clearer way to plan roofing work</h2>
+          <p>Simple communication keeps the project easy to understand from estimate through completion.</p>
         </div>
-        <div class="why-grid"><div class="differentiators"><article><h3>Fast Inspections</h3><p>Begin with a focused inspection of your roofing needs.</p></article><article><h3>Clear Written Scopes</h3><p>Review the proposed work in writing before moving ahead.</p></article><article><h3>Simple Estimates</h3><p>Follow an estimate process designed around clear communication and practical next steps.</p></article></div></div>
+        <div class="why-grid"><article><h3>Clear Scope</h3><p>Know what the estimate covers before work begins.</p></article><article><h3>Property Focused</h3><p>Recommendations stay centered on the roof in front of us.</p></article><article><h3>Responsive Process</h3><p>Questions and next steps remain easy to follow.</p></article></div>
       </div>
     </section>
 
     <section class="about" id="about">
       <div class="wrap about-grid">
-        <div class="about-media" data-monogram="Summit Ridge Roofing QA v20"></div>
+        <div class="about-media" data-monogram="Summit Ridge Roofing"></div>
         <div class="about-copy">
-          <p class="eyebrow">Focused on Dependable Residential Work</p>
-          <h2>Local Roofing With Clear Communication</h2>
-          <div class="about-body">Summit Ridge Roofing QA v20 is a local roofing team focused on clear communication and dependable residential work. The team serves homeowners and property managers in Everett and nearby Snohomish County with roof replacement, roof repair, storm damage inspections, emergency tarping, and gutter installation.</div>
-          <div class="about-quote"></div>
+          <p class="eyebrow">About Summit Ridge</p>
+          <h2>Roofing built around the property</h2>
+          <div class="about-body">Summit Ridge Roofing helps property owners understand the condition of their roof and choose a practical next step. The process stays focused on the work, the scope, and what the property needs.</div>
+          <div class="about-quote">Start with clarity. Build from there.</div>
           <div class="stats"></div>
         </div>
       </div>
@@ -1309,10 +1377,10 @@
       <div class="wrap">
         <p class="eyebrow">How it works</p>
         <div class="section-head">
-          <h2>A Straightforward Roofing Process</h2>
-          <p>From the initial request through the written estimate, each stage is centered on clear communication.</p>
+          <h2>From first look to finished roof</h2>
+          <p>A simple three-step path keeps every project moving.</p>
         </div>
-        <div class="process-list"><div class="process-list"><article><h3>Request an Inspection</h3><p>Share your property information, service needs, and project details.</p></article><article><h3>Review the Roof</h3><p>The process begins with an inspection focused on the roofing concern or planned replacement.</p></article><article><h3>Receive a Written Estimate</h3><p>Review a clear written scope and estimate outlining the proposed work.</p></article><article><h3>Plan the Work</h3><p>Discuss project details, permit needs, materials, and timing based on the final scope.</p></article></div></div>
+        <div class="process-list"><article><h3>1. Request an estimate</h3><p>Share the property and the roofing issue.</p></article><article><h3>2. Review the scope</h3><p>Understand the recommended work and next steps.</p></article><article><h3>3. Schedule the project</h3><p>Choose the right timing for the work.</p></article></div>
       </div>
     </section>
 
@@ -1320,8 +1388,8 @@
       <div class="wrap">
         <p class="eyebrow">Work</p>
         <div class="section-head">
-          <h2></h2>
-          <p></p>
+          <h2>A closer look at the work</h2>
+          <p>Industry imagery shows the visual direction; real project photos replace it at launch.</p>
         </div>
         <div class="gallery-grid"></div>
       </div>
@@ -1342,10 +1410,10 @@
       <div class="wrap faq-grid">
         <div class="faq-copy">
           <p class="eyebrow">FAQ</p>
-          <h2>Roofing Questions, Answered Clearly</h2>
-          <p>Review common questions about inspections, replacement planning, permits, and roofing materials.</p>
+          <h2>Roofing questions, answered</h2>
+          <p>Quick answers before you request an estimate.</p>
         </div>
-        <div class="faq-list"><div class="faq-list"><details><summary>How long does replacement take?</summary><p>Timing depends on the roof, project scope, materials, and other property-specific needs. Request an estimate to discuss timing for your project.</p></details><details><summary>Do you handle permits?</summary><p>Permit needs vary by project. Contact the team to discuss your property and clarify permit requirements within the written scope.</p></details><details><summary>Are inspections free?</summary><p>Yes. The current offer includes a free roof inspection and written estimate.</p></details><details><summary>What roofing materials do you install?</summary><p>Material options depend on the project. Request an estimate to discuss the materials appropriate for your roof and scope.</p></details></div></div>
+        <div class="faq-list"><details><summary>How do I know whether I need repair or replacement?</summary><p>An inspection can identify whether the issue is isolated or part of broader roof wear.</p></details><details><summary>What should I include in my estimate request?</summary><p>Share the property location, the problem you noticed, and any helpful photos.</p></details><details><summary>How quickly can the work begin?</summary><p>Timing depends on the scope, materials, and current schedule. Request an estimate for the next available options.</p></details></div>
       </div>
     </section>
 
@@ -1355,11 +1423,11 @@
           <div class="contact-grid">
             <div>
               <p class="eyebrow">Next step</p>
-              <h2>Request Your Free Roof Inspection and Written Estimate</h2>
-              <p class="contact-body">Tell Summit Ridge Roofing QA v20 about your roof, property, and preferred date. The team serves homeowners and property managers in Everett and nearby Snohomish County.</p>
-              <div class="contact-actions"><form name="client-lead" method="POST" data-netlify="true" netlify-honeypot="bot-field" action="/?submitted=1"><input type="hidden" name="form-name" value="client-lead"><p hidden><label>Do not fill this out: <input name="bot-field"></label></p><div><label for="name">Name</label><input id="name" name="name" type="text" autocomplete="name" required></div><div><label for="email">Email</label><input id="email" name="email" type="email" autocomplete="email" required></div><div><label for="phone">Phone</label><input id="phone" name="phone" type="tel" autocomplete="tel"></div><div><label for="service">Service</label><select id="service" name="service" required><option value="">Select a service</option><option value="Roof replacement">Roof replacement</option><option value="Roof repair">Roof repair</option><option value="Storm damage inspections">Storm damage inspections</option><option value="Emergency tarping">Emergency tarping</option><option value="Gutter installation">Gutter installation</option></select></div><div><label for="address">Address</label><input id="address" name="address" type="text" autocomplete="street-address"></div><div><label for="project_details">Project details</label><textarea id="project_details" name="project_details"></textarea></div><div><label for="preferred_date">Preferred date</label><input id="preferred_date" name="preferred_date" type="date"></div><button type="submit">Request Estimate</button></form></div>
+              <h2>Request your roofing estimate</h2>
+              <p class="contact-body">Tell us what is happening with the roof and where the property is located.</p>
+              <div class="contact-actions"><form name="client-lead" method="POST" data-netlify="true" netlify-honeypot="bot-field" action="/?submitted=1"><input type="hidden" name="form-name" value="client-lead"><p hidden><label>Do not fill this out: <input name="bot-field"></label></p><label for="name">Name</label><input id="name" name="name" type="text" required><label for="email">Email</label><input id="email" name="email" type="email" required><label for="phone">Phone</label><input id="phone" name="phone" type="tel"><label for="project_details">Project details</label><textarea id="project_details" name="project_details" required></textarea><button type="submit">Request Estimate</button></form></div>
             </div>
-            <div class="contact-details"><address><p><a href="tel:+14255550147">(425) 555-0147</a></p><p><a href="mailto:arcwebhq@gmail.com">arcwebhq@gmail.com</a></p><p>Mon–Fri, 7 AM–6 PM; emergency calls anytime</p></address></div>
+            <div class="contact-details"><p>Everett, Washington</p></div>
           </div>
         </div>
       </div>
@@ -1369,11 +1437,11 @@
   <footer>
     <div class="wrap footer-row">
       <div class="footer-copy">
-        <strong>Summit Ridge Roofing QA v20</strong>
-        <span>Clear communication and dependable residential roofing work in Everett and nearby Snohomish County.</span><br>
+        <strong>Summit Ridge Roofing</strong>
+        <span>Clear roofing decisions from estimate to completion.</span><br>
         <span>© <span id="year"></span> All rights reserved.</span>
       </div>
-      <div class="footer-links"><nav aria-label="Footer navigation"><a href="#about">About</a><a href="#services">Services</a><a href="#process">Process</a><a href="#faq">FAQ</a><a href="#contact">Contact</a></nav></div>
+      <div class="footer-links"><a href="#services">Services</a><a href="#about">About</a><a href="#process">Process</a><a href="#faq">FAQ</a><a href="#contact">Contact</a></div>
     </div>
   </footer>
   <a class="btn btn-primary mobile-cta" href="#contact">Request Estimate <span aria-hidden="true">→</span></a>
@@ -1474,7 +1542,10 @@
           images:[
             unsplash("photo-1755114203680-d39d95efa82c"),
             unsplash("photo-1635424709870-cdc6e64f0e20"),
-            unsplash("photo-1775508567497-67165c535755")
+            unsplash("photo-1775508567497-67165c535755"),
+            unsplash("photo-1504307651254-35680f356dfd"),
+            unsplash("photo-1487958449943-2429e8be8625"),
+            unsplash("photo-1600607688969-a5bfcd646154")
           ]
         },
         {
@@ -1484,7 +1555,10 @@
           images:[
             unsplash("photo-1629909615957-be38d48fbbe6"),
             unsplash("photo-1606811971618-4486d14f3f99"),
-            unsplash("photo-1588776814546-1ffcf47267a5")
+            unsplash("photo-1588776814546-1ffcf47267a5"),
+            unsplash("photo-1609840114035-3c981b782dfe"),
+            unsplash("photo-1550831107-1553da8c8464"),
+            unsplash("photo-1629909615184-74f495363b67")
           ]
         },
         {
@@ -1494,7 +1568,10 @@
           images:[
             unsplash("photo-1773100699991-b7e6bf89a6a1"),
             unsplash("photo-1517248135467-4c7edcad34c4"),
-            unsplash("photo-1414235077428-338989a2e8c0")
+            unsplash("photo-1414235077428-338989a2e8c0"),
+            unsplash("photo-1552566626-52f8b828add9"),
+            unsplash("photo-1555396273-367ea4eb4db5"),
+            unsplash("photo-1515003197210-e0cd71810b5f")
           ]
         },
         {
@@ -1504,7 +1581,10 @@
           images:[
             unsplash("photo-1756435292384-1bf32eff7baf"),
             unsplash("photo-1600585154340-be6161a56a0c"),
-            unsplash("photo-1600566753190-17f0baa2a6c3")
+            unsplash("photo-1600566753190-17f0baa2a6c3"),
+            unsplash("photo-1512917774080-9991f1c4c750"),
+            unsplash("photo-1600607687939-ce8a6c25118c"),
+            unsplash("photo-1600607688969-a5bfcd646154")
           ]
         },
         {
@@ -1514,7 +1594,10 @@
           images:[
             unsplash("photo-1758448756350-3d0eec02ba37"),
             unsplash("photo-1534438327276-14e0e8d1b80b"),
-            unsplash("photo-1571902943202-507ec2618e8f")
+            unsplash("photo-1571902943202-507ec2618e8f"),
+            unsplash("photo-1571019613454-1cb2f99b2d8b"),
+            unsplash("photo-1581009146145-b5ef050c2e1e"),
+            unsplash("photo-1517836357463-d25dfeac3438")
           ]
         },
         {
@@ -1524,7 +1607,10 @@
           images:[
             unsplash("photo-1771340012378-3c86cb649193"),
             unsplash("photo-1492144534655-ae79c964c9d7"),
-            unsplash("photo-1486262715619-67b85e0b08d3")
+            unsplash("photo-1486262715619-67b85e0b08d3"),
+            unsplash("photo-1503376780353-7e6692767b70"),
+            unsplash("photo-1625047509248-ec889cbff17f"),
+            unsplash("photo-1489824904134-891ab64532f1")
           ]
         },
         {
@@ -1534,7 +1620,10 @@
           images:[
             unsplash("photo-1521590832167-7bcbfaa6381f"),
             unsplash("photo-1560066984-138dadb4c035"),
-            unsplash("photo-1522337360788-8b13dee7a37e")
+            unsplash("photo-1522337360788-8b13dee7a37e"),
+            unsplash("photo-1562322140-8baeececf3df"),
+            unsplash("photo-1595476108010-b4d1f102b1b1"),
+            unsplash("photo-1487412912498-0447578fcca8")
           ]
         },
         {
@@ -1544,7 +1633,10 @@
           images:[
             unsplash("photo-1760346546767-95b89356a6bb"),
             unsplash("photo-1497366754035-f200968a6e72"),
-            unsplash("photo-1522071820081-009f0129c71c")
+            unsplash("photo-1522071820081-009f0129c71c"),
+            unsplash("photo-1521737711867-e3b97375f902"),
+            unsplash("photo-1531482615713-2afd69097998"),
+            unsplash("photo-1556761175-b413da4baf72")
           ]
         },
         {
@@ -1554,7 +1646,10 @@
           images:[
             unsplash("photo-1775163024488-e88e4a71179f"),
             unsplash("photo-1450101499163-c8848c66ca85"),
-            unsplash("photo-1497366811353-6870744d04b2")
+            unsplash("photo-1497366811353-6870744d04b2"),
+            unsplash("photo-1454165804606-c3d57bc86b40"),
+            unsplash("photo-1521791055366-0d553872125f"),
+            unsplash("photo-1497366216548-37526070297c")
           ]
         },
         {
@@ -1564,11 +1659,32 @@
           images:[
             unsplash("photo-1497366811353-6870744d04b2"),
             unsplash("photo-1524758631624-e2822e304c36"),
-            unsplash("photo-1497366754035-f200968a6e72")
+            unsplash("photo-1497366754035-f200968a6e72"),
+            unsplash("photo-1556761175-b413da4baf72"),
+            unsplash("photo-1497366216548-37526070297c"),
+            unsplash("photo-1521737711867-e3b97375f902")
           ]
         }
       ];
       const media = mediaPresets.find(preset => preset.match.test(industry));
+      const mediaKey = value => {
+        try {
+          const url=new URL(value,location.href);
+          return `${url.origin}${url.pathname}`;
+        } catch(error) {
+          return String(value || "").split("?")[0];
+        }
+      };
+      const usedMediaSources = new Set(
+        $$(".hero-media img,.about-media img,.gallery-grid img")
+          .map(node => mediaKey(node.currentSrc || node.getAttribute("src")))
+          .filter(Boolean)
+      );
+      const nextMedia = () => {
+        const source=media.images.find(candidate => !usedMediaSources.has(mediaKey(candidate)));
+        if(source) usedMediaSources.add(mediaKey(source));
+        return source || "";
+      };
       const disclosure = (root,label=media.label) => {
         if (!root || root.querySelector(".media-disclosure")) return;
         const badge=document.createElement("span");
@@ -1576,19 +1692,70 @@
         badge.textContent=label;
         root.appendChild(badge);
       };
+      const setResponsiveSource = (node,src) => {
+        if(!node || !src)return;
+        node.src=src;
+        if(src.includes("images.unsplash.com")){
+          node.srcset=[
+            `${src.replace("w=1800","w=720")} 720w`,
+            `${src.replace("w=1800","w=1200")} 1200w`,
+            `${src.replace("w=1800","w=1800")} 1800w`
+          ].join(",");
+          node.sizes="(max-width: 660px) 100vw, (max-width: 1000px) 90vw, 50vw";
+          node.referrerPolicy="no-referrer";
+        }else{
+          node.removeAttribute("srcset");
+          node.removeAttribute("sizes");
+        }
+      };
+      const makeVisualCaption = root => {
+        if(!root || root.querySelector("figcaption"))return;
+        root.classList.add("visual-direction");
+        const caption=document.createElement("figcaption");
+        const label=document.createElement("span");
+        label.textContent="Industry imagery · replace with real work";
+        caption.appendChild(label);
+        if(media.creditUrl){
+          const credit=document.createElement("a");
+          credit.href=media.creditUrl;
+          credit.textContent="Photo source";
+          caption.appendChild(credit);
+        }
+        root.appendChild(caption);
+      };
+      const recoverImage = (node,onFallback) => {
+        if(!node || node.dataset.arcFallbackReady==="true")return;
+        node.dataset.arcFallbackReady="true";
+        node.addEventListener("error",() => {
+          const replacement=nextMedia();
+          if(!replacement){
+            node.hidden=true;
+            return;
+          }
+          node.alt=`Curated industry visual direction for ${industry || "this business"}`;
+          setResponsiveSource(node,replacement);
+          onFallback?.();
+        });
+      };
       const image = (src,alt,lazy=true) => {
         const node=document.createElement("img");
-        node.src=src;
         node.alt=alt;
         node.decoding="async";
         if(lazy) node.loading="lazy";
+        setResponsiveSource(node,src);
+        recoverImage(node);
         return node;
       };
 
       const heroVisual = $(".hero-visual");
       const heroMedia = $(".hero-media");
+      const suppliedHeroImage=heroMedia?.querySelector("img");
+      recoverImage(suppliedHeroImage,() => {
+        heroMedia.dataset.fallbackMedia="true";
+        disclosure(heroVisual);
+      });
       if (heroMedia && !heroMedia.querySelector("img,picture,video,svg")) {
-        const node=image(media.images[0],`Curated visual direction for ${industry || "this business"}`,false);
+        const node=image(nextMedia(),`Curated visual direction for ${industry || "this business"}`,false);
         node.fetchPriority="high";
         heroMedia.replaceChildren(node);
         heroMedia.dataset.fallbackMedia="true";
@@ -1596,29 +1763,26 @@
       }
 
       const aboutMedia = $(".about-media");
+      const suppliedAboutImage=aboutMedia?.querySelector("img");
+      recoverImage(suppliedAboutImage,() => {
+        aboutMedia.dataset.fallbackMedia="true";
+        disclosure(aboutMedia);
+      });
       if (aboutMedia && !aboutMedia.querySelector("img,picture,video,svg")) {
-        aboutMedia.replaceChildren(image(media.images[1],`Industry visual direction for ${industry || "this business"}`));
+        aboutMedia.replaceChildren(image(nextMedia(),`Industry visual direction for ${industry || "this business"}`));
         aboutMedia.dataset.fallbackMedia="true";
         disclosure(aboutMedia);
       }
 
       const galleryGrid = $(".gallery-grid");
+      $$(".gallery-grid img").forEach(node => recoverImage(node,() => makeVisualCaption(node.parentElement)));
       if (galleryGrid && contentIsFake(galleryGrid)) {
-        galleryGrid.replaceChildren(...media.images.map((src,index) => {
+        const gallerySources=[nextMedia(),nextMedia(),nextMedia()].filter(Boolean);
+        galleryGrid.replaceChildren(...gallerySources.map((src,index) => {
           const figure=document.createElement("figure");
           figure.className="visual-direction";
           figure.appendChild(image(src,`Visual direction ${index+1} for ${industry || "this business"}`));
-          const caption=document.createElement("figcaption");
-          const label=document.createElement("span");
-          label.textContent="Visual direction · replace with real work";
-          caption.appendChild(label);
-          if(media.creditUrl){
-            const credit=document.createElement("a");
-            credit.href=media.creditUrl;
-            credit.textContent="Photo source";
-            caption.appendChild(credit);
-          }
-          figure.appendChild(caption);
+          makeVisualCaption(figure);
           return figure;
         }));
         galleryGrid.dataset.fallbackMedia="true";
@@ -1702,9 +1866,9 @@
         const schema = {
           "@context":"https://schema.org",
           "@type":"LocalBusiness",
-          "name":"Summit Ridge Roofing QA v20",
-          "description":"Roof replacement, roof repair, storm damage inspections, emergency tarping, and gutter installation for Everett and nearby Snohomish County.",
-          "areaServed":"Everett, WA"
+          "name":"Summit Ridge Roofing",
+          "description":"A polished ARC roofing showcase for repair, replacement, and inspection services in Everett, Washington.",
+          "areaServed":"Everett, Washington"
         };
         const node = document.createElement("script");
         node.type="application/ld+json";

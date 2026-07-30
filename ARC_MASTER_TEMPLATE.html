@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- ARC Client Master Template v9.1 | conversion editorial system | exact 58-key production contract -->
+<!-- ARC Client Master Template v9.2 | conversion editorial system | exact 58-key production contract -->
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -798,6 +798,10 @@
     }
     .gallery-grid>*:first-child{grid-column:span 8}
     .gallery-grid>*:nth-child(2){grid-column:span 4}
+    .gallery-grid>*:last-child:nth-child(odd){
+      grid-column:span 12;
+      min-height:480px
+    }
     .gallery-grid img,
     .gallery-grid picture,
     .gallery-grid video{

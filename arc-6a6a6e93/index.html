@@ -1,16 +1,16 @@
-<!doctype html>
-<!-- ARC Client Master Template v8.0 | conversion editorial system | exact 58-key production contract -->
+<!DOCTYPE html>
+<!-- ARC Client Master Template v9.4 | conversion editorial system | exact 58-key production contract -->
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>ARC | Web Designer in Everett, Washington</title>
-  <meta name="description" content="Professional website design for business owners in Everett, Washington. Request a free preview and see your website’s potential.">
+  <title>ARC Website Design | Everett, Washington</title>
+  <meta name="description" content="Professional website design for business owners in Everett, Washington, with a free preview before committing.">
   <meta name="theme-color" content="#FFFFFF">
   <meta name="robots" content="index,follow">
   <meta name="referrer" content="strict-origin-when-cross-origin">
-  <meta property="og:title" content="ARC | Web Designer in Everett, Washington">
-  <meta property="og:description" content="Professional website design for business owners in Everett, Washington. Request a free preview and see your website’s potential.">
+  <meta property="og:title" content="ARC Website Design | Everett, Washington">
+  <meta property="og:description" content="Professional website design for business owners in Everett, Washington, with a free preview before committing.">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="ARC">
   <meta name="twitter:card" content="summary_large_image">
@@ -18,11 +18,11 @@
   <style>
     :root{
       --bg:#FFFFFF;
-      --surface:#F4F7FB;
+      --surface:#F3F6FA;
       --ink:#0B0B0C;
-      --muted:#566070;
-      --brand:#1457D9;
-      --accent:#2563EB;
+      --muted:#555B66;
+      --brand:#145BDB;
+      --accent:#0A3D91;
       --button-ink:#FFFFFF;
       --white:#fff;
       --black:#0b0b0c;
@@ -30,6 +30,8 @@
       --line-soft:color-mix(in srgb,var(--ink) 7%,transparent);
       --wash:color-mix(in srgb,var(--surface) 70%,var(--bg));
       --paper:color-mix(in srgb,var(--surface) 88%,var(--bg));
+      --brand-wash:color-mix(in srgb,var(--brand) 11%,transparent);
+      --accent-wash:color-mix(in srgb,var(--accent) 10%,transparent);
       --display:Arial,"Helvetica Neue",Helvetica,sans-serif;
       --body:Arial,"Helvetica Neue",Helvetica,sans-serif;
       --max:1200px;
@@ -325,7 +327,12 @@
       min-height:100svh;
       display:grid;
       align-items:center;
-      padding:clamp(116px,12vw,166px) 0 clamp(58px,7vw,92px)
+      overflow:hidden;
+      padding:clamp(116px,12vw,166px) 0 clamp(58px,7vw,92px);
+      background:
+        radial-gradient(circle at 8% 18%,var(--brand-wash),transparent 32%),
+        radial-gradient(circle at 92% 74%,var(--accent-wash),transparent 31%),
+        linear-gradient(180deg,var(--bg),color-mix(in srgb,var(--surface) 28%,var(--bg)))
     }
     .hero:after{
       content:"";
@@ -396,7 +403,17 @@
       border:1px solid var(--line);
       border-radius:var(--radius);
       background:var(--paper);
-      box-shadow:var(--shadow)
+      box-shadow:var(--shadow);
+      isolation:isolate
+    }
+    .hero-visual:before{
+      content:"";
+      position:absolute;
+      z-index:3;
+      inset:0;
+      border:1px solid color-mix(in srgb,#fff 22%,transparent);
+      border-radius:inherit;
+      pointer-events:none
     }
     .hero-media{
       position:absolute;
@@ -409,8 +426,11 @@
     .hero-media video{
       width:100%;
       height:100%;
-      object-fit:cover
+      object-fit:cover;
+      transform:scale(1.035);
+      transition:transform 1.2s var(--ease),filter .7s var(--ease)
     }
+    .hero-visual:hover .hero-media img{transform:scale(1.075)}
     .hero-media:after{
       content:"";
       position:absolute;
@@ -441,6 +461,32 @@
       max-width:560px;
       font:700 clamp(27px,3.4vw,45px)/1.03 var(--display);
       letter-spacing:-.045em
+    }
+    .media-disclosure{
+      position:absolute;
+      z-index:4;
+      top:18px;
+      right:18px;
+      display:inline-flex;
+      align-items:center;
+      gap:7px;
+      padding:8px 10px;
+      border:1px solid rgba(255,255,255,.26);
+      border-radius:999px;
+      color:rgba(255,255,255,.86);
+      background:rgba(11,11,12,.5);
+      backdrop-filter:blur(12px);
+      font-size:9px;
+      font-weight:850;
+      letter-spacing:.08em;
+      text-transform:uppercase
+    }
+    .media-disclosure:before{
+      content:"";
+      width:5px;
+      height:5px;
+      border-radius:50%;
+      background:var(--brand)
     }
     .hero-fallback{
       position:absolute;
@@ -563,7 +609,13 @@
     .services,.why,.about,.process,.proof,.gallery,.faq,.contact{
       padding:var(--section) 0
     }
-    .services{background:var(--bg)}
+    .services{
+      position:relative;
+      overflow:hidden;
+      background:
+        radial-gradient(circle at 96% 10%,var(--brand-wash),transparent 27%),
+        linear-gradient(180deg,var(--bg),color-mix(in srgb,var(--surface) 36%,var(--bg)))
+    }
     .service-grid{
       display:grid;
       grid-template-columns:repeat(3,1fr);
@@ -577,11 +629,14 @@
       padding:clamp(25px,3vw,36px);
       border-right:1px solid var(--line);
       border-bottom:1px solid var(--line);
-      background:transparent;
-      transition:background .25s,color .25s
+      background:color-mix(in srgb,var(--surface) 30%,transparent);
+      transition:transform .25s var(--ease),background .25s,color .25s,box-shadow .25s
     }
     .service-grid>*:hover{
-      background:var(--paper)
+      z-index:2;
+      transform:translateY(-4px);
+      background:linear-gradient(150deg,var(--paper),color-mix(in srgb,var(--brand) 8%,var(--paper)));
+      box-shadow:var(--shadow-soft)
     }
     .service-grid h3{
       margin:0 0 15px;
@@ -603,8 +658,13 @@
     }
 
     .why{
+      position:relative;
+      overflow:hidden;
       color:#fff;
-      background:color-mix(in srgb,var(--ink) 96%,#000)
+      background:
+        radial-gradient(circle at 84% 16%,color-mix(in srgb,var(--brand) 26%,transparent),transparent 30%),
+        radial-gradient(circle at 12% 92%,color-mix(in srgb,var(--accent) 13%,transparent),transparent 34%),
+        color-mix(in srgb,var(--ink) 96%,#000)
     }
     .why .eyebrow,
     .why .section-head p{
@@ -631,6 +691,11 @@
       line-height:1.68
     }
 
+    .about{
+      background:
+        radial-gradient(circle at 5% 82%,var(--accent-wash),transparent 29%),
+        linear-gradient(180deg,var(--bg),color-mix(in srgb,var(--surface) 26%,var(--bg)))
+    }
     .about-grid{
       display:grid;
       grid-template-columns:minmax(360px,.88fr) minmax(0,1.12fr);
@@ -660,8 +725,11 @@
     .about-media video{
       width:100%;
       height:100%;
-      object-fit:cover
+      object-fit:cover;
+      transition:transform .9s var(--ease)
     }
+    .about-media:hover img{transform:scale(1.025)}
+    .about-media .media-disclosure{top:auto;right:16px;bottom:16px}
     .about-copy h2{
       margin-bottom:24px;
       font-size:clamp(39px,5vw,70px);
@@ -704,7 +772,9 @@
 
     .process{
       border-block:1px solid var(--line);
-      background:var(--wash)
+      background:
+        radial-gradient(circle at 88% 20%,var(--brand-wash),transparent 30%),
+        linear-gradient(135deg,var(--wash),color-mix(in srgb,var(--accent) 6%,var(--wash)))
     }
     .process-list{
       counter-reset:step;
@@ -742,8 +812,13 @@
     }
 
     .gallery{
+      position:relative;
+      overflow:hidden;
       color:#fff;
-      background:color-mix(in srgb,var(--ink) 96%,#000)
+      background:
+        radial-gradient(circle at 12% 8%,color-mix(in srgb,var(--brand) 24%,transparent),transparent 28%),
+        radial-gradient(circle at 94% 88%,color-mix(in srgb,var(--accent) 16%,transparent),transparent 30%),
+        color-mix(in srgb,var(--ink) 96%,#000)
     }
     .gallery .eyebrow,
     .gallery .section-head p{
@@ -755,8 +830,11 @@
       gap:12px
     }
     .gallery-grid>*{
+      position:relative;
       grid-column:span 6;
-      min-height:390px;
+      margin:0;
+      height:clamp(380px,34vw,480px);
+      min-height:0;
       overflow:hidden;
       border:1px solid rgba(255,255,255,.14);
       border-radius:var(--radius-sm);
@@ -764,6 +842,9 @@
     }
     .gallery-grid>*:first-child{grid-column:span 8}
     .gallery-grid>*:nth-child(2){grid-column:span 4}
+    .gallery-grid>*:last-child:nth-child(odd){
+      grid-column:span 12
+    }
     .gallery-grid img,
     .gallery-grid picture,
     .gallery-grid video{
@@ -773,6 +854,39 @@
       transition:transform .7s var(--ease)
     }
     .gallery-grid>*:hover img{transform:scale(1.025)}
+    .visual-direction figcaption{
+      position:absolute;
+      z-index:2;
+      right:16px;
+      bottom:16px;
+      left:16px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:16px;
+      padding:12px 14px;
+      border:1px solid rgba(255,255,255,.2);
+      border-radius:10px;
+      color:rgba(255,255,255,.88);
+      background:rgba(8,8,9,.62);
+      backdrop-filter:blur(14px);
+      font-size:10px;
+      font-weight:800;
+      letter-spacing:.06em;
+      text-transform:uppercase
+    }
+    .visual-direction figcaption a{
+      color:rgba(255,255,255,.62);
+      text-decoration:underline;
+      text-underline-offset:3px
+    }
+    .visual-direction:after{
+      content:"";
+      position:absolute;
+      inset:0;
+      background:linear-gradient(180deg,transparent 54%,rgba(0,0,0,.54));
+      pointer-events:none
+    }
 
     .proof-grid{
       display:grid;
@@ -784,7 +898,7 @@
       padding:clamp(26px,3.5vw,42px);
       border:1px solid var(--line);
       border-radius:var(--radius-sm);
-      background:var(--paper)
+      background:linear-gradient(145deg,var(--paper),color-mix(in srgb,var(--accent) 6%,var(--paper)))
     }
     .proof-grid blockquote{
       margin:0;
@@ -855,7 +969,10 @@
       padding:clamp(34px,6vw,78px);
       border-radius:var(--radius);
       color:#fff;
-      background:color-mix(in srgb,var(--ink) 97%,#000);
+      background:
+        radial-gradient(circle at 82% 10%,color-mix(in srgb,var(--brand) 25%,transparent),transparent 31%),
+        radial-gradient(circle at 12% 96%,color-mix(in srgb,var(--accent) 13%,transparent),transparent 32%),
+        color-mix(in srgb,var(--ink) 97%,#000);
       box-shadow:var(--shadow)
     }
     .contact-card:after{
@@ -1013,6 +1130,16 @@
       justify-content:flex-end;
       gap:10px 20px
     }
+    .mobile-cta{
+      position:fixed;
+      z-index:190;
+      right:14px;
+      bottom:14px;
+      left:14px;
+      display:none;
+      min-height:54px;
+      box-shadow:0 16px 45px rgba(0,0,0,.26)
+    }
 
     .reveal{
       opacity:0;
@@ -1060,36 +1187,62 @@
       }
     }
     @media(max-width:660px){
-      :root{--section:72px}
+      :root{--section:56px}
       .wrap{width:min(100% - 28px,var(--max))}
-      .nav{min-height:70px}
+      .nav{min-height:64px}
       .brand-location{display:none}
-      .brand-logo{width:42px;height:42px}
-      .hero{padding-top:106px}
-      .hero-grid{gap:34px}
-      .hero h1{font-size:clamp(47px,14.4vw,66px)}
-      .hero-visual{min-height:480px}
-      .hero-fallback{padding:24px}
-      .fallback-logo{width:60px;height:60px}
+      .brand-logo{width:39px;height:39px}
+      .hero{padding:94px 0 46px}
+      .hero-grid{gap:28px}
+      .hero h1{font-size:clamp(40px,11.8vw,54px);line-height:.96}
+      .hero-copy{margin-top:18px;font-size:17px;line-height:1.48}
+      .hero-actions{margin-top:24px}
+      .hero-actions .btn{width:100%}
+      .trust-line{margin-top:19px}
+      .hero-visual{min-height:388px}
+      .hero-fallback{padding:20px}
+      .fallback-logo{width:54px;height:54px}
+      .fallback-main{padding:27px 0}
+      .fallback-main h2{font-size:clamp(36px,11vw,48px)}
       .fallback-bottom{display:grid}
       .hero-proof{text-align:left}
+      .ticker-track{gap:30px;padding:14px 20px}
+      .section-head{gap:12px;margin-bottom:30px}
+      .section-head h2{font-size:clamp(34px,10.5vw,48px);line-height:1}
+      .section-head p{font-size:15px;line-height:1.55}
       .service-grid,.why-grid,.proof-grid,.gallery-grid{grid-template-columns:1fr}
       .service-grid>*:last-child:nth-child(odd),
       .why-grid>*:last-child:nth-child(odd){grid-column:auto}
-      .service-grid>*{min-height:250px}
+      .service-grid>*{min-height:205px;padding:23px}
       .why-grid>*{min-height:0}
       .stats{grid-template-columns:1fr}
-      .about-media{min-height:400px}
+      .about-grid{gap:32px}
+      .about-media{min-height:330px}
+      .about-copy h2,.faq-copy h2{font-size:clamp(36px,10.5vw,48px)}
+      .about-body{font-size:16px;line-height:1.62}
+      .process-list>*{padding:23px}
+      .process-list>*:before{margin-bottom:24px}
       .gallery-grid>*,
       .gallery-grid>*:first-child,
       .gallery-grid>*:nth-child(2){
         grid-column:auto;
-        min-height:290px
+        height:246px;
+        min-height:0
       }
+      .visual-direction figcaption{right:10px;bottom:10px;left:10px;padding:10px;font-size:9px}
+      .faq-list summary{padding:19px 0;font-size:16px}
+      .faq-list details>*:not(summary){padding:0 26px 20px 0;line-height:1.6}
+      .contact-card{padding:26px;border-radius:16px}
+      .contact-grid{gap:32px}
+      .contact h2{font-size:clamp(39px,11.6vw,54px);line-height:.97}
+      .contact-body{font-size:16px;line-height:1.55}
       .contact-actions form{grid-template-columns:1fr;padding:16px}
       .contact-actions form>*{grid-column:1}
       .footer-row{display:grid}
       .footer-links{justify-content:flex-start}
+      .mobile-cta{display:inline-flex}
+      footer{padding-bottom:86px}
+      .media-disclosure{top:13px;right:13px}
     }
     @media(prefers-reduced-motion:reduce){
       html{scroll-behavior:auto}
@@ -1116,7 +1269,7 @@
     })();
   </script>
 </head>
-<body data-style="Bold, minimal, professional">
+<body data-style="Bold Minimal Professional" data-industry="Web Designer">
   <a class="skip" href="#content">Skip to content</a>
   <div class="progress" aria-hidden="true"><span></span></div>
 
@@ -1147,21 +1300,21 @@
     <section class="hero" id="top">
       <div class="wrap hero-grid">
         <div class="hero-copy-column">
-          <p class="eyebrow">Web design for business owners</p>
-          <h1>A professional website built to move your business forward.</h1>
-          <p class="hero-copy">ARC creates bold, minimal websites and offers a free preview so you can see your website’s potential before paying.</p>
+          <p class="eyebrow">Website Design in Everett, Washington</p>
+          <h1>Websites Built for Business Owners</h1>
+          <p class="hero-copy">See your website’s potential with a free preview before deciding whether to move forward.</p>
           <div class="hero-actions">
             <a class="btn btn-primary" href="#contact">Request Estimate <span aria-hidden="true">→</span></a>
             <a class="btn btn-secondary" href="#services">Explore Services</a>
           </div>
-          <div class="trust-line"><p>Free preview available before you pay.</p></div>
+          <div class="trust-line"><span>Free preview before payment</span></div>
         </div>
 
         <div class="hero-visual">
           <div class="hero-media"></div>
           <div class="hero-photo-caption">
-            <small>Web designer</small>
-            <strong>Minimal design. Professional presence.</strong>
+            <small>Web Designer</small>
+            <strong>Minimal design. Clear business purpose.</strong>
           </div>
           <div class="hero-fallback">
             <div class="fallback-top">
@@ -1169,30 +1322,30 @@
               <div class="fallback-logo"><img src="https://d33wubrfki0l68.cloudfront.net/eb7c0653-fa3e-405e-a821-3dcc8a4d1377/IMG_2370.jpeg" alt="ARC logo" class="logo-img" loading="eager" decoding="async"></div>
             </div>
             <div class="fallback-main">
-              <small>Web designer</small>
-              <h2>Minimal design. Professional presence.</h2>
+              <small>Web Designer</small>
+              <h2>Minimal design. Clear business purpose.</h2>
             </div>
             <div class="fallback-bottom">
-              <div class="chips"><ul><li>Free Preview</li><li>Website Making</li><li>Professional Design</li></ul></div>
-              <div class="hero-proof">See your website’s potential with a free preview.</div>
+              <div class="chips"><span>Free Preview</span><span>Professional Design</span><span>Business Focused</span></div>
+              <div class="hero-proof">Preview your website’s potential without paying first.</div>
             </div>
           </div>
         </div>
       </div>
     </section>
 
-    <div class="ticker" aria-label="Highlights">
-      <div class="ticker-track"><p>Websites for business owners • Everett, Washington • Free Preview</p></div>
+    <div class="ticker" role="region" aria-label="Highlights">
+      <div class="ticker-track"><span>Website Making</span><span>Free Preview</span><span>Everett, Washington</span></div>
     </div>
 
     <section class="services" id="services">
       <div class="wrap">
         <p class="eyebrow">Services</p>
         <div class="section-head">
-          <h2>Website Services</h2>
-          <p>Professional website creation focused on helping business owners look trusted, explain their services, and generate inquiries.</p>
+          <h2>Website Services for Business Owners</h2>
+          <p>Focused website creation that presents your business clearly and supports calls, estimates, and bookings.</p>
         </div>
-        <div class="service-grid"><article><h3>Website Making</h3><p>A bold, minimal website designed around your business, services, and goals.</p></article><article><h3>Free Preview</h3><p>See what your website could become before paying.</p></article></div>
+        <div class="service-grid"><article><h3>Website Making</h3><p>A professional website designed around your business, services, goals, and customers.</p></article><article><h3>Free Website Preview</h3><p>See the potential direction for your website before paying or committing.</p></article></div>
       </div>
     </section>
 
@@ -1200,10 +1353,10 @@
       <div class="wrap">
         <p class="eyebrow">Why choose us</p>
         <div class="section-head">
-          <h2>Why Choose ARC</h2>
-          <p>A simpler, risk-free way to explore your website’s potential.</p>
+          <h2>Why Work With ARC</h2>
+          <p>A simple process centered on helping business owners evaluate their website direction first.</p>
         </div>
-        <div class="why-grid"><ul><li>Free preview before payment</li><li>Minimal, professional presentation</li><li>Built around business-owner goals</li><li>Focused on calls, estimates, bookings, trust, and service clarity</li></ul></div>
+        <div class="why-grid"><article><h3>Preview Before Payment</h3><p>Review a free preview of your website’s potential before making a financial commitment.</p></article><article><h3>Minimal Presentation</h3><p>Clean layouts avoid clutter and keep attention on your services and next step.</p></article><article><h3>Business Goals First</h3><p>Your website is shaped to support calls, estimate requests, bookings, and clearer service explanations.</p></article></div>
       </div>
     </section>
 
@@ -1212,9 +1365,9 @@
         <div class="about-media" data-monogram="ARC"></div>
         <div class="about-copy">
           <p class="eyebrow">About ARC</p>
-          <h2>Websites made for business owners</h2>
-          <div class="about-body">ARC was started to create websites for business owners who need a stronger online presence. The approach combines professional design with a free preview, allowing clients to see their website’s potential before paying.</div>
-          <div class="about-quote">See your website’s potential before paying.</div>
+          <h2>Websites Made for Business Owners</h2>
+          <div class="about-body">ARC was started to make websites for business owners who need a stronger online presence. Each project begins with a free preview, giving you a clear look at your website’s potential before you pay.</div>
+          <div class="about-quote">See the direction before making the decision.</div>
           <div class="stats"></div>
         </div>
       </div>
@@ -1224,10 +1377,10 @@
       <div class="wrap">
         <p class="eyebrow">How it works</p>
         <div class="section-head">
-          <h2>A straightforward website process</h2>
-          <p>Start by sharing your business needs, then review a free preview of the direction your website could take.</p>
+          <h2>A Straightforward Website Process</h2>
+          <p>Start with your business details, review a free preview, and decide whether to continue.</p>
         </div>
-        <div class="process-list"><ol><li><h3>Share Your Project</h3><p>Tell us about your business, services, and website goals.</p></li><li><h3>View Your Free Preview</h3><p>See the potential direction for your website before paying.</p></li><li><h3>Move Forward</h3><p>Discuss the project details and next steps.</p></li></ol></div>
+        <div class="process-list"><article><h3>1. Share Your Goals</h3><p>Tell us about your business, services, customers, and the actions your website should encourage.</p></article><article><h3>2. Review Your Preview</h3><p>See a free preview showing the potential direction for your website.</p></article><article><h3>3. Move Forward</h3><p>Choose whether to continue based on the preview and your project needs.</p></article></div>
       </div>
     </section>
 
@@ -1235,8 +1388,8 @@
       <div class="wrap">
         <p class="eyebrow">Work</p>
         <div class="section-head">
-          <h2>Website Gallery</h2>
-          <p>Explore the design approach behind ARC websites.</p>
+          <h2>Website Work</h2>
+          <p>Discuss the visual direction and website needs for your business.</p>
         </div>
         <div class="gallery-grid"></div>
       </div>
@@ -1247,9 +1400,9 @@
         <p class="eyebrow">Client proof</p>
         <div class="section-head">
           <h2>Client Feedback</h2>
-          <p>ARC reports receiving positive feedback from website clients.</p>
+          <p>Feedback is discussed directly during the estimate process.</p>
         </div>
-        <div class="proof-grid"><p>ARC reports client feedback in the 4-to-5-star range. This information is provided by the business and is not independently verified.</p></div>
+        <div class="proof-grid"></div>
       </div>
     </section>
 
@@ -1257,10 +1410,10 @@
       <div class="wrap faq-grid">
         <div class="faq-copy">
           <p class="eyebrow">FAQ</p>
-          <h2>Frequently Asked Questions</h2>
-          <p>Helpful information about working with ARC.</p>
+          <h2>Website Design Questions</h2>
+          <p>Clear answers about the preview, project timing, and value.</p>
         </div>
-        <div class="faq-list"><details><summary>How long does it usually take to make a website?</summary><p>ARC reports that website creation usually takes 1 to 2 days.</p></details><details><summary>Is this worth my money?</summary><p>ARC positions its service as cheaper than most agencies while aiming to provide agency-quality website work. Request a free preview to evaluate the direction before paying.</p></details></div>
+        <div class="faq-list"><details><summary>How long does a website usually take?</summary><p>Website creation usually takes one to two days, depending on the project scope and requirements.</p></details><details><summary>Do I pay for the preview?</summary><p>No. The preview lets you see your website’s potential before paying.</p></details><details><summary>Is this worth the investment?</summary><p>The free preview helps you evaluate the proposed direction before deciding whether to move forward.</p></details></div>
       </div>
     </section>
 
@@ -1270,11 +1423,11 @@
           <div class="contact-grid">
             <div>
               <p class="eyebrow">Next step</p>
-              <h2>Request Your Free Preview</h2>
-              <p class="contact-body">Tell us about your business, the service you need, and your project goals.</p>
-              <div class="contact-actions"><form name="client-lead" method="POST" data-netlify="true" netlify-honeypot="bot-field" action="/?submitted=1"><input type="hidden" name="form-name" value="client-lead"><p hidden><label>Do not fill this out: <input name="bot-field"></label></p><label for="name">Name</label><input id="name" name="name" type="text" required><label for="email">Email</label><input id="email" name="email" type="email" required><label for="phone">Phone</label><input id="phone" name="phone" type="tel"><label for="service">Service</label><input id="service" name="service" type="text" required><label for="project_details">Project details</label><textarea id="project_details" name="project_details" required></textarea><button type="submit">Request Estimate</button></form></div>
+              <h2>Request Your Website Estimate</h2>
+              <p class="contact-body">Share your project details to start a conversation about your website and free preview.</p>
+              <div class="contact-actions"><form name="client-lead" method="POST" data-netlify="true" netlify-honeypot="bot-field" action="/?submitted=1"><input type="hidden" name="form-name" value="client-lead"><p hidden><label>Do not fill this out: <input name="bot-field"></label></p><label for="name">Name</label><input id="name" name="name" type="text"><label for="email">Email</label><input id="email" name="email" type="email"><label for="phone">Phone</label><input id="phone" name="phone" type="tel"><label for="service">Service</label><input id="service" name="service" type="text"><label for="project_details">Project details</label><textarea id="project_details" name="project_details"></textarea><button type="submit">Request Estimate</button></form></div>
             </div>
-            <div class="contact-details"><address><p><a href="tel:14253441760">14253441760</a></p><p><a href="mailto:rafaelpalmero198@gmail.com">rafaelpalmero198@gmail.com</a></p><p>10610 1st dr se 98208</p></address></div>
+            <div class="contact-details"><p><a href="tel:14253441760">14253441760</a></p><p><a href="mailto:rafaelpalmero198@gmail.com">rafaelpalmero198@gmail.com</a></p><p>10610 1st dr se 98208</p></div>
           </div>
         </div>
       </div>
@@ -1285,12 +1438,13 @@
     <div class="wrap footer-row">
       <div class="footer-copy">
         <strong>ARC</strong>
-        <span>Professional websites for business owners.</span><br>
+        <span>Professional websites for business owners in Everett, Washington.</span><br>
         <span>© <span id="year"></span> All rights reserved.</span>
       </div>
-      <div class="footer-links"><nav><a href="#services">Services</a><a href="#about">About</a><a href="#process">Process</a><a href="#faq">FAQ</a><a href="#contact">Contact</a></nav></div>
+      <div class="footer-links"><a href="#services">Services</a><a href="#about">About</a><a href="#process">Process</a><a href="#faq">FAQ</a><a href="#contact">Contact</a></div>
     </div>
   </footer>
+  <a class="btn btn-primary mobile-cta" href="#contact">Request Estimate <span aria-hidden="true">→</span></a>
 
   <script>
     (() => {
@@ -1302,6 +1456,7 @@
       const menu = $(".menu");
       const progress = $(".progress span");
       const year = $("#year");
+      const industry = (document.body.dataset.industry || "").toLowerCase();
 
       if (year) year.textContent = new Date().getFullYear();
 
@@ -1324,6 +1479,34 @@
       addEventListener("scroll",onScroll,{passive:true});
       onScroll();
 
+      /*
+       * AI output is the content contract, while this template owns layout.
+       * Flatten a single redundant list/grid wrapper so generated classes can
+       * never create a nested grid, one-column cards, or oversized sections.
+       */
+      const flattenGeneratedGroup = selector => {
+        const outer = $(selector);
+        const wrapper = outer?.firstElementChild;
+        if (
+          !outer ||
+          outer.children.length !== 1 ||
+          !wrapper ||
+          !["DIV","UL","OL","NAV"].includes(wrapper.tagName) ||
+          !wrapper.children.length
+        ) return;
+        outer.replaceChildren(...wrapper.children);
+      };
+      [
+        ".ticker-track",
+        ".service-grid",
+        ".why-grid",
+        ".process-list",
+        ".gallery-grid",
+        ".proof-grid",
+        ".faq-list",
+        ".footer-links"
+      ].forEach(flattenGeneratedGroup);
+
       const markEmpty = selector => {
         $$(selector).forEach(element => {
           if (empty(element)) element.classList.add("is-empty");
@@ -1332,6 +1515,7 @@
       markEmpty(".trust-line,.chips,.hero-proof,.stats,.about-quote,.contact-details,.footer-links,.ticker");
 
       const contentIsFake = element => {
+        if (element?.querySelector("img,picture,video,svg")) return false;
         const value = text(element).toLowerCase();
         if (!value) return true;
         return [
@@ -1344,6 +1528,266 @@
         ].some(phrase => value.includes(phrase));
       };
 
+      /*
+       * Real uploads always win. When a client has not supplied photography, ARC
+       * adds clearly disclosed industry-direction imagery so the preview still
+       * communicates a premium visual system without inventing client work.
+       */
+      const unsplash = id => `https://images.unsplash.com/${id}?auto=format&fit=crop&w=1800&q=82`;
+      const mediaPresets = [
+        {
+          match:/roof|siding|gutter|exterior/,
+          label:"Industry imagery",
+          creditUrl:"https://unsplash.com/photos/-uvuU43FAwQ",
+          images:[
+            unsplash("photo-1755114203680-d39d95efa82c"),
+            unsplash("photo-1635424709870-cdc6e64f0e20"),
+            unsplash("photo-1775508567497-67165c535755"),
+            unsplash("photo-1504307651254-35680f356dfd"),
+            unsplash("photo-1487958449943-2429e8be8625"),
+            unsplash("photo-1600607688969-a5bfcd646154")
+          ]
+        },
+        {
+          match:/dent|medical|clinic|health|orthodont/,
+          label:"Industry imagery",
+          creditUrl:"https://unsplash.com/photos/vVKh9xeLub4",
+          images:[
+            unsplash("photo-1629909615957-be38d48fbbe6"),
+            unsplash("photo-1606811971618-4486d14f3f99"),
+            unsplash("photo-1588776814546-1ffcf47267a5"),
+            unsplash("photo-1609840114035-3c981b782dfe"),
+            unsplash("photo-1550831107-1553da8c8464"),
+            unsplash("photo-1629909615184-74f495363b67")
+          ]
+        },
+        {
+          match:/restaurant|food|hospitality|cafe|bakery|cater/,
+          label:"Industry imagery",
+          creditUrl:"https://unsplash.com/photos/jwPuIQTa3qE",
+          images:[
+            unsplash("photo-1773100699991-b7e6bf89a6a1"),
+            unsplash("photo-1517248135467-4c7edcad34c4"),
+            unsplash("photo-1414235077428-338989a2e8c0"),
+            unsplash("photo-1552566626-52f8b828add9"),
+            unsplash("photo-1555396273-367ea4eb4db5"),
+            unsplash("photo-1515003197210-e0cd71810b5f")
+          ]
+        },
+        {
+          match:/real estate|realtor|property|builder|architect/,
+          label:"Industry imagery",
+          creditUrl:"https://unsplash.com/photos/7qD-iDyrdHY",
+          images:[
+            unsplash("photo-1756435292384-1bf32eff7baf"),
+            unsplash("photo-1600585154340-be6161a56a0c"),
+            unsplash("photo-1600566753190-17f0baa2a6c3"),
+            unsplash("photo-1512917774080-9991f1c4c750"),
+            unsplash("photo-1600607687939-ce8a6c25118c"),
+            unsplash("photo-1600607688969-a5bfcd646154")
+          ]
+        },
+        {
+          match:/fitness|gym|wellness|trainer|yoga/,
+          label:"Industry imagery",
+          creditUrl:"https://unsplash.com/photos/fuyulf8cNmg",
+          images:[
+            unsplash("photo-1758448756350-3d0eec02ba37"),
+            unsplash("photo-1534438327276-14e0e8d1b80b"),
+            unsplash("photo-1571902943202-507ec2618e8f"),
+            unsplash("photo-1571019613454-1cb2f99b2d8b"),
+            unsplash("photo-1581009146145-b5ef050c2e1e"),
+            unsplash("photo-1517836357463-d25dfeac3438")
+          ]
+        },
+        {
+          match:/auto|car|mechanic|collision|detail/,
+          label:"Industry imagery",
+          creditUrl:"https://unsplash.com/photos/1771340012378-3c86cb649193",
+          images:[
+            unsplash("photo-1771340012378-3c86cb649193"),
+            unsplash("photo-1492144534655-ae79c964c9d7"),
+            unsplash("photo-1486262715619-67b85e0b08d3"),
+            unsplash("photo-1503376780353-7e6692767b70"),
+            unsplash("photo-1625047509248-ec889cbff17f"),
+            unsplash("photo-1489824904134-891ab64532f1")
+          ]
+        },
+        {
+          match:/beauty|salon|barber|spa|cosmetic/,
+          label:"Industry imagery",
+          creditUrl:"https://unsplash.com/photos/1521590832167-7bcbfaa6381f",
+          images:[
+            unsplash("photo-1521590832167-7bcbfaa6381f"),
+            unsplash("photo-1560066984-138dadb4c035"),
+            unsplash("photo-1522337360788-8b13dee7a37e"),
+            unsplash("photo-1562322140-8baeececf3df"),
+            unsplash("photo-1595476108010-b4d1f102b1b1"),
+            unsplash("photo-1487412912498-0447578fcca8")
+          ]
+        },
+        {
+          match:/software|technology|saas|consult|agency/,
+          label:"Industry imagery",
+          creditUrl:"https://unsplash.com/photos/n3DNE1aN31M",
+          images:[
+            unsplash("photo-1760346546767-95b89356a6bb"),
+            unsplash("photo-1497366754035-f200968a6e72"),
+            unsplash("photo-1522071820081-009f0129c71c"),
+            unsplash("photo-1521737711867-e3b97375f902"),
+            unsplash("photo-1531482615713-2afd69097998"),
+            unsplash("photo-1556761175-b413da4baf72")
+          ]
+        },
+        {
+          match:/law|legal|account|finance|insurance|professional/,
+          label:"Industry imagery",
+          creditUrl:"https://unsplash.com/photos/MhqUBTxQ3Hw",
+          images:[
+            unsplash("photo-1775163024488-e88e4a71179f"),
+            unsplash("photo-1450101499163-c8848c66ca85"),
+            unsplash("photo-1497366811353-6870744d04b2"),
+            unsplash("photo-1454165804606-c3d57bc86b40"),
+            unsplash("photo-1521791055366-0d553872125f"),
+            unsplash("photo-1497366216548-37526070297c")
+          ]
+        },
+        {
+          match:/.*/,
+          label:"Industry imagery",
+          creditUrl:"https://unsplash.com",
+          images:[
+            unsplash("photo-1497366811353-6870744d04b2"),
+            unsplash("photo-1524758631624-e2822e304c36"),
+            unsplash("photo-1497366754035-f200968a6e72"),
+            unsplash("photo-1556761175-b413da4baf72"),
+            unsplash("photo-1497366216548-37526070297c"),
+            unsplash("photo-1521737711867-e3b97375f902")
+          ]
+        }
+      ];
+      const media = mediaPresets.find(preset => preset.match.test(industry));
+      const mediaKey = value => {
+        try {
+          const url=new URL(value,location.href);
+          return `${url.origin}${url.pathname}`;
+        } catch(error) {
+          return String(value || "").split("?")[0];
+        }
+      };
+      const usedMediaSources = new Set(
+        $$(".hero-media img,.about-media img,.gallery-grid img")
+          .map(node => mediaKey(node.currentSrc || node.getAttribute("src")))
+          .filter(Boolean)
+      );
+      const nextMedia = () => {
+        const source=media.images.find(candidate => !usedMediaSources.has(mediaKey(candidate)));
+        if(source) usedMediaSources.add(mediaKey(source));
+        return source || "";
+      };
+      const disclosure = (root,label=media.label) => {
+        if (!root || root.querySelector(".media-disclosure")) return;
+        const badge=document.createElement("span");
+        badge.className="media-disclosure";
+        badge.textContent=label;
+        root.appendChild(badge);
+      };
+      const setResponsiveSource = (node,src) => {
+        if(!node || !src)return;
+        node.src=src;
+        if(src.includes("images.unsplash.com")){
+          node.srcset=[
+            `${src.replace("w=1800","w=720")} 720w`,
+            `${src.replace("w=1800","w=1200")} 1200w`,
+            `${src.replace("w=1800","w=1800")} 1800w`
+          ].join(",");
+          node.sizes="(max-width: 660px) 100vw, (max-width: 1000px) 90vw, 50vw";
+          node.referrerPolicy="no-referrer";
+        }else{
+          node.removeAttribute("srcset");
+          node.removeAttribute("sizes");
+        }
+      };
+      const makeVisualCaption = root => {
+        if(!root || root.querySelector("figcaption"))return;
+        root.classList.add("visual-direction");
+        const caption=document.createElement("figcaption");
+        const label=document.createElement("span");
+        label.textContent="Industry imagery · replace with real work";
+        caption.appendChild(label);
+        if(media.creditUrl){
+          const credit=document.createElement("a");
+          credit.href=media.creditUrl;
+          credit.textContent="Photo source";
+          caption.appendChild(credit);
+        }
+        root.appendChild(caption);
+      };
+      const recoverImage = (node,onFallback) => {
+        if(!node || node.dataset.arcFallbackReady==="true")return;
+        node.dataset.arcFallbackReady="true";
+        node.addEventListener("error",() => {
+          const replacement=nextMedia();
+          if(!replacement){
+            node.hidden=true;
+            return;
+          }
+          node.alt=`Curated industry visual direction for ${industry || "this business"}`;
+          setResponsiveSource(node,replacement);
+          onFallback?.();
+        });
+      };
+      const image = (src,alt,lazy=true) => {
+        const node=document.createElement("img");
+        node.alt=alt;
+        node.decoding="async";
+        if(lazy) node.loading="lazy";
+        setResponsiveSource(node,src);
+        recoverImage(node);
+        return node;
+      };
+
+      const heroVisual = $(".hero-visual");
+      const heroMedia = $(".hero-media");
+      const suppliedHeroImage=heroMedia?.querySelector("img");
+      recoverImage(suppliedHeroImage,() => {
+        heroMedia.dataset.fallbackMedia="true";
+        disclosure(heroVisual);
+      });
+      if (heroMedia && !heroMedia.querySelector("img,picture,video,svg")) {
+        const node=image(nextMedia(),`Curated visual direction for ${industry || "this business"}`,false);
+        node.fetchPriority="high";
+        heroMedia.replaceChildren(node);
+        heroMedia.dataset.fallbackMedia="true";
+        disclosure(heroVisual);
+      }
+
+      const aboutMedia = $(".about-media");
+      const suppliedAboutImage=aboutMedia?.querySelector("img");
+      recoverImage(suppliedAboutImage,() => {
+        aboutMedia.dataset.fallbackMedia="true";
+        disclosure(aboutMedia);
+      });
+      if (aboutMedia && !aboutMedia.querySelector("img,picture,video,svg")) {
+        aboutMedia.replaceChildren(image(nextMedia(),`Industry visual direction for ${industry || "this business"}`));
+        aboutMedia.dataset.fallbackMedia="true";
+        disclosure(aboutMedia);
+      }
+
+      const galleryGrid = $(".gallery-grid");
+      $$(".gallery-grid img").forEach(node => recoverImage(node,() => makeVisualCaption(node.parentElement)));
+      if (galleryGrid && contentIsFake(galleryGrid)) {
+        const gallerySources=[nextMedia(),nextMedia(),nextMedia()].filter(Boolean);
+        galleryGrid.replaceChildren(...gallerySources.map((src,index) => {
+          const figure=document.createElement("figure");
+          figure.className="visual-direction";
+          figure.appendChild(image(src,`Visual direction ${index+1} for ${industry || "this business"}`));
+          makeVisualCaption(figure);
+          return figure;
+        }));
+        galleryGrid.dataset.fallbackMedia="true";
+      }
+
       [
         ["#why",".why-grid"],
         ["#gallery",".gallery-grid"],
@@ -1353,15 +1797,12 @@
         if (contentIsFake($(content))) $(section)?.setAttribute("hidden","");
       });
 
-      const heroVisual = $(".hero-visual");
-      const heroMedia = $(".hero-media");
       if (heroMedia?.querySelector("img,picture,video,svg")) {
         heroVisual?.classList.add("has-media");
       } else {
         heroMedia?.setAttribute("hidden","");
       }
 
-      const aboutMedia = $(".about-media");
       if (aboutMedia && !aboutMedia.querySelector("img,picture,video,svg") && empty(aboutMedia)) {
         aboutMedia.classList.add("is-empty");
         $(".about-grid")?.classList.add("no-media");
@@ -1426,7 +1867,7 @@
           "@context":"https://schema.org",
           "@type":"LocalBusiness",
           "name":"ARC",
-          "description":"Professional website design for business owners in Everett, Washington. Request a free preview and see your website’s potential.",
+          "description":"Professional website design for business owners in Everett, Washington, with a free preview before committing.",
           "areaServed":"Everett, Washington"
         };
         const node = document.createElement("script");

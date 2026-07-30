@@ -515,7 +515,14 @@
       flex-wrap:wrap;
       gap:7px
     }
-    .chips>*{
+    .chips>ul{
+      display:contents;
+      margin:0;
+      padding:0;
+      list-style:none
+    }
+    .chips>*,
+    .chips li{
       padding:7px 10px;
       border:1px solid var(--line);
       border-radius:999px;
@@ -908,6 +915,12 @@
       background:rgba(255,255,255,.055)
     }
     .contact-actions form>*{min-width:0}
+    .contact-actions form .form-field{
+      display:grid;
+      gap:7px
+    }
+    .contact-actions form .form-field:has(textarea),
+    .contact-actions form .form-field.form-wide{grid-column:1/-1}
     .contact-actions form label{
       display:grid;
       gap:7px;
@@ -1363,6 +1376,16 @@
       const previewHost=location.hostname.endsWith(".github.io");
       const submitted=new URLSearchParams(location.search).has("submitted");
       $$(".contact-actions form").forEach(form => {
+        [...form.children].forEach(label => {
+          if(label.tagName!=="LABEL"||label.querySelector("input,textarea,select"))return;
+          const control=label.nextElementSibling;
+          if(!control?.matches("input,textarea,select"))return;
+          const field=document.createElement("div");
+          field.className="form-field";
+          if(control.matches("textarea"))field.classList.add("form-wide");
+          label.before(field);
+          field.append(label,control);
+        });
         if(submitted){
           const status=document.createElement("p");
           status.className="form-status";

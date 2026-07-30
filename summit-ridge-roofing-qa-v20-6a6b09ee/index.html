@@ -1,15 +1,15 @@
 <!doctype html>
-<!-- ARC Client Master Template v9.2 | conversion editorial system | exact 58-key production contract -->
+<!-- ARC Client Master Template v9.3 | conversion editorial system | exact 58-key production contract -->
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Roofing in Everett, WA | Summit Ridge Roofing QA v20</title>
+  <title>Summit Ridge Roofing QA v20 | Roofing in Everett, WA</title>
   <meta name="description" content="Roof replacement, roof repair, storm damage inspections, emergency tarping, and gutter installation for Everett and nearby Snohomish County.">
-  <meta name="theme-color" content="#FAF7F2">
+  <meta name="theme-color" content="#FFFDF7">
   <meta name="robots" content="index,follow">
   <meta name="referrer" content="strict-origin-when-cross-origin">
-  <meta property="og:title" content="Roofing in Everett, WA | Summit Ridge Roofing QA v20">
+  <meta property="og:title" content="Summit Ridge Roofing QA v20 | Roofing in Everett, WA">
   <meta property="og:description" content="Roof replacement, roof repair, storm damage inspections, emergency tarping, and gutter installation for Everett and nearby Snohomish County.">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Summit Ridge Roofing QA v20">
@@ -17,10 +17,10 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' https: data:; img-src 'self' https: data: blob:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; font-src 'self' https: data:; connect-src 'none'; object-src 'none'; base-uri 'none'; frame-src 'none'; form-action 'self' mailto: tel:; upgrade-insecure-requests">
   <style>
     :root{
-      --bg:#FAF7F2;
-      --surface:#FFFFFF;
-      --ink:#14202B;
-      --muted:#5B6773;
+      --bg:#FFFDF7;
+      --surface:#F5F1E8;
+      --ink:#10202F;
+      --muted:#52606D;
       --brand:#102A43;
       --accent:#E85D04;
       --button-ink:#FFFFFF;
@@ -790,7 +790,8 @@
       position:relative;
       grid-column:span 6;
       margin:0;
-      min-height:390px;
+      height:clamp(380px,34vw,480px);
+      min-height:0;
       overflow:hidden;
       border:1px solid rgba(255,255,255,.14);
       border-radius:var(--radius-sm);
@@ -799,8 +800,7 @@
     .gallery-grid>*:first-child{grid-column:span 8}
     .gallery-grid>*:nth-child(2){grid-column:span 4}
     .gallery-grid>*:last-child:nth-child(odd){
-      grid-column:span 12;
-      min-height:480px
+      grid-column:span 12
     }
     .gallery-grid img,
     .gallery-grid picture,
@@ -1165,7 +1165,8 @@
       .gallery-grid>*:first-child,
       .gallery-grid>*:nth-child(2){
         grid-column:auto;
-        min-height:290px
+        height:310px;
+        min-height:0
       }
       .contact-actions form{grid-template-columns:1fr;padding:16px}
       .contact-actions form>*{grid-column:1}
@@ -1231,21 +1232,21 @@
     <section class="hero" id="top">
       <div class="wrap hero-grid">
         <div class="hero-copy-column">
-          <p class="eyebrow">Roofing • Everett, WA</p>
-          <h1>Clear, dependable roofing starts with a straightforward estimate.</h1>
-          <p class="hero-copy">Roof replacement, repairs, storm damage inspections, emergency tarping, and gutter installation for homeowners and property managers.</p>
+          <p class="eyebrow">Local Roofing Team Serving Everett, WA</p>
+          <h1>Clear Roofing Solutions for Your Home or Property</h1>
+          <p class="hero-copy">Get a free roof inspection and written estimate from a local team focused on clear communication and dependable residential work.</p>
           <div class="hero-actions">
             <a class="btn btn-primary" href="#contact">Request Estimate <span aria-hidden="true">→</span></a>
-            <a class="btn btn-secondary" href="#services">View Roofing Services</a>
+            <a class="btn btn-secondary" href="#services">Explore Services</a>
           </div>
-          <div class="trust-line"><p>Serving homeowners and property managers in Everett and nearby Snohomish County.</p></div>
+          <div class="trust-line"><p>Free roof inspection and written estimate for homeowners and property managers in Everett and nearby Snohomish County.</p></div>
         </div>
 
         <div class="hero-visual">
           <div class="hero-media"></div>
           <div class="hero-photo-caption">
             <small>Roofing</small>
-            <strong>Clear scopes. Simple estimates. Dependable roofing.</strong>
+            <strong>A simpler path from inspection to written estimate.</strong>
           </div>
           <div class="hero-fallback">
             <div class="fallback-top">
@@ -1254,11 +1255,11 @@
             </div>
             <div class="fallback-main">
               <small>Roofing</small>
-              <h2>Clear scopes. Simple estimates. Dependable roofing.</h2>
+              <h2>A simpler path from inspection to written estimate.</h2>
             </div>
             <div class="fallback-bottom">
-              <div class="chips"><ul class="hero-chips"><li>Free roof inspection</li><li>Written estimate</li><li>Emergency tarping</li></ul></div>
-              <div class="hero-proof">Free roof inspection and written estimate</div>
+              <div class="chips"><ul><li>Roof replacement</li><li>Fast inspections</li><li>Clear written scopes</li><li>Emergency tarping</li></ul></div>
+              <div class="hero-proof">Fast inspections, clear written scopes, and a simple estimate process.</div>
             </div>
           </div>
         </div>
@@ -1266,17 +1267,17 @@
     </section>
 
     <div class="ticker" aria-label="Highlights">
-      <div class="ticker-track"><p>Emergency tarping available • Emergency calls anytime</p></div>
+      <div class="ticker-track"><p>Roof replacement • Roof repair • Storm damage inspections • Emergency tarping • Gutter installation</p></div>
     </div>
 
     <section class="services" id="services">
       <div class="wrap">
         <p class="eyebrow">Services</p>
         <div class="section-head">
-          <h2>Roofing services for your property</h2>
-          <p>Get help with replacement, repairs, storm concerns, emergency protection, and gutters in Everett and nearby Snohomish County.</p>
+          <h2>Roofing Services Built Around Clear Next Steps</h2>
+          <p>Explore residential roofing support for replacement needs, repairs, storm concerns, emergency protection, and gutters.</p>
         </div>
-        <div class="service-grid"><div class="service-grid"><article><h3>Roof Replacement</h3><p>Explore roof replacement with a clear written scope and a simple estimate process.</p></article><article><h3>Roof Repair</h3><p>Request an inspection to discuss roof repair needs for your property.</p></article><article><h3>Storm Damage Inspections</h3><p>Have storm-related roof concerns inspected and documented in a written estimate.</p></article><article><h3>Emergency Tarping</h3><p>Call for emergency tarping when your property needs temporary roof protection.</p></article><article><h3>Gutter Installation</h3><p>Discuss gutter installation as part of your property's exterior needs.</p></article></div></div>
+        <div class="service-grid"><div class="services-list"><article><h3>Roof Replacement</h3><p>Start with an inspection and receive a clear written scope and estimate for your replacement project.</p></article><article><h3>Roof Repair</h3><p>Address roofing concerns with an inspection focused on identifying the work your property needs.</p></article><article><h3>Storm Damage Inspections</h3><p>Have your roof inspected after storm damage and receive clear information about the proposed scope.</p></article><article><h3>Emergency Tarping</h3><p>Emergency tarping is available for roofing situations that need immediate temporary protection.</p></article><article><h3>Gutter Installation</h3><p>Add gutter installation to support your home or property's exterior drainage needs.</p></article></div></div>
       </div>
     </section>
 
@@ -1284,10 +1285,10 @@
       <div class="wrap">
         <p class="eyebrow">Why choose us</p>
         <div class="section-head">
-          <h2>A clearer path from inspection to estimate</h2>
-          <p>Summit Ridge Roofing QA v20 focuses on responsive inspections, clear communication, and dependable residential work.</p>
+          <h2>Why Property Owners Choose a Clearer Roofing Process</h2>
+          <p>Summit Ridge Roofing QA v20 focuses on responsive inspections, straightforward written information, and dependable residential work.</p>
         </div>
-        <div class="why-grid"><ul class="differentiators"><li><strong>Fast inspections</strong><span>Start with a direct conversation about your roofing needs.</span></li><li><strong>Clear written scopes</strong><span>Understand the work being discussed before moving forward.</span></li><li><strong>Simple estimate process</strong><span>Request an estimate without navigating a cluttered process.</span></li></ul></div>
+        <div class="why-grid"><div class="differentiators"><article><h3>Fast Inspections</h3><p>Begin with a focused inspection of your roofing needs.</p></article><article><h3>Clear Written Scopes</h3><p>Review the proposed work in writing before moving ahead.</p></article><article><h3>Simple Estimates</h3><p>Follow an estimate process designed around clear communication and practical next steps.</p></article></div></div>
       </div>
     </section>
 
@@ -1295,9 +1296,9 @@
       <div class="wrap about-grid">
         <div class="about-media" data-monogram="Summit Ridge Roofing QA v20"></div>
         <div class="about-copy">
-          <p class="eyebrow">About Summit Ridge Roofing QA v20</p>
-          <h2>Local roofing with clear communication</h2>
-          <div class="about-body">Summit Ridge Roofing QA v20 is a local roofing team focused on clear communication and dependable residential work for homeowners and property managers in Everett and nearby Snohomish County.</div>
+          <p class="eyebrow">Focused on Dependable Residential Work</p>
+          <h2>Local Roofing With Clear Communication</h2>
+          <div class="about-body">Summit Ridge Roofing QA v20 is a local roofing team focused on clear communication and dependable residential work. The team serves homeowners and property managers in Everett and nearby Snohomish County with roof replacement, roof repair, storm damage inspections, emergency tarping, and gutter installation.</div>
           <div class="about-quote"></div>
           <div class="stats"></div>
         </div>
@@ -1308,10 +1309,10 @@
       <div class="wrap">
         <p class="eyebrow">How it works</p>
         <div class="section-head">
-          <h2>A simple estimate process</h2>
-          <p>Start with your property details and roofing concern, then connect with the team about an inspection and written scope.</p>
+          <h2>A Straightforward Roofing Process</h2>
+          <p>From the initial request through the written estimate, each stage is centered on clear communication.</p>
         </div>
-        <div class="process-list"><ol class="process-list"><li><h3>Request an estimate</h3><p>Share your contact information, property address, service need, and project details.</p></li><li><h3>Discuss the inspection</h3><p>Connect with the team about the roof, storm concern, emergency tarping need, or gutter project.</p></li><li><h3>Review the written scope</h3><p>Use the written estimate to understand the proposed work.</p></li></ol></div>
+        <div class="process-list"><div class="process-list"><article><h3>Request an Inspection</h3><p>Share your property information, service needs, and project details.</p></article><article><h3>Review the Roof</h3><p>The process begins with an inspection focused on the roofing concern or planned replacement.</p></article><article><h3>Receive a Written Estimate</h3><p>Review a clear written scope and estimate outlining the proposed work.</p></article><article><h3>Plan the Work</h3><p>Discuss project details, permit needs, materials, and timing based on the final scope.</p></article></div></div>
       </div>
     </section>
 
@@ -1341,10 +1342,10 @@
       <div class="wrap faq-grid">
         <div class="faq-copy">
           <p class="eyebrow">FAQ</p>
-          <h2>Roofing questions</h2>
-          <p>Find clear answers about inspections, project timing, permits, and roofing materials.</p>
+          <h2>Roofing Questions, Answered Clearly</h2>
+          <p>Review common questions about inspections, replacement planning, permits, and roofing materials.</p>
         </div>
-        <div class="faq-list"><div class="faq-list"><details><summary>How long does replacement take?</summary><p>Timing depends on the roof and project scope. Contact the team with your property details to discuss your replacement needs.</p></details><details><summary>Do you handle permits?</summary><p>Permit requirements can vary by project. Ask the team about permit needs when discussing your written scope.</p></details><details><summary>Are inspections free?</summary><p>Yes. The main offer includes a free roof inspection and written estimate.</p></details><details><summary>What roofing materials do you install?</summary><p>Material options depend on the project. Contact the team to discuss appropriate options for your property.</p></details></div></div>
+        <div class="faq-list"><div class="faq-list"><details><summary>How long does replacement take?</summary><p>Timing depends on the roof, project scope, materials, and other property-specific needs. Request an estimate to discuss timing for your project.</p></details><details><summary>Do you handle permits?</summary><p>Permit needs vary by project. Contact the team to discuss your property and clarify permit requirements within the written scope.</p></details><details><summary>Are inspections free?</summary><p>Yes. The current offer includes a free roof inspection and written estimate.</p></details><details><summary>What roofing materials do you install?</summary><p>Material options depend on the project. Request an estimate to discuss the materials appropriate for your roof and scope.</p></details></div></div>
       </div>
     </section>
 
@@ -1354,11 +1355,11 @@
           <div class="contact-grid">
             <div>
               <p class="eyebrow">Next step</p>
-              <h2>Request your roofing estimate</h2>
-              <p class="contact-body">Tell Summit Ridge Roofing QA v20 about your property and the service you need. The team serves Everett and nearby Snohomish County.</p>
-              <div class="contact-actions"><form name="client-lead" method="POST" data-netlify="true" netlify-honeypot="bot-field" action="/?submitted=1"><input type="hidden" name="form-name" value="client-lead"><p hidden><label for="bot_field">Do not fill this out</label><input id="bot_field" name="bot-field" type="text"></p><div><label for="name">Name</label><input id="name" name="name" type="text" autocomplete="name" required></div><div><label for="email">Email</label><input id="email" name="email" type="email" autocomplete="email" required></div><div><label for="phone">Phone</label><input id="phone" name="phone" type="tel" autocomplete="tel" required></div><div><label for="service">Service</label><select id="service" name="service" required><option value="">Choose a service</option><option>Roof replacement</option><option>Roof repair</option><option>Storm damage inspections</option><option>Emergency tarping</option><option>Gutter installation</option></select></div><div><label for="address">Address</label><input id="address" name="address" type="text" autocomplete="street-address"></div><div><label for="project_details">Project details</label><textarea id="project_details" name="project_details" required></textarea></div><div><label for="preferred_date">Preferred date</label><input id="preferred_date" name="preferred_date" type="date"></div><button type="submit">Request Estimate</button></form></div>
+              <h2>Request Your Free Roof Inspection and Written Estimate</h2>
+              <p class="contact-body">Tell Summit Ridge Roofing QA v20 about your roof, property, and preferred date. The team serves homeowners and property managers in Everett and nearby Snohomish County.</p>
+              <div class="contact-actions"><form name="client-lead" method="POST" data-netlify="true" netlify-honeypot="bot-field" action="/?submitted=1"><input type="hidden" name="form-name" value="client-lead"><p hidden><label>Do not fill this out: <input name="bot-field"></label></p><div><label for="name">Name</label><input id="name" name="name" type="text" autocomplete="name" required></div><div><label for="email">Email</label><input id="email" name="email" type="email" autocomplete="email" required></div><div><label for="phone">Phone</label><input id="phone" name="phone" type="tel" autocomplete="tel"></div><div><label for="service">Service</label><select id="service" name="service" required><option value="">Select a service</option><option value="Roof replacement">Roof replacement</option><option value="Roof repair">Roof repair</option><option value="Storm damage inspections">Storm damage inspections</option><option value="Emergency tarping">Emergency tarping</option><option value="Gutter installation">Gutter installation</option></select></div><div><label for="address">Address</label><input id="address" name="address" type="text" autocomplete="street-address"></div><div><label for="project_details">Project details</label><textarea id="project_details" name="project_details"></textarea></div><div><label for="preferred_date">Preferred date</label><input id="preferred_date" name="preferred_date" type="date"></div><button type="submit">Request Estimate</button></form></div>
             </div>
-            <div class="contact-details"><address><p><strong>Service area:</strong> Everett, WA</p><p><strong>Phone:</strong> <a href="tel:+14255550147">(425) 555-0147</a></p><p><strong>Email:</strong> <a href="mailto:arcwebhq@gmail.com">arcwebhq@gmail.com</a></p><p><strong>Hours:</strong> Mon–Fri, 7 AM–6 PM; emergency calls anytime</p></address></div>
+            <div class="contact-details"><address><p><a href="tel:+14255550147">(425) 555-0147</a></p><p><a href="mailto:arcwebhq@gmail.com">arcwebhq@gmail.com</a></p><p>Mon–Fri, 7 AM–6 PM; emergency calls anytime</p></address></div>
           </div>
         </div>
       </div>
@@ -1369,7 +1370,7 @@
     <div class="wrap footer-row">
       <div class="footer-copy">
         <strong>Summit Ridge Roofing QA v20</strong>
-        <span>Clear communication and dependable residential roofing in Everett and nearby Snohomish County.</span><br>
+        <span>Clear communication and dependable residential roofing work in Everett and nearby Snohomish County.</span><br>
         <span>© <span id="year"></span> All rights reserved.</span>
       </div>
       <div class="footer-links"><nav aria-label="Footer navigation"><a href="#about">About</a><a href="#services">Services</a><a href="#process">Process</a><a href="#faq">FAQ</a><a href="#contact">Contact</a></nav></div>

@@ -767,6 +767,8 @@
     .about-media img,
     .about-media picture,
     .about-media video{
+      position:absolute;
+      inset:0;
       width:100%;
       height:100%;
       object-fit:cover;
@@ -1614,6 +1616,19 @@
        */
       const unsplash = id => `https://images.unsplash.com/${id}?auto=format&fit=crop&w=1800&q=82`;
       const mediaPresets = [
+        {
+          match:/remodel|renovat|contractor|construction|kitchen|bathroom|home improvement|home service/,
+          label:"Preview imagery",
+          creditUrl:"https://unsplash.com",
+          images:[
+            unsplash("photo-1600585154340-be6161a56a0c"),
+            unsplash("photo-1600566753190-17f0baa2a6c3"),
+            unsplash("photo-1512917774080-9991f1c4c750"),
+            unsplash("photo-1600607687939-ce8a6c25118c"),
+            unsplash("photo-1600607688969-a5bfcd646154"),
+            unsplash("photo-1504307651254-35680f356dfd")
+          ]
+        },
         {
           match:/roof|siding|gutter|exterior/,
           label:"Preview imagery",

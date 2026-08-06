@@ -1322,6 +1322,15 @@
       .reveal,.reveal>*{opacity:1;transform:none}
       .js .hero-copy-column,.js .hero-visual{animation:none}
     }
+    .section-head.single{grid-template-columns:minmax(0,1fr)}
+    .service-grid:has(>:only-child),
+    .why-grid:has(>:only-child),
+    .proof-grid:has(>:only-child){grid-template-columns:minmax(0,1fr)}
+    .service-grid:has(>:nth-child(2):last-child),
+    .why-grid:has(>:nth-child(2):last-child),
+    .proof-grid:has(>:nth-child(2):last-child){grid-template-columns:repeat(2,minmax(0,1fr))}
+    .media-disclosure{display:none!important}
+
   </style>
   <script>
     (() => {
@@ -1494,7 +1503,7 @@
             <div>
               <p class="eyebrow">Next step</p>
               <h2>[[CONTACT_HEADING]]</h2>
-              <p class="contact-body">[[CONTACT_BODY]]</p>
+              <div class="contact-body">[[CONTACT_BODY]]</div>
               <div class="contact-actions">[[CONTACT_ACTION_HTML]]</div>
             </div>
             <div class="contact-details">[[CONTACT_DETAILS_HTML]]</div>
@@ -1526,7 +1535,13 @@
       const menu = $(".menu");
       const progress = $(".progress span");
       const year = $("#year");
-      const industry = (document.body.dataset.industry || "").toLowerCase();
+      const industry = [
+        document.body.dataset.industry || "",
+        text($(".hero .eyebrow")),
+        text($(".hero-copy")),
+        text($(".service-grid")),
+        text($(".about-body"))
+      ].join(" ").toLowerCase();
 
       if (year) year.textContent = new Date().getFullYear();
 
@@ -1593,7 +1608,17 @@
           if (empty(element)) element.classList.add("is-empty");
         });
       };
-      markEmpty(".trust-line,.chips,.hero-proof,.stats,.about-quote,.contact-details,.footer-links,.ticker");
+      markEmpty(".trust-line,.chips,.hero-proof,.stats,.about-quote,.contact-details,.footer-links,.ticker,.section-head h2,.section-head p,.faq-copy h2,.faq-copy>p:not(.eyebrow),.contact-card h2,.contact-body,.contact-actions>p,.contact-details>p");
+      $$(".section-head").forEach(element => {
+        const populated=[...element.children].filter(child => !empty(child));
+        if(!populated.length) element.classList.add("is-empty");
+        else if(populated.length===1) element.classList.add("single");
+      });
+      $$(".media-disclosure").forEach(element => element.remove());
+      $$(".gallery-grid figcaption").forEach(caption => {
+        const value=text(caption).toLowerCase();
+        if(value.includes("curated preview imagery") || value.includes("image credit")) caption.remove();
+      });
 
       const contentIsFake = element => {
         if (element?.querySelector("img,picture,video,svg")) return false;
@@ -1611,13 +1636,13 @@
 
       /*
        * Real uploads always win. When a client has not supplied photography, ARC
-       * adds clearly disclosed industry-direction imagery so the preview still
+       * adds industry-matched stock imagery so the preview still
        * communicates a premium visual system without inventing client work.
        */
       const unsplash = id => `https://images.unsplash.com/${id}?auto=format&fit=crop&w=1800&q=82`;
       const mediaPresets = [
         {
-          match:/remodel|renovat|contractor|construction|kitchen|bathroom|home improvement|home service/,
+          match:/remodel|renovat|kitchen|bathroom|home improvement/,
           label:"Preview imagery",
           creditUrl:"https://unsplash.com",
           images:[
@@ -1721,7 +1746,20 @@
           ]
         },
         {
-          match:/software|technology|saas|consult|agency/,
+          match:/web design|web designer|website design|web development|digital studio|digital agency|creative agency|ui\/ux|ux design|product design|ecommerce design/,
+          label:"Website design",
+          creditUrl:"https://unsplash.com",
+          images:[
+            unsplash("photo-1776278806688-64ef6a7e2cc5"),
+            unsplash("photo-1772272935464-2e90d8218987"),
+            unsplash("photo-1559028012-481c04fa702d"),
+            unsplash("photo-1658297063569-162817482fb6"),
+            unsplash("photo-1688561807440-8a57dfa77ee3"),
+            unsplash("photo-1530435460869-d13625c69bbf")
+          ]
+        },
+        {
+          match:/software|technology|saas|consult|it service|tech company/,
           label:"Preview imagery",
           creditUrl:"https://unsplash.com/photos/n3DNE1aN31M",
           images:[
@@ -1779,13 +1817,7 @@
         if(source) usedMediaSources.add(mediaKey(source));
         return source || "";
       };
-      const disclosure = (root,label=media.label) => {
-        if (!root || root.querySelector(".media-disclosure")) return;
-        const badge=document.createElement("span");
-        badge.className="media-disclosure";
-        badge.textContent=label;
-        root.appendChild(badge);
-      };
+      const disclosure = () => {};
       const setResponsiveSource = (node,src) => {
         if(!node || !src)return;
         node.src=src;
@@ -1803,19 +1835,7 @@
         }
       };
       const makeVisualCaption = root => {
-        if(!root || root.querySelector("figcaption"))return;
-        root.classList.add("visual-direction");
-        const caption=document.createElement("figcaption");
-        const label=document.createElement("span");
-        label.textContent="Curated preview imagery";
-        caption.appendChild(label);
-        if(media.creditUrl){
-          const credit=document.createElement("a");
-          credit.href=media.creditUrl;
-          credit.textContent="Image credit";
-          caption.appendChild(credit);
-        }
-        root.appendChild(caption);
+        if(root) root.classList.add("visual-direction");
       };
       const recoverImage = (node,onFallback) => {
         if(!node || node.dataset.arcFallbackReady==="true")return;
@@ -1826,7 +1846,7 @@
             node.hidden=true;
             return;
           }
-          node.alt=`Curated industry visual direction for ${industry || "this business"}`;
+          node.alt=`Relevant service image for ${industry || "this business"}`;
           setResponsiveSource(node,replacement);
           onFallback?.();
         });
@@ -1849,7 +1869,7 @@
         disclosure(heroVisual);
       });
       if (heroMedia && !heroMedia.querySelector("img,picture,video,svg")) {
-        const node=image(nextMedia(),`Curated visual direction for ${industry || "this business"}`,false);
+        const node=image(nextMedia(),`Relevant service image for ${industry || "this business"}`,false);
         node.fetchPriority="high";
         heroMedia.replaceChildren(node);
         heroMedia.dataset.fallbackMedia="true";
@@ -1863,7 +1883,7 @@
         disclosure(aboutMedia);
       });
       if (aboutMedia && !aboutMedia.querySelector("img,picture,video,svg")) {
-        aboutMedia.replaceChildren(image(nextMedia(),`Industry visual direction for ${industry || "this business"}`));
+        aboutMedia.replaceChildren(image(nextMedia(),`Relevant service image for ${industry || "this business"}`));
         aboutMedia.dataset.fallbackMedia="true";
         disclosure(aboutMedia);
       }
@@ -1875,7 +1895,7 @@
         galleryGrid.replaceChildren(...gallerySources.map((src,index) => {
           const figure=document.createElement("figure");
           figure.className="visual-direction";
-          figure.appendChild(image(src,`Visual direction ${index+1} for ${industry || "this business"}`));
+          figure.appendChild(image(src,`Service image ${index+1} for ${industry || "this business"}`));
           makeVisualCaption(figure);
           return figure;
         }));

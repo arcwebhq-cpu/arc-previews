@@ -5,12 +5,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Web Design for Everett Business Owners | Arc</title>
-  <meta name="description" content="Arc creates modern websites for Everett business owners, with free estimates and a free preview before payment.">
+  <meta name="description" content="ARC builds conversion-focused websites for business owners, starting with a free custom preview before payment.">
   <meta name="theme-color" content="#FFFFFF">
   <meta name="robots" content="index,follow">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta property="og:title" content="Web Design for Everett Business Owners | Arc">
-  <meta property="og:description" content="Arc creates modern websites for Everett business owners, with free estimates and a free preview before payment.">
+  <meta property="og:description" content="ARC builds conversion-focused websites for business owners, starting with a free custom preview before payment.">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Arc">
   <meta name="twitter:card" content="summary_large_image">
@@ -1322,6 +1322,15 @@
       .reveal,.reveal>*{opacity:1;transform:none}
       .js .hero-copy-column,.js .hero-visual{animation:none}
     }
+    .section-head.single{grid-template-columns:minmax(0,1fr)}
+    .service-grid:has(>:only-child),
+    .why-grid:has(>:only-child),
+    .proof-grid:has(>:only-child){grid-template-columns:minmax(0,1fr)}
+    .service-grid:has(>:nth-child(2):last-child),
+    .why-grid:has(>:nth-child(2):last-child),
+    .proof-grid:has(>:nth-child(2):last-child){grid-template-columns:repeat(2,minmax(0,1fr))}
+    .media-disclosure{display:none!important}
+
   </style>
   <script>
     (() => {
@@ -1360,7 +1369,7 @@
         <a href="#contact">Contact</a>
       </nav>
       <div class="nav-action">
-        <a class="btn btn-primary btn-small" href="#contact">Request Estimate <span aria-hidden="true">→</span></a>
+        <a class="btn btn-primary btn-small" href="#contact">Get Free Preview <span aria-hidden="true">→</span></a>
       </div>
       <button class="menu" type="button" aria-label="Toggle menu" aria-expanded="false"></button>
     </div>
@@ -1372,19 +1381,19 @@
         <div class="hero-copy-column">
           <p class="eyebrow">Web design in Everett</p>
           <h1>See Your Website Before You Pay</h1>
-          <p class="hero-copy">Arc creates modern websites for Everett business owners who want to sell or take reservations online.</p>
+          <p class="hero-copy">ARC builds premium, conversion-focused websites for business owners—starting with a free custom preview.</p>
           <div class="hero-actions">
-            <a class="btn btn-primary" href="#contact">Request Estimate <span aria-hidden="true">→</span></a>
+            <a class="btn btn-primary" href="#contact">Get Free Preview <span aria-hidden="true">→</span></a>
             <a class="btn btn-secondary" href="#services">Explore Website Services</a>
           </div>
-          <div class="trust-line"><p>For Everett business owners planning to sell or take reservations online.</p></div>
+          <div class="trust-line"><p>Built for business owners who want more trust, leads, and sales online.</p></div>
         </div>
 
         <div class="hero-visual">
           <div class="hero-media"></div>
           <div class="hero-photo-caption">
             <small>Web design</small>
-            <strong>Websites for online sales and reservations</strong>
+            <strong>Websites built to earn trust and action</strong>
           </div>
           <div class="hero-fallback">
             <div class="fallback-top">
@@ -1393,7 +1402,7 @@
             </div>
             <div class="fallback-main">
               <small>Web design</small>
-              <h2>Websites for online sales and reservations</h2>
+              <h2>Websites built to earn trust and action</h2>
             </div>
             <div class="fallback-bottom">
               <div class="chips"><span>Websites</span><span>Free estimate</span><span>Everett</span></div>
@@ -1405,17 +1414,17 @@
     </section>
 
     <div class="ticker" role="region" aria-label="Highlights">
-      <div class="ticker-track"><span>Modern web design</span><span>Online selling</span><span>Online reservations</span></div>
+      <div class="ticker-track"><span>Premium web design</span><span>Conversion-focused pages</span><span>Free custom preview</span></div>
     </div>
 
     <section class="services" id="services">
       <div class="wrap">
         <p class="eyebrow">Services</p>
         <div class="section-head">
-          <h2>Websites Built Around Your Goals</h2>
-          <p>Plan a modern website around the actions you want customers to take online.</p>
+          <h2>A complete website built to convert.</h2>
+          <p>Strategy, design, lead capture, and a clean ownership handoff in one focused system.</p>
         </div>
-        <div class="service-grid"><article><h3>Websites</h3><p>Modern websites built to help Everett businesses sell products or accept reservations online.</p></article></div>
+        <div class="service-grid"><article><h3>Conversion Strategy</h3><p>Clear messaging, service structure, and calls to action built around the next step you want visitors to take.</p></article><article><h3>Responsive Design</h3><p>A polished five-page website designed to feel premium and work cleanly across desktop, tablet, and mobile.</p></article><article><h3>Lead Capture & Handoff</h3><p>Contact forms, basic SEO, and a white-glove ownership transfer so the finished website is fully yours.</p></article></div>
       </div>
     </section>
 
@@ -1423,10 +1432,10 @@
       <div class="wrap">
         <p class="eyebrow">Why choose us</p>
         <div class="section-head">
-          <h2>Review the Direction Before Payment</h2>
-          <p>See how your website could take shape before deciding whether to move forward.</p>
+          <h2>See the work before taking the risk.</h2>
+          <p>ARC makes the decision simple: review the real direction first, then pay only if you want it.</p>
         </div>
-        <div class="why-grid"><article><h3>Free preview before payment</h3><p>Review a free website preview before payment, then decide whether to approve the finished website.</p></article></div>
+        <div class="why-grid"><article><h3>Free custom preview</h3><p>See a real website direction for your business before paying anything.</p></article><article><h3>Built around your offer</h3><p>Copy, visuals, services, and calls to action are shaped around what your customers need to understand.</p></article><article><h3>Own it after approval</h3><p>Approve the finished direction, complete payment, and receive the website through a clean ownership transfer.</p></article></div>
       </div>
     </section>
 
@@ -1435,8 +1444,8 @@
         <div class="about-media" data-monogram="Arc"></div>
         <div class="about-copy">
           <p class="eyebrow">About Arc</p>
-          <h2>Web Design Centered on Your Business Goals</h2>
-          <div class="about-body"><p>Arc designs websites for business owners in Everett. Each project focuses on the business's goals, including selling products or accepting reservations online, with a free preview before payment.</p></div>
+          <h2>Premium websites without the usual guesswork.</h2>
+          <div class="about-body"><p>ARC helps business owners replace weak, confusing websites with clear digital experiences that build trust and drive action. Every project starts with a free custom preview, so the work earns approval before payment.</p></div>
           <div class="about-quote"></div>
           <div class="stats"></div>
         </div>
@@ -1447,10 +1456,10 @@
       <div class="wrap">
         <p class="eyebrow">How it works</p>
         <div class="section-head">
-          <h2>From Estimate to Website Approval</h2>
-          <p>Start by sharing your needs, then review the proposed website direction before payment.</p>
+          <h2>From business details to full ownership.</h2>
+          <p>A simple three-step path with no sales call and no payment before the preview.</p>
         </div>
-        <div class="process-list"><article><h3>1. Share Your Project</h3><p>Tell us about your website and online selling or reservation goals.</p></article><article><h3>2. Review the Preview</h3><p>See a free website preview before payment.</p></article><article><h3>3. Approve and Proceed</h3><p>Decide whether to move forward after reviewing the website direction.</p></article></div>
+        <div class="process-list"><article><h3>1. Share Your Business</h3><p>Complete the short intake with your services, goals, brand direction, and ideal customer.</p></article><article><h3>2. Review Your Preview</h3><p>Open the private website preview and judge the real direction before paying.</p></article><article><h3>3. Approve & Own It</h3><p>Pay only if you want the website, then receive it through the white-glove ownership transfer.</p></article></div>
       </div>
     </section>
 
@@ -1458,8 +1467,8 @@
       <div class="wrap">
         <p class="eyebrow">Work</p>
         <div class="section-head">
-          <h2></h2>
-          <p></p>
+          <h2>Visual direction that supports the offer.</h2>
+          <p>Every image is selected to match the service, strengthen the message, and make the website feel intentional.</p>
         </div>
         <div class="gallery-grid"></div>
       </div>
@@ -1483,7 +1492,7 @@
           <h2>Website Questions</h2>
           <p>Learn about previews, estimates, project scope, and timing before getting started.</p>
         </div>
-        <div class="faq-list"><details><summary>Do I pay before seeing the website preview?</summary><p>No. We make a free preview before payment so you can review the direction first.</p></details><details><summary>Can my website support online selling or reservations?</summary><p>That can be discussed as part of your website goals. Request an estimate and describe the service you need.</p></details><details><summary>How long will my website take?</summary><p>Timing depends on the project scope. Request an estimate to discuss your website and next steps.</p></details><details><summary>Is the estimate free?</summary><p>Yes. Share the website service you need to request a free estimate.</p></details></div>
+        <div class="faq-list"><details><summary>Do I pay before seeing the website preview?</summary><p>No. We make a free preview before payment so you can review the direction first.</p></details><details><summary>What does the website include?</summary><p>The standard build includes five responsive pages, clear service messaging, lead capture, basic SEO, and ownership transfer after approval.</p></details><details><summary>How long does the process take?</summary><p>Timing depends on the business and scope. Your preview email explains the exact next step after the intake is reviewed.</p></details><details><summary>Is the preview really free?</summary><p>Yes. The custom preview is free, and payment happens only after you approve the direction.</p></details></div>
       </div>
     </section>
 
@@ -1493,9 +1502,9 @@
           <div class="contact-grid">
             <div>
               <p class="eyebrow">Next step</p>
-              <h2>Request a Website Estimate</h2>
-              <p class="contact-body"><p>Share your website needs, including whether you want to sell products or accept reservations online. We'll use your details to discuss the project scope.</p></p>
-              <div class="contact-actions"><form name="client-lead" method="POST" data-netlify="true" netlify-honeypot="bot-field" action="/?submitted=1"><input type="hidden" name="form-name" value="client-lead"><p hidden><label>Do not fill this out: <input name="bot-field"></label></p><p><label for="lead_name">Name</label><input id="lead_name" name="name" type="text" required></p><p><label for="lead_email">Email</label><input id="lead_email" name="email" type="email" required></p><p><label for="lead_phone">Phone</label><input id="lead_phone" name="phone" type="tel"></p><p><label for="lead_service">Service</label><input id="lead_service" name="service" type="text" required></p><button type="submit">Request Estimate</button></form></div>
+              <h2>Get Your Free Website Preview</h2>
+              <div class="contact-body"><p>Share your goals and we’ll build a free custom preview around your business. Pay only if you want to own and launch it.</p></div>
+              <div class="contact-actions"><form name="client-lead" method="POST" data-netlify="true" netlify-honeypot="bot-field" action="/?submitted=1"><input type="hidden" name="form-name" value="client-lead"><p hidden><label>Do not fill this out: <input name="bot-field"></label></p><p><label for="lead_name">Name</label><input id="lead_name" name="name" type="text" required></p><p><label for="lead_email">Email</label><input id="lead_email" name="email" type="email" required></p><p><label for="lead_phone">Phone</label><input id="lead_phone" name="phone" type="tel"></p><p><label for="lead_service">Service</label><input id="lead_service" name="service" type="text" required></p><button type="submit">Get Free Preview</button></form></div>
             </div>
             <div class="contact-details"><a href="tel:14254431760">425-443-1760</a></div>
           </div>
@@ -1508,13 +1517,13 @@
     <div class="wrap footer-row">
       <div class="footer-copy">
         <strong>Arc</strong>
-        <span>Modern websites for Everett business owners.</span><br>
+        <span>Premium websites built before you pay.</span><br>
         <span>© <span id="year"></span> All rights reserved.</span>
       </div>
       <div class="footer-links"><a href="#about">About</a><a href="#services">Services</a><a href="#process">Process</a><a href="#contact">Contact</a></div>
     </div>
   </footer>
-  <a class="btn btn-primary mobile-cta" href="#contact">Request Estimate <span aria-hidden="true">→</span></a>
+  <a class="btn btn-primary mobile-cta" href="#contact">Get Free Preview <span aria-hidden="true">→</span></a>
 
   <script>
     (() => {
@@ -1526,7 +1535,13 @@
       const menu = $(".menu");
       const progress = $(".progress span");
       const year = $("#year");
-      const industry = (document.body.dataset.industry || "").toLowerCase();
+      const industry = [
+        document.body.dataset.industry || "",
+        text($(".hero .eyebrow")),
+        text($(".hero-copy")),
+        text($(".service-grid")),
+        text($(".about-body"))
+      ].join(" ").toLowerCase();
 
       if (year) year.textContent = new Date().getFullYear();
 
@@ -1593,7 +1608,17 @@
           if (empty(element)) element.classList.add("is-empty");
         });
       };
-      markEmpty(".trust-line,.chips,.hero-proof,.stats,.about-quote,.contact-details,.footer-links,.ticker");
+      markEmpty(".trust-line,.chips,.hero-proof,.stats,.about-quote,.contact-details,.footer-links,.ticker,.section-head h2,.section-head p,.faq-copy h2,.faq-copy>p:not(.eyebrow),.contact-card h2,.contact-body,.contact-actions>p,.contact-details>p");
+      $$(".section-head").forEach(element => {
+        const populated=[...element.children].filter(child => !empty(child));
+        if(!populated.length) element.classList.add("is-empty");
+        else if(populated.length===1) element.classList.add("single");
+      });
+      $$(".media-disclosure").forEach(element => element.remove());
+      $$(".gallery-grid figcaption").forEach(caption => {
+        const value=text(caption).toLowerCase();
+        if(value.includes("curated preview imagery") || value.includes("image credit")) caption.remove();
+      });
 
       const contentIsFake = element => {
         if (element?.querySelector("img,picture,video,svg")) return false;
@@ -1611,13 +1636,13 @@
 
       /*
        * Real uploads always win. When a client has not supplied photography, ARC
-       * adds clearly disclosed industry-direction imagery so the preview still
+       * adds industry-matched stock imagery so the preview still
        * communicates a premium visual system without inventing client work.
        */
       const unsplash = id => `https://images.unsplash.com/${id}?auto=format&fit=crop&w=1800&q=82`;
       const mediaPresets = [
         {
-          match:/remodel|renovat|contractor|construction|kitchen|bathroom|home improvement|home service/,
+          match:/remodel|renovat|kitchen|bathroom|home improvement/,
           label:"Preview imagery",
           creditUrl:"https://unsplash.com",
           images:[
@@ -1721,7 +1746,20 @@
           ]
         },
         {
-          match:/software|technology|saas|consult|agency/,
+          match:/web design|web designer|website design|web development|digital studio|digital agency|creative agency|ui\/ux|ux design|product design|ecommerce design/,
+          label:"Website design",
+          creditUrl:"https://unsplash.com",
+          images:[
+            unsplash("photo-1776278806688-64ef6a7e2cc5"),
+            unsplash("photo-1772272935464-2e90d8218987"),
+            unsplash("photo-1559028012-481c04fa702d"),
+            unsplash("photo-1658297063569-162817482fb6"),
+            unsplash("photo-1688561807440-8a57dfa77ee3"),
+            unsplash("photo-1530435460869-d13625c69bbf")
+          ]
+        },
+        {
+          match:/software|technology|saas|consult|it service|tech company/,
           label:"Preview imagery",
           creditUrl:"https://unsplash.com/photos/n3DNE1aN31M",
           images:[
@@ -1779,13 +1817,7 @@
         if(source) usedMediaSources.add(mediaKey(source));
         return source || "";
       };
-      const disclosure = (root,label=media.label) => {
-        if (!root || root.querySelector(".media-disclosure")) return;
-        const badge=document.createElement("span");
-        badge.className="media-disclosure";
-        badge.textContent=label;
-        root.appendChild(badge);
-      };
+      const disclosure = () => {};
       const setResponsiveSource = (node,src) => {
         if(!node || !src)return;
         node.src=src;
@@ -1803,19 +1835,7 @@
         }
       };
       const makeVisualCaption = root => {
-        if(!root || root.querySelector("figcaption"))return;
-        root.classList.add("visual-direction");
-        const caption=document.createElement("figcaption");
-        const label=document.createElement("span");
-        label.textContent="Curated preview imagery";
-        caption.appendChild(label);
-        if(media.creditUrl){
-          const credit=document.createElement("a");
-          credit.href=media.creditUrl;
-          credit.textContent="Image credit";
-          caption.appendChild(credit);
-        }
-        root.appendChild(caption);
+        if(root) root.classList.add("visual-direction");
       };
       const recoverImage = (node,onFallback) => {
         if(!node || node.dataset.arcFallbackReady==="true")return;
@@ -1826,7 +1846,7 @@
             node.hidden=true;
             return;
           }
-          node.alt=`Curated industry visual direction for ${industry || "this business"}`;
+          node.alt=`Relevant service image for ${industry || "this business"}`;
           setResponsiveSource(node,replacement);
           onFallback?.();
         });
@@ -1849,7 +1869,7 @@
         disclosure(heroVisual);
       });
       if (heroMedia && !heroMedia.querySelector("img,picture,video,svg")) {
-        const node=image(nextMedia(),`Curated visual direction for ${industry || "this business"}`,false);
+        const node=image(nextMedia(),`Relevant service image for ${industry || "this business"}`,false);
         node.fetchPriority="high";
         heroMedia.replaceChildren(node);
         heroMedia.dataset.fallbackMedia="true";
@@ -1863,7 +1883,7 @@
         disclosure(aboutMedia);
       });
       if (aboutMedia && !aboutMedia.querySelector("img,picture,video,svg")) {
-        aboutMedia.replaceChildren(image(nextMedia(),`Industry visual direction for ${industry || "this business"}`));
+        aboutMedia.replaceChildren(image(nextMedia(),`Relevant service image for ${industry || "this business"}`));
         aboutMedia.dataset.fallbackMedia="true";
         disclosure(aboutMedia);
       }
@@ -1875,7 +1895,7 @@
         galleryGrid.replaceChildren(...gallerySources.map((src,index) => {
           const figure=document.createElement("figure");
           figure.className="visual-direction";
-          figure.appendChild(image(src,`Visual direction ${index+1} for ${industry || "this business"}`));
+          figure.appendChild(image(src,`Service image ${index+1} for ${industry || "this business"}`));
           makeVisualCaption(figure);
           return figure;
         }));
@@ -1961,7 +1981,7 @@
           "@context":"https://schema.org",
           "@type":"LocalBusiness",
           "name":"Arc",
-          "description":"Arc creates modern websites for Everett business owners, with free estimates and a free preview before payment.",
+          "description":"ARC builds conversion-focused websites for business owners, starting with a free custom preview before payment.",
           "areaServed":"Everett"
         };
         const node = document.createElement("script");

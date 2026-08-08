@@ -1331,6 +1331,84 @@
     .proof-grid:has(>:nth-child(2):last-child){grid-template-columns:repeat(2,minmax(0,1fr))}
     .media-disclosure{display:none!important}
 
+    /*
+     * One safe master template, four distinct industry directions.
+     * The content contract stays fixed while composition changes by category.
+     */
+    body.arc-layout-impact .hero-grid{
+      grid-template-columns:minmax(420px,.86fr) minmax(0,1.14fr)
+    }
+    body.arc-layout-impact .hero-copy-column{order:2}
+    body.arc-layout-impact .hero-visual{
+      order:1;
+      min-height:clamp(500px,55vw,700px)
+    }
+    body.arc-layout-impact .service-grid:has(>:nth-child(3):last-child)>:first-child{grid-column:span 2}
+    body.arc-layout-impact .service-grid:has(>:nth-child(3):last-child)>:nth-child(3){grid-column:1/-1;min-height:220px}
+    body.arc-layout-impact .gallery-grid:has(>:nth-child(3):last-child)>:first-child{grid-column:span 5}
+    body.arc-layout-impact .gallery-grid:has(>:nth-child(3):last-child)>:nth-child(2){grid-column:span 7}
+
+    body.arc-layout-editorial .hero-grid{
+      grid-template-columns:minmax(0,.76fr) minmax(470px,1.14fr);
+      gap:clamp(52px,8vw,122px)
+    }
+    body.arc-layout-editorial .hero-visual{min-height:clamp(540px,58vw,730px)}
+    body.arc-layout-editorial .about-media{order:2}
+    body.arc-layout-editorial .about-copy{order:1}
+    body.arc-layout-editorial .service-grid:has(>:nth-child(3):last-child){
+      grid-template-columns:repeat(12,1fr)
+    }
+    body.arc-layout-editorial .service-grid:has(>:nth-child(3):last-child)>:first-child{grid-column:span 7}
+    body.arc-layout-editorial .service-grid:has(>:nth-child(3):last-child)>:nth-child(2){grid-column:span 5}
+    body.arc-layout-editorial .service-grid:has(>:nth-child(3):last-child)>:nth-child(3){grid-column:1/-1;min-height:220px}
+    body.arc-layout-editorial .gallery-grid:has(>:nth-child(3):last-child)>:first-child{grid-column:span 7}
+    body.arc-layout-editorial .gallery-grid:has(>:nth-child(3):last-child)>:nth-child(2){grid-column:span 5}
+
+    body.arc-layout-trusted .hero-grid{
+      grid-template-columns:minmax(0,1.12fr) minmax(390px,.76fr)
+    }
+    body.arc-layout-trusted .hero-visual{min-height:clamp(440px,48vw,610px)}
+    body.arc-layout-trusted .service-grid:has(>:nth-child(3):last-child){
+      grid-template-columns:repeat(2,minmax(0,1fr))
+    }
+    body.arc-layout-trusted .service-grid:has(>:nth-child(3):last-child)>:nth-child(3){grid-column:1/-1;min-height:220px}
+    body.arc-layout-trusted .gallery-grid:has(>:nth-child(3):last-child)>:first-child{grid-column:1/-1}
+    body.arc-layout-trusted .gallery-grid:has(>:nth-child(3):last-child)>:nth-child(2),
+    body.arc-layout-trusted .gallery-grid:has(>:nth-child(3):last-child)>:nth-child(3){grid-column:span 6}
+
+    @media(max-width:1000px){
+      body.arc-layout-impact .hero-copy-column,
+      body.arc-layout-editorial .hero-copy-column,
+      body.arc-layout-trusted .hero-copy-column{order:1}
+      body.arc-layout-impact .hero-visual,
+      body.arc-layout-editorial .hero-visual,
+      body.arc-layout-trusted .hero-visual{order:2;min-height:560px}
+      body.arc-layout-editorial .about-media{order:0}
+      body.arc-layout-editorial .about-copy{order:0}
+      body.arc-layout-impact .service-grid:has(>:nth-child(3):last-child),
+      body.arc-layout-editorial .service-grid:has(>:nth-child(3):last-child),
+      body.arc-layout-trusted .service-grid:has(>:nth-child(3):last-child){grid-template-columns:repeat(2,minmax(0,1fr))}
+      body.arc-layout-impact .service-grid:has(>:nth-child(3):last-child)>:first-child,
+      body.arc-layout-editorial .service-grid:has(>:nth-child(3):last-child)>:first-child{grid-column:auto}
+      body.arc-layout-impact .service-grid:has(>:nth-child(3):last-child)>:nth-child(3),
+      body.arc-layout-editorial .service-grid:has(>:nth-child(3):last-child)>:nth-child(3),
+      body.arc-layout-trusted .service-grid:has(>:nth-child(3):last-child)>:nth-child(3){grid-column:1/-1}
+    }
+    @media(max-width:660px){
+      body.arc-layout-impact .hero-visual,
+      body.arc-layout-editorial .hero-visual,
+      body.arc-layout-trusted .hero-visual{min-height:388px}
+      body.arc-layout-impact .service-grid:has(>:nth-child(3):last-child),
+      body.arc-layout-editorial .service-grid:has(>:nth-child(3):last-child),
+      body.arc-layout-trusted .service-grid:has(>:nth-child(3):last-child){grid-template-columns:1fr}
+      body.arc-layout-impact .service-grid:has(>:nth-child(3):last-child)>*,
+      body.arc-layout-editorial .service-grid:has(>:nth-child(3):last-child)>*,
+      body.arc-layout-trusted .service-grid:has(>:nth-child(3):last-child)>*,
+      body.arc-layout-impact .gallery-grid:has(>:nth-child(3):last-child)>*,
+      body.arc-layout-editorial .gallery-grid:has(>:nth-child(3):last-child)>*,
+      body.arc-layout-trusted .gallery-grid:has(>:nth-child(3):last-child)>*{grid-column:auto}
+    }
+
   </style>
   <script>
     (() => {
@@ -1535,8 +1613,9 @@
       const menu = $(".menu");
       const progress = $(".progress span");
       const year = $("#year");
-      const industry = [
-        document.body.dataset.industry || "",
+      const primaryIndustry = (document.body.dataset.industry || "").trim().toLowerCase();
+      const industryContext = [
+        primaryIndustry,
         text($(".hero .eyebrow")),
         text($(".hero-copy")),
         text($(".service-grid")),
@@ -1642,9 +1721,10 @@
       const unsplash = id => `https://images.unsplash.com/${id}?auto=format&fit=crop&w=1800&q=82`;
       const mediaPresets = [
         {
-          match:/remodel|renovat|kitchen|bathroom|home improvement/,
-          label:"Preview imagery",
-          creditUrl:"https://unsplash.com",
+          key:"remodeling",
+          layout:"impact",
+          alt:"Home remodeling",
+          match:/\b(remodel(?:ing|er)?|renovat(?:e|ion|ing)?|kitchen|bathroom|home improvement)\b/,
           images:[
             unsplash("photo-1600585154340-be6161a56a0c"),
             unsplash("photo-1600566753190-17f0baa2a6c3"),
@@ -1655,9 +1735,10 @@
           ]
         },
         {
-          match:/roof|siding|gutter|exterior/,
-          label:"Preview imagery",
-          creditUrl:"https://unsplash.com/photos/-uvuU43FAwQ",
+          key:"roofing",
+          layout:"impact",
+          alt:"Roofing",
+          match:/\b(roof(?:er|ing)?|siding|gutters?|exteriors?)\b/,
           images:[
             unsplash("photo-1755114203680-d39d95efa82c"),
             unsplash("photo-1541888946425-d81bb19240f5"),
@@ -1668,9 +1749,24 @@
           ]
         },
         {
-          match:/dent|medical|clinic|health|orthodont/,
-          label:"Preview imagery",
-          creditUrl:"https://unsplash.com/photos/vVKh9xeLub4",
+          key:"hvac_trades",
+          layout:"impact",
+          alt:"HVAC service",
+          match:/\b(hvac|air conditioning|air conditioner|heating|furnace|heat pump|plumb(?:er|ing)?|electric(?:al|ian)?|construction|contractor|home services?)\b/,
+          images:[
+            unsplash("photo-1621905251189-08b45d6a269e"),
+            unsplash("photo-1615774925655-a0e97fc85c14"),
+            unsplash("photo-1660330589827-da8ab7dd3c02"),
+            unsplash("photo-1642749776312-aa42ce20c9f5"),
+            unsplash("photo-1660330590022-9f4ff56b63f6"),
+            unsplash("photo-1625148230889-8195e85aae6b")
+          ]
+        },
+        {
+          key:"dental",
+          layout:"trusted",
+          alt:"Dental care",
+          match:/\b(dent(?:al|ist|istry)|orthodont(?:ic|ics|ist)|oral surgery)\b/,
           images:[
             unsplash("photo-1629909615957-be38d48fbbe6"),
             unsplash("photo-1606811971618-4486d14f3f99"),
@@ -1681,9 +1777,38 @@
           ]
         },
         {
-          match:/restaurant|food|hospitality|cafe|bakery|cater/,
-          label:"Preview imagery",
-          creditUrl:"https://unsplash.com/photos/jwPuIQTa3qE",
+          key:"medical_spa",
+          layout:"editorial",
+          alt:"Aesthetic treatment",
+          match:/\b(med(?:ical)? spa|medspa|aesthetic(?:s)?|injectables?|botox|facial treatment|skin rejuvenation)\b/,
+          images:[
+            unsplash("photo-1600334089648-b0d9d3028eb2"),
+            unsplash("photo-1515377905703-c4788e51af15"),
+            unsplash("photo-1570172619644-dfd03ed5d881"),
+            unsplash("photo-1506634064465-7dab4de896ed"),
+            unsplash("photo-1540555700478-4be289fbecef"),
+            unsplash("photo-1512290923902-8a9f81dc236c")
+          ]
+        },
+        {
+          key:"healthcare",
+          layout:"trusted",
+          alt:"Healthcare",
+          match:/\b(medical|health(?:care)?|clinic|doctor|physician|chiropract(?:ic|or)|physical therapy|therapist|urgent care)\b/,
+          images:[
+            unsplash("photo-1550831107-1553da8c8464"),
+            unsplash("photo-1576091160399-112ba8d25d1d"),
+            unsplash("photo-1538108149393-fbbd81895907"),
+            unsplash("photo-1584982751601-97dcc096659c"),
+            unsplash("photo-1516841273335-e39b37888115"),
+            unsplash("photo-1579684385127-1ef15d508118")
+          ]
+        },
+        {
+          key:"restaurant",
+          layout:"editorial",
+          alt:"Restaurant dining",
+          match:/\b(restaurant|food|hospitality|cafe|bakery|cater(?:er|ing)?)\b/,
           images:[
             unsplash("photo-1773100699991-b7e6bf89a6a1"),
             unsplash("photo-1517248135467-4c7edcad34c4"),
@@ -1694,9 +1819,10 @@
           ]
         },
         {
-          match:/real estate|realtor|property|builder|architect/,
-          label:"Preview imagery",
-          creditUrl:"https://unsplash.com/photos/7qD-iDyrdHY",
+          key:"real_estate",
+          layout:"editorial",
+          alt:"Real estate",
+          match:/\b(real estate|realtor|property|brokerage|home builder|architect(?:ure)?)\b/,
           images:[
             unsplash("photo-1756435292384-1bf32eff7baf"),
             unsplash("photo-1600585154340-be6161a56a0c"),
@@ -1707,9 +1833,10 @@
           ]
         },
         {
-          match:/fitness|gym|wellness|trainer|yoga/,
-          label:"Preview imagery",
-          creditUrl:"https://unsplash.com/photos/fuyulf8cNmg",
+          key:"fitness",
+          layout:"impact",
+          alt:"Fitness training",
+          match:/\b(fitness|gym|wellness|personal trainer|yoga|strength club)\b/,
           images:[
             unsplash("photo-1758448756350-3d0eec02ba37"),
             unsplash("photo-1716367840427-4c148eb7bf15"),
@@ -1720,9 +1847,10 @@
           ]
         },
         {
-          match:/auto|car|mechanic|collision|detail/,
-          label:"Preview imagery",
-          creditUrl:"https://unsplash.com/photos/1771340012378-3c86cb649193",
+          key:"auto",
+          layout:"impact",
+          alt:"Automotive service",
+          match:/\b(auto|automotive|cars?|vehicles?|mechanic|collision|detailing|detailer|ceramic coating)\b/,
           images:[
             unsplash("photo-1771340012378-3c86cb649193"),
             unsplash("photo-1492144534655-ae79c964c9d7"),
@@ -1733,48 +1861,24 @@
           ]
         },
         {
-          match:/beauty|salon|barber|spa|cosmetic/,
-          label:"Preview imagery",
-          creditUrl:"https://unsplash.com/photos/1521590832167-7bcbfaa6381f",
+          key:"legal",
+          layout:"trusted",
+          alt:"Legal service",
+          match:/\b(law|legal|attorney|lawyer|law firm)\b/,
           images:[
-            unsplash("photo-1521590832167-7bcbfaa6381f"),
-            unsplash("photo-1560066984-138dadb4c035"),
-            unsplash("photo-1522337360788-8b13dee7a37e"),
-            unsplash("photo-1562322140-8baeececf3df"),
-            unsplash("photo-1595476108010-b4d1f102b1b1"),
-            unsplash("photo-1487412912498-0447578fcca8")
+            unsplash("photo-1589829545856-d10d557cf95f"),
+            unsplash("photo-1505664194779-8beaceb93744"),
+            unsplash("photo-1450101499163-c8848c66ca85"),
+            unsplash("photo-1521587760476-6c12a4b040da"),
+            unsplash("photo-1589578527966-fdac0f44566c"),
+            unsplash("photo-1593115057322-e94b77572f20")
           ]
         },
         {
-          match:/web design|web designer|website design|web development|digital studio|digital agency|creative agency|ui\/ux|ux design|product design|ecommerce design/,
-          label:"Website design",
-          creditUrl:"https://unsplash.com",
-          images:[
-            unsplash("photo-1776278806688-64ef6a7e2cc5"),
-            unsplash("photo-1772272935464-2e90d8218987"),
-            unsplash("photo-1559028012-481c04fa702d"),
-            unsplash("photo-1658297063569-162817482fb6"),
-            unsplash("photo-1688561807440-8a57dfa77ee3"),
-            unsplash("photo-1530435460869-d13625c69bbf")
-          ]
-        },
-        {
-          match:/software|technology|saas|consult|it service|tech company/,
-          label:"Preview imagery",
-          creditUrl:"https://unsplash.com/photos/n3DNE1aN31M",
-          images:[
-            unsplash("photo-1760346546767-95b89356a6bb"),
-            unsplash("photo-1497366754035-f200968a6e72"),
-            unsplash("photo-1522071820081-009f0129c71c"),
-            unsplash("photo-1521737711867-e3b97375f902"),
-            unsplash("photo-1531482615713-2afd69097998"),
-            unsplash("photo-1556761175-b413da4baf72")
-          ]
-        },
-        {
-          match:/law|legal|account|financ|insurance|professional/,
-          label:"Preview imagery",
-          creditUrl:"https://unsplash.com/photos/MhqUBTxQ3Hw",
+          key:"finance",
+          layout:"trusted",
+          alt:"Financial service",
+          match:/\b(account(?:ant|ing)?|cpa|finance|financial|insurance|bookkeep(?:er|ing)?|tax)\b/,
           images:[
             unsplash("photo-1775163024488-e88e4a71179f"),
             unsplash("photo-1450101499163-c8848c66ca85"),
@@ -1785,9 +1889,52 @@
           ]
         },
         {
+          key:"web_design",
+          layout:"editorial",
+          alt:"Website design",
+          match:/\b(web design|web designer|website design|web development|digital studio|digital agency|creative agency|ui\/ux|ux design|product design|ecommerce design)\b/,
+          images:[
+            unsplash("photo-1776278806688-64ef6a7e2cc5"),
+            unsplash("photo-1772272935464-2e90d8218987"),
+            unsplash("photo-1559028012-481c04fa702d"),
+            unsplash("photo-1658297063569-162817482fb6"),
+            unsplash("photo-1688561807440-8a57dfa77ee3"),
+            unsplash("photo-1530435460869-d13625c69bbf")
+          ]
+        },
+        {
+          key:"technology",
+          layout:"trusted",
+          alt:"Technology team",
+          match:/\b(software|technology|saas|consulting|it services?|tech company)\b/,
+          images:[
+            unsplash("photo-1760346546767-95b89356a6bb"),
+            unsplash("photo-1497366754035-f200968a6e72"),
+            unsplash("photo-1522071820081-009f0129c71c"),
+            unsplash("photo-1521737711867-e3b97375f902"),
+            unsplash("photo-1531482615713-2afd69097998"),
+            unsplash("photo-1556761175-b413da4baf72")
+          ]
+        },
+        {
+          key:"beauty",
+          layout:"editorial",
+          alt:"Beauty service",
+          match:/\b(beauty|salon|barber|spa|cosmetic|skincare|skin care)\b/,
+          images:[
+            unsplash("photo-1521590832167-7bcbfaa6381f"),
+            unsplash("photo-1560066984-138dadb4c035"),
+            unsplash("photo-1522337360788-8b13dee7a37e"),
+            unsplash("photo-1562322140-8baeececf3df"),
+            unsplash("photo-1595476108010-b4d1f102b1b1"),
+            unsplash("photo-1487412912498-0447578fcca8")
+          ]
+        },
+        {
+          key:"general",
+          layout:"balanced",
+          alt:"Professional service",
           match:/.*/,
-          label:"Preview imagery",
-          creditUrl:"https://unsplash.com",
           images:[
             unsplash("photo-1497366811353-6870744d04b2"),
             unsplash("photo-1524758631624-e2822e304c36"),
@@ -1798,7 +1945,29 @@
           ]
         }
       ];
-      const media = mediaPresets.find(preset => preset.match.test(industry));
+      const media =
+        mediaPresets.find(preset => preset.key !== "general" && preset.match.test(primaryIndustry)) ||
+        mediaPresets.find(preset => preset.key !== "general" && preset.match.test(industryContext)) ||
+        mediaPresets[mediaPresets.length - 1];
+      document.body.classList.add(`arc-layout-${media.layout}`);
+      document.body.dataset.mediaPreset=media.key;
+      const shortAlt = (kind,index=0) => {
+        const suffix = kind === "hero"
+          ? "featured service"
+          : kind === "about"
+            ? "team and service"
+            : kind === "gallery"
+              ? `project ${index + 1}`
+              : "service";
+        return `${media.alt} ${suffix}`.replace(/\s+/g," ").trim().slice(0,120);
+      };
+      const normalizeAlt = (node,fallback) => {
+        if(!node)return;
+        const value=(node.getAttribute("alt") || "").replace(/\s+/g," ").trim();
+        if(!value || value.length > 140 || /curated preview imagery|image credit|visual direction/i.test(value)){
+          node.alt=fallback;
+        }
+      };
       const mediaKey = value => {
         try {
           const url=new URL(value,location.href);
@@ -1846,7 +2015,7 @@
             node.hidden=true;
             return;
           }
-          node.alt=`Relevant service image for ${industry || "this business"}`;
+          node.alt=shortAlt("service");
           setResponsiveSource(node,replacement);
           onFallback?.();
         });
@@ -1864,12 +2033,13 @@
       const heroVisual = $(".hero-visual");
       const heroMedia = $(".hero-media");
       const suppliedHeroImage=heroMedia?.querySelector("img");
+      normalizeAlt(suppliedHeroImage,shortAlt("hero"));
       recoverImage(suppliedHeroImage,() => {
         heroMedia.dataset.fallbackMedia="true";
         disclosure(heroVisual);
       });
       if (heroMedia && !heroMedia.querySelector("img,picture,video,svg")) {
-        const node=image(nextMedia(),`Relevant service image for ${industry || "this business"}`,false);
+        const node=image(nextMedia(),shortAlt("hero"),false);
         node.fetchPriority="high";
         heroMedia.replaceChildren(node);
         heroMedia.dataset.fallbackMedia="true";
@@ -1878,24 +2048,28 @@
 
       const aboutMedia = $(".about-media");
       const suppliedAboutImage=aboutMedia?.querySelector("img");
+      normalizeAlt(suppliedAboutImage,shortAlt("about"));
       recoverImage(suppliedAboutImage,() => {
         aboutMedia.dataset.fallbackMedia="true";
         disclosure(aboutMedia);
       });
       if (aboutMedia && !aboutMedia.querySelector("img,picture,video,svg")) {
-        aboutMedia.replaceChildren(image(nextMedia(),`Relevant service image for ${industry || "this business"}`));
+        aboutMedia.replaceChildren(image(nextMedia(),shortAlt("about")));
         aboutMedia.dataset.fallbackMedia="true";
         disclosure(aboutMedia);
       }
 
       const galleryGrid = $(".gallery-grid");
-      $$(".gallery-grid img").forEach(node => recoverImage(node,() => makeVisualCaption(node.parentElement)));
+      $$(".gallery-grid img").forEach((node,index) => {
+        normalizeAlt(node,shortAlt("gallery",index));
+        recoverImage(node,() => makeVisualCaption(node.parentElement));
+      });
       if (galleryGrid && contentIsFake(galleryGrid)) {
         const gallerySources=[nextMedia(),nextMedia(),nextMedia()].filter(Boolean);
         galleryGrid.replaceChildren(...gallerySources.map((src,index) => {
           const figure=document.createElement("figure");
           figure.className="visual-direction";
-          figure.appendChild(image(src,`Service image ${index+1} for ${industry || "this business"}`));
+          figure.appendChild(image(src,shortAlt("gallery",index)));
           makeVisualCaption(figure);
           return figure;
         }));

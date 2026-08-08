@@ -2060,7 +2060,7 @@
       }
 
       const galleryGrid = $(".gallery-grid");
-      $(".gallery-grid img").forEach((node,index) => {
+      $$(".gallery-grid img").forEach((node,index) => {
         normalizeAlt(node,shortAlt("gallery",index));
         recoverImage(node,() => makeVisualCaption(node.parentElement));
       });

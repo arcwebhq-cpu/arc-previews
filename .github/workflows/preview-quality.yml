@@ -1,0 +1,33 @@
+name: ARC preview quality
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  preview-quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm test
+        env:
+          ARC_QA_REAL_IMAGES: "1"
+          ARC_QA_PLAYWRIGHT_BROWSER: "1"
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-quality-failures
+          path: test-results/
+          if-no-files-found: ignore

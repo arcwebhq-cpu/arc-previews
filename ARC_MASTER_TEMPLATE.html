@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- ARC Client Master Template v9.5 | conversion editorial system | exact 58-key production contract -->
+<!-- ARC Client Master Template v9.6 | private mobile-first conversion system | exact 58-key production contract -->
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -7,7 +7,7 @@
   <title>[[SEO_TITLE]]</title>
   <meta name="description" content="[[SEO_DESCRIPTION]]">
   <meta name="theme-color" content="[[BACKGROUND_COLOR]]">
-  <meta name="robots" content="index,follow">
+  <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta property="og:title" content="[[SEO_TITLE]]">
   <meta property="og:description" content="[[SEO_DESCRIPTION]]">
@@ -72,10 +72,14 @@
     a{color:inherit;text-decoration:none}
     img,picture,video,svg{display:block;max-width:100%}
     button,input,textarea,select{font:inherit}
-    h1,h2,h3,p{overflow-wrap:break-word}
+    p{overflow-wrap:break-word}
     h1,h2,h3{
       margin-top:0;
       font-family:var(--display);
+      max-width:100%;
+      overflow-wrap:normal;
+      word-break:normal;
+      hyphens:none;
       letter-spacing:-.044em
     }
     p{margin-top:0}
@@ -1261,12 +1265,12 @@
       .brand-logo.is-wide{width:68px}
       .hero{padding:94px 0 46px}
       .hero-grid{gap:28px}
-      .hero h1{font-size:clamp(40px,11.8vw,54px);line-height:.96}
+      .hero h1{font-size:clamp(34px,10.2vw,46px);line-height:1.02;text-wrap:pretty}
       .hero-copy{margin-top:18px;font-size:17px;line-height:1.48}
       .hero-actions{margin-top:24px}
       .hero-actions .btn{width:100%}
       .trust-line{margin-top:19px}
-      .hero-visual{min-height:388px}
+      .hero-visual{min-height:0;height:clamp(250px,74vw,310px)}
       .hero-fallback{padding:20px}
       .fallback-logo{width:54px;height:54px}
       .fallback-main{padding:27px 0}
@@ -1275,7 +1279,7 @@
       .hero-proof{text-align:left}
       .ticker-track{gap:30px;padding:14px 20px}
       .section-head{gap:12px;margin-bottom:30px}
-      .section-head h2{font-size:clamp(34px,10.5vw,48px);line-height:1}
+      .section-head h2{font-size:clamp(31px,9.2vw,43px);line-height:1.04;text-wrap:pretty}
       .section-head p{font-size:15px;line-height:1.55}
       .service-grid,.why-grid,.proof-grid,.gallery-grid{grid-template-columns:1fr}
       .service-grid>*:last-child:nth-child(odd),
@@ -1286,8 +1290,8 @@
       .why-grid>*:before{margin-bottom:28px}
       .stats{grid-template-columns:1fr}
       .about-grid{gap:32px}
-      .about-media{min-height:330px}
-      .about-copy h2,.faq-copy h2{font-size:clamp(36px,10.5vw,48px)}
+      .about-media{min-height:0;height:clamp(240px,72vw,300px)}
+      .about-copy h2,.faq-copy h2{font-size:clamp(31px,9.2vw,43px);line-height:1.04;text-wrap:pretty}
       .about-body{font-size:16px;line-height:1.62}
       .process-list>*{padding:23px}
       .process-list>*:before{margin-bottom:24px}
@@ -1295,7 +1299,7 @@
       .gallery-grid>*:first-child,
       .gallery-grid>*:nth-child(2){
         grid-column:auto;
-        height:246px;
+        height:clamp(200px,62vw,240px);
         min-height:0
       }
       .visual-direction figcaption{right:10px;bottom:10px;left:10px;padding:10px;font-size:9px}
@@ -1303,10 +1307,14 @@
       .faq-list details>*:not(summary){padding:0 26px 20px 0;line-height:1.6}
       .contact-card{padding:26px;border-radius:16px}
       .contact-grid{gap:32px}
-      .contact h2{font-size:clamp(39px,11.6vw,54px);line-height:.97}
+      .contact h2{font-size:clamp(32px,9.5vw,44px);line-height:1.03;text-wrap:pretty}
       .contact-body{font-size:16px;line-height:1.55}
       .contact-actions form{grid-template-columns:1fr;padding:16px}
       .contact-actions form>*{grid-column:1}
+      .contact-actions form input,
+      .contact-actions form textarea,
+      .contact-actions form select{font-size:16px}
+      .hero-photo-caption strong{font-size:clamp(23px,7.4vw,32px);line-height:1.08}
       .footer-row{display:grid}
       .footer-links{justify-content:flex-start}
       .mobile-cta{display:inline-flex}
@@ -1397,7 +1405,7 @@
     @media(max-width:660px){
       body.arc-layout-impact .hero-visual,
       body.arc-layout-editorial .hero-visual,
-      body.arc-layout-trusted .hero-visual{min-height:388px}
+      body.arc-layout-trusted .hero-visual{min-height:0;height:clamp(250px,74vw,310px)}
       body.arc-layout-impact .service-grid:has(>:nth-child(3):last-child),
       body.arc-layout-editorial .service-grid:has(>:nth-child(3):last-child),
       body.arc-layout-trusted .service-grid:has(>:nth-child(3):last-child){grid-template-columns:1fr}
@@ -1407,6 +1415,30 @@
       body.arc-layout-impact .gallery-grid:has(>:nth-child(3):last-child)>*,
       body.arc-layout-editorial .gallery-grid:has(>:nth-child(3):last-child)>*,
       body.arc-layout-trusted .gallery-grid:has(>:nth-child(3):last-child)>*{grid-column:auto}
+    }
+
+    /* ARC production hardening v9.6: dark contrast and phone readability. */
+    .why,.gallery,.contact-card{background-color:#0b0b0c}
+    .hero-grid>*,.about-grid>*,.contact-grid>*,.section-head>*{min-width:0}
+    .btn,button,input,textarea,select{min-height:44px}
+    /* ARC adaptive mobile grid fix v9.6 */
+    @media(max-width:1000px){
+      body.arc-layout-impact .hero-grid,
+      body.arc-layout-editorial .hero-grid,
+      body.arc-layout-trusted .hero-grid{grid-template-columns:minmax(0,1fr)!important}
+    }
+    @media(max-width:660px){
+      h1,h2,h3{
+        overflow-wrap:normal!important;
+        word-break:normal!important;
+        hyphens:none!important
+      }
+      .mobile-cta{
+        max-width:calc(100% - 28px);
+        min-height:48px;
+        white-space:normal;
+        text-align:center
+      }
     }
 
   </style>

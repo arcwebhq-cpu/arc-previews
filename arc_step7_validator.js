@@ -220,7 +220,11 @@ const generatedLinkSafetyPass = generatedHrefValues.every(value =>
   /^(#|https?:\/\/|tel:|mailto:|\/)/i.test(value)
 );
 const generatedImages = [...generatedMarkup.matchAll(/<img\b[^>]*>/gi)].map(match => match[0]);
-const mediaAltPass = generatedImages.every(tag => /\balt\s*=\s*["'][^"']*["']/i.test(tag));
+const generatedAltValues = generatedImages.map(tag => {
+  const match = tag.match(/\balt\s*=\s*["']([^"']*)["']/i);
+  return match ? clean(match[1]) : "";
+});
+const mediaAltPass = generatedAltValues.every(value => value.length > 0 && value.length <= 160);
 
 const seoTitleLength = clean(generated.SEO_TITLE).length;
 const seoDescriptionLength = clean(generated.SEO_DESCRIPTION).length;
@@ -287,6 +291,15 @@ const securityPass =
   /Content-Security-Policy/i.test(html) &&
   /name=["']viewport["']/i.test(html) &&
   /name=["']robots["']/i.test(html);
+const privatePreviewPass =
+  /<meta\s+name=["']robots["']\s+content=["'][^"']*noindex[^"']*nofollow[^"']*["']/i.test(html);
+const customerEmailPass =
+  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail) &&
+  !html.toLowerCase().includes(customerEmail.toLowerCase());
+const dummyLinkPass = generatedHrefValues.every(value =>
+  !/^https?:\/\/(?:www\.)?(?:example\.(?:com|org|net)|localhost)(?:[/:?#]|$)/i.test(value) &&
+  value !== "#"
+);
 const v9QualityPass =
   templateVersion < 9 ||
   (
@@ -312,6 +325,13 @@ const v9QualityPass =
         html.includes("fitLogo") &&
         html.includes("arcHeroVisual")
       )
+    ) &&
+    (
+      templateVersion < 9.6 ||
+      (
+        html.includes("ARC production hardening v9.6") &&
+        privatePreviewPass
+      )
     )
   );
 
@@ -319,7 +339,7 @@ const checks = {
   json_parse_pass: jsonParsePass,
   exact_58_key_contract_pass:
     jsonParsePass && generatedKeys.length === 58 && missingKeys.length === 0 && extraKeys.length === 0,
-  template_version_pass: Number.isFinite(templateVersion) && templateVersion >= 9.5,
+  template_version_pass: Number.isFinite(templateVersion) && templateVersion >= 9.6,
   template_marker_pass: Boolean(markerMatch),
   template_quality_pass: v9QualityPass,
   html_size_pass: html.length >= 30000,
@@ -327,6 +347,7 @@ const checks = {
     Number.isFinite(declaredHtmlCount) && Math.abs(declaredHtmlCount - html.length) <= 8,
   base_structure_pass: baseStructurePass,
   security_metadata_pass: securityPass,
+  private_preview_metadata_pass: privatePreviewPass,
   template_placeholder_contract_pass: declaredTemplateCount === 58,
   final_placeholder_count_pass: declaredFinalCount === 0,
   unresolved_placeholder_pass: unresolvedPlaceholders.length === 0,
@@ -336,9 +357,7 @@ const checks = {
   preview_protocol_pass: previewProtocolPass,
   idempotency_key_pass: idempotencyKeyPass,
   business_name_pass: Boolean(businessName) && normalize(html).includes(normalize(businessName)),
-  customer_email_pass:
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail) &&
-    html.toLowerCase().includes(customerEmail.toLowerCase()),
+  customer_email_not_exposed_pass: customerEmailPass,
   primary_cta_contract_pass: ctaContractPass,
   mapped_cta_consistency_pass: mappedCtaPass,
   primary_cta_rendered_pass: ctaHtmlPass,
@@ -352,6 +371,7 @@ const checks = {
   button_contrast_pass: buttonContrast >= 4.5,
   generated_markup_safety_pass: markupSafetyPass,
   generated_link_safety_pass: generatedLinkSafetyPass,
+  dummy_link_pass: dummyLinkPass,
   media_alt_text_pass: mediaAltPass,
   seo_contract_pass: seoContractPass,
   concise_copy_contract_pass: copyDensityPass,

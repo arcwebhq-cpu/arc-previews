@@ -1,4 +1,5 @@
 // ARC2 Code step — publish one paid-delivery candidate to a deterministic branch and PR.
+throw new Error("ARC_LEGACY_HANDOFF_DISABLED: private delivery PRs were replaced by the Netlify claimable-deploy flow");
 // This step never updates main and never authorizes or sends customer email.
 const clean = value => String(value == null ? "" : value).trim();
 const owner = clean(inputData.github_owner);
@@ -83,7 +84,7 @@ const rawClientReferenceId = clean(inputData.client_reference_id);
 if (checkoutBindingSecret.length < 32 || checkoutBindingSecret.length > 256) {
   throw new Error("ARC_PAYMENT_INVALID: checkout binding secret must be 32–256 characters");
 }
-const signedReference = rawClientReferenceId.match(/^((?:[a-z0-9][a-z0-9-]*-[a-f0-9]{8})|(?:[a-f0-9]{8}))\.([a-f0-9]{64})$/i);
+const signedReference = rawClientReferenceId.match(/^((?:[a-z0-9][a-z0-9-]*-[a-f0-9]{8})|(?:[a-f0-9]{8}))_([a-f0-9]{64})$/i);
 const checkoutLookupReference = signedReference?.[1].toLowerCase() || "";
 const checkoutLookupMatchesPreview = checkoutLookupReference === previewFolder ||
   (/^[a-f0-9]{8}$/.test(checkoutLookupReference) && previewFolder.endsWith(`-${checkoutLookupReference}`));

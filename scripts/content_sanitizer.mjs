@@ -43,6 +43,7 @@ const SAFE_CLASSES = new Set([
   "contact-form",
   "form-field",
   "form-wide",
+  "form-status",
   "btn",
   "btn-primary",
   "btn-secondary"
@@ -55,6 +56,7 @@ const SUPPORTED_FORM_CONTROL_NAMES = new Set([
   "phone",
   "project_details"
 ]);
+const LEAD_DISCLOSURE_HTML = '<p class="form-status" role="note">By submitting this form, you agree that this business may contact you about your request. Do not include sensitive personal, medical, legal, or financial information.</p>';
 
 const commonTextTags = ["span", "strong", "em", "small", "p", "br"];
 const cardTags = [...commonTextTags, "article", "div", "h3", "ul", "ol", "li"];
@@ -231,6 +233,9 @@ export function validateGeneratedFormContract(markup) {
     throw new Error("ARC_CONTENT_UNSAFE: exactly one generated Netlify form is allowed");
   }
   const formBlock = forms[0];
+  if (!formBlock.includes(LEAD_DISCLOSURE_HTML)) {
+    throw new Error("ARC_CONTENT_UNSAFE: exact visible lead privacy disclosure is required");
+  }
   const outside = markup.replace(formBlock, "");
   if (/<(?:input|textarea|select|button)\b/i.test(outside)) {
     throw new Error("ARC_CONTENT_UNSAFE: generated form controls escaped the form");
@@ -241,6 +246,7 @@ export function validateGeneratedFormContract(markup) {
   if (!/^[A-Za-z][A-Za-z0-9_-]{0,58}-lead$/.test(formName) ||
       formAttributes.get("method") !== "POST" ||
       formAttributes.get("data-netlify") !== "true" ||
+      formAttributes.get("action") !== "/?submitted=1" ||
       honeypotName !== "bot-field") {
     throw new Error("ARC_CONTENT_UNSAFE: exact Netlify form attributes are required");
   }

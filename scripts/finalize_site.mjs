@@ -11,7 +11,19 @@ function clean(value) {
   return String(value ?? "").trim();
 }
 
-export function validatePaidSession(session, { expectedPaymentLinkId, expectedTermsVersion } = {}) {
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function sha256(value) {
+  return createHash("sha256").update(value, "utf8").digest("hex");
+}
+
+export function validatePaidSession(session, { expectedPaymentLinkId, expectedPriceId, expectedTermsVersion } = {}) {
   const id = clean(session?.id);
   const object = clean(session?.object);
   const mode = clean(session?.mode).toLowerCase();
@@ -19,15 +31,20 @@ export function validatePaidSession(session, { expectedPaymentLinkId, expectedTe
   const paymentStatus = clean(session?.payment_status).toLowerCase();
   const currency = clean(session?.currency).toLowerCase();
   const amountTotal = session?.amount_total;
-  const paymentLinkId = clean(session?.payment_link);
+  const paymentLinkId = clean(
+    session?.payment_link && typeof session.payment_link === "object"
+      ? session.payment_link.id
+      : session?.payment_link
+  );
   const requiredPaymentLinkId = clean(expectedPaymentLinkId);
+  const requiredPriceId = clean(expectedPriceId);
   const termsConsent = clean(session?.consent?.terms_of_service).toLowerCase();
   const termsVersion = clean(session?.metadata?.terms_version);
   const requiredTermsVersion = clean(expectedTermsVersion);
   const customerDetailsEmail = clean(session?.customer_details?.email).toLowerCase();
   const customerEmail = clean(session?.customer_email).toLowerCase();
   const adultAcknowledgements = (Array.isArray(session?.custom_fields) ? session.custom_fields : []).filter(field =>
-    field && typeof field === "object" && clean(field.key) === "adult_purchaser_ack"
+    field && typeof field === "object" && clean(field.key) === "adultpurchaserack"
   );
   const adultAcknowledgement = clean(
     adultAcknowledgements[0]?.dropdown?.value ||
@@ -45,12 +62,34 @@ export function validatePaidSession(session, { expectedPaymentLinkId, expectedTe
   if (!Number.isSafeInteger(amountTotal) || amountTotal !== 500000) {
     throw new Error("ARC_PAYMENT_INVALID: amount_total must be exactly 500000 minor units ($5,000.00)");
   }
+  if (!Number.isSafeInteger(session?.amount_subtotal) || session.amount_subtotal !== 500000) {
+    throw new Error("ARC_PAYMENT_INVALID: amount_subtotal must be exactly 500000 minor units ($5,000.00)");
+  }
   if (!/^plink_[A-Za-z0-9]+$/.test(requiredPaymentLinkId)) throw new Error("ARC_PAYMENT_INVALID: expected Payment Link id");
   if (paymentLinkId !== requiredPaymentLinkId) throw new Error("ARC_PAYMENT_INVALID: Payment Link identity mismatch");
+  if (!/^price_[A-Za-z0-9]+$/.test(requiredPriceId)) throw new Error("ARC_PAYMENT_INVALID: expected Price id");
+  const lineItems = session?.line_items;
+  if (!lineItems || typeof lineItems !== "object" || Array.isArray(lineItems) || lineItems.object !== "list" ||
+      lineItems.has_more !== false || !Array.isArray(lineItems.data) || lineItems.data.length !== 1) {
+    throw new Error("ARC_PAYMENT_INVALID: exactly one fully expanded line item is required");
+  }
+  const lineItem = lineItems.data[0];
+  const price = lineItem?.price;
+  if (!lineItem || lineItem.object !== "item" || lineItem.quantity !== 1 || lineItem.currency !== "usd" ||
+      lineItem.amount_subtotal !== 500000 || lineItem.amount_discount !== 0 || lineItem.amount_tax !== 0 ||
+      lineItem.amount_total !== 500000 || !price || typeof price !== "object" || Array.isArray(price) ||
+      price.object !== "price" || price.id !== requiredPriceId || price.livemode !== false ||
+      price.type !== "one_time" || price.currency !== "usd" || price.unit_amount !== 500000 ||
+      price.custom_unit_amount !== null || price.recurring !== null) {
+    throw new Error("ARC_PAYMENT_INVALID: expanded line item does not match the exact one-time ARC Price");
+  }
   if (termsConsent !== "accepted") throw new Error("ARC_PAYMENT_INVALID: terms_of_service consent must be accepted");
   if (!requiredTermsVersion) throw new Error("ARC_PAYMENT_INVALID: expected terms version");
   if (termsVersion !== requiredTermsVersion) throw new Error("ARC_PAYMENT_INVALID: terms version mismatch");
-  if (adultAcknowledgements.length !== 1 || adultAcknowledgement !== "accepted") {
+  if (adultAcknowledgements.length !== 1 || adultAcknowledgement !== "accepted" ||
+      clean(adultAcknowledgements[0].type) !== "dropdown" || adultAcknowledgements[0].optional !== false ||
+      clean(adultAcknowledgements[0].label?.type) !== "custom" ||
+      clean(adultAcknowledgements[0].label?.custom) !== "I am 18+ and authorized to buy for this business") {
     throw new Error("ARC_PAYMENT_INVALID: adult purchaser acknowledgement must be accepted");
   }
   if (customerDetailsEmail && customerEmail && customerDetailsEmail !== customerEmail) {
@@ -58,6 +97,12 @@ export function validatePaidSession(session, { expectedPaymentLinkId, expectedTe
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerDetailsEmail || customerEmail)) {
     throw new Error("ARC_HANDOFF_INVALID: Stripe customer email");
+  }
+  const collectedBusinessName = clean(session?.collected_information?.business_name);
+  const collectedIndividualName = clean(session?.collected_information?.individual_name);
+  if (!collectedBusinessName || collectedBusinessName.length > 120 || /[\r\n<>]/.test(collectedBusinessName) ||
+      !collectedIndividualName || collectedIndividualName.length > 120 || /[\r\n<>]/.test(collectedIndividualName)) {
+    throw new Error("ARC_HANDOFF_INVALID: required Stripe business and individual names");
   }
   return true;
 }
@@ -94,6 +139,21 @@ export function resolvePreviewFolder({ clientReferenceId, treePaths }) {
   return requireRootPreviewFolder(matches[0]);
 }
 
+function parseCheckoutReference(clientReferenceId) {
+  const match = clean(clientReferenceId).toLowerCase().match(/^([a-f0-9]{8})_([a-f0-9]{64})_([a-f0-9]{64})$/);
+  if (!match) throw new Error("ARC_PAYMENT_INVALID: immutable signed checkout reference");
+  return { folderSuffix: match[1], approvalContentSha256: match[2], signature: match[3] };
+}
+
+function removeExactTerminalPreviewToolbar(previewHtml) {
+  const toolbarPattern = /<aside class="arc-preview-toolbar" aria-label="ARC preview purchase"><span><strong>ARC preview<\/strong>Built for this business\. Purchase only if approved\.<\/span><a data-arc-checkout href="https:\/\/buy\.stripe\.com\/test_[A-Za-z0-9]+\?client_reference_id=[a-f0-9]{8}_[a-f0-9]{64}_[a-f0-9]{64}">Own this website — \$5,000<\/a><\/aside>/g;
+  const blocks = [...String(previewHtml).matchAll(toolbarPattern)].map(match => match[0]);
+  if (blocks.length !== 1 || !String(previewHtml).endsWith(`${blocks[0]}\n</body>\n</html>`)) {
+    throw new Error("ARC_FINALIZE_INVALID: exact terminal preview purchase toolbar is required");
+  }
+  return String(previewHtml).replace(`${blocks[0]}\n</body>\n</html>`, "</body>\n</html>");
+}
+
 function upsertHeadTag(html, expression, markup) {
   if (expression.test(html)) return html.replace(expression, markup);
   return html.replace(/<\/head>/i, `  ${markup}\n</head>`);
@@ -110,11 +170,7 @@ export function finalizePreviewHtml(previewHtml, options = {}) {
   if (!/<meta\s+name=["']arc-template-version["']\s+content=["']10\.0["']/i.test(html)) {
     throw new Error("ARC_FINALIZE_INVALID: only verified ARC v10 previews can be delivered");
   }
-  if (!/class=["'][^"']*arc-preview-toolbar/i.test(html)) {
-    throw new Error("ARC_FINALIZE_INVALID: preview purchase toolbar is missing");
-  }
-
-  html = html.replace(/<aside\b[^>]*class=["'][^"']*arc-preview-toolbar[^"']*["'][^>]*>[\s\S]*?<\/aside>\s*/gi, "");
+  html = removeExactTerminalPreviewToolbar(html);
 
   html = upsertHeadTag(
     html,
@@ -155,12 +211,16 @@ export function finalizePreviewHtml(previewHtml, options = {}) {
   return `${html.trim()}\n`;
 }
 
+export function buildHeadersFile() {
+  return `/*\n  X-Content-Type-Options: nosniff\n  X-Frame-Options: DENY\n  X-Robots-Tag: noindex, nofollow, noarchive\n  Referrer-Policy: strict-origin-when-cross-origin\n  Permissions-Policy: camera=(), microphone=(), geolocation=()\n`;
+}
+
 export function buildNetlifyConfig() {
-  return `[build]\n  publish = "."\n\n[[headers]]\n  for = "/*"\n  [headers.values]\n    X-Content-Type-Options = "nosniff"\n    X-Frame-Options = "DENY"\n    X-Robots-Tag = "noindex, nofollow, noarchive"\n    Referrer-Policy = "strict-origin-when-cross-origin"\n    Permissions-Policy = "camera=(), microphone=(), geolocation=()"\n`;
+  throw new Error("ARC_LEGACY_HANDOFF_DISABLED: netlify.toml is not a deploy artifact; use _headers");
 }
 
 export function buildUsageGuide() {
-  return `# Launch checklist\n\nThis is a private pre-launch handoff bundle. It is not proof of repository ownership, Netlify ownership, transfer, or launch readiness.\n\nARC must place these exact four files into a customer-approved repository and Netlify site through a separate secure handoff. There is no one-click transfer promise. The delivery email remains blocked until ARC's read-only verifier proves that the authenticated customer controls both destinations and that their bytes match this paid bundle.\n\n1. Complete the separately approved secure repository and Netlify setup.\n2. Confirm the new GitHub repository and Netlify site are in accounts the customer controls.\n3. In Netlify, enable **Forms > Form detection**, then redeploy once.\n4. In **Project configuration > Notifications > Form submission notifications**, add the separately verified lead-notification address.\n5. Submit one test lead and confirm it arrives before connecting the final domain.\n6. Connect the business domain and add its final HTTPS URL as the canonical and Open Graph URL.\n7. Only after the final domain and lead route are verified, remove the staging-only \`X-Robots-Tag\` noindex header from \`netlify.toml\` and redeploy.\n\nDo not publish unverified claims, reviews, licenses, prices, or results.\n`;
+  throw new Error("ARC_LEGACY_HANDOFF_DISABLED: USAGE.md must not be deployed with a customer site");
 }
 
 export function buildProductionHandoff({
@@ -169,16 +229,34 @@ export function buildProductionHandoff({
   previewHtml,
   canonicalUrl,
   expectedPaymentLinkId,
+  expectedPriceId,
   expectedTermsVersion,
   verifiedLeadNotificationEmail,
-  leadRouteEvidenceSecret
+  leadRouteEvidenceSecret,
+  handoffArtifactEvidenceSecret,
+  checkoutBindingSecret,
+  artifactEvidenceIssuedAt = new Date().toISOString()
 }) {
-  validatePaidSession(session, { expectedPaymentLinkId, expectedTermsVersion });
+  validatePaidSession(session, { expectedPaymentLinkId, expectedPriceId, expectedTermsVersion });
+  const checkoutReference = parseCheckoutReference(session.client_reference_id);
+  const bindingSecret = clean(checkoutBindingSecret);
+  if (bindingSecret.length < 32 || bindingSecret.length > 256) {
+    throw new Error("ARC_PAYMENT_INVALID: checkout binding secret must be 32–256 characters");
+  }
+  const expectedCheckoutSignature = createHmac("sha256", bindingSecret)
+    .update(`arc-checkout-reference-v2\n${checkoutReference.folderSuffix}\n${checkoutReference.approvalContentSha256}`, "utf8")
+    .digest("hex");
+  if (expectedCheckoutSignature !== checkoutReference.signature) {
+    throw new Error("ARC_PAYMENT_INVALID: checkout reference signature mismatch");
+  }
   const previewFolder = resolvePreviewFolder({
-    clientReferenceId: session.client_reference_id,
+    clientReferenceId: checkoutReference.folderSuffix,
     treePaths
   });
-  const productionFolder = `deliveries/${previewFolder}`;
+  const approvalHtml = removeExactTerminalPreviewToolbar(clean(previewHtml));
+  if (sha256(approvalHtml) !== checkoutReference.approvalContentSha256) {
+    throw new Error("ARC_PAYMENT_INVALID: approved preview bytes do not match the checkout approval digest");
+  }
   const productionHtml = finalizePreviewHtml(previewHtml, { canonicalUrl });
   const customerEmail = clean(session.customer_details?.email || session.customer_email).toLowerCase();
   const formTags = productionHtml.match(/<form\b[^>]*>/gi) || [];
@@ -207,36 +285,76 @@ export function buildProductionHandoff({
       .update(`arc-lead-route-recipient-v1\n${routeEmail}`, "utf8")
       .digest("hex")
     : "";
-  const netlifyConfig = buildNetlifyConfig();
-  const usageGuide = buildUsageGuide();
-  for (const [label, content] of [["production HTML", productionHtml], ["Netlify config", netlifyConfig], ["usage guide", usageGuide]]) {
+  const headersFile = buildHeadersFile();
+  for (const [label, content] of [["production HTML", productionHtml], ["headers file", headersFile]]) {
     for (const privateValue of [clean(session.id), customerEmail, routeEmail, evidenceSecret].filter(Boolean)) {
       if (content.toLowerCase().includes(privateValue.toLowerCase())) {
         throw new Error(`ARC_PRIVACY_FAILED: ${label} contains private handoff data`);
       }
     }
   }
-  const productionContentSha256 = createHash("sha256").update(productionHtml, "utf8").digest("hex");
-  const bundleFingerprint = createHash("sha256").update([
-    { path: `${productionFolder}/index.html`, content: productionHtml },
-    { path: `${productionFolder}/netlify.toml`, content: netlifyConfig },
-    { path: `${productionFolder}/USAGE.md`, content: usageGuide }
-  ].map(artifact => `${artifact.path}\0${artifact.content}\0`).join(""), "utf8").digest("hex");
+  const relativeReferences = [...productionHtml.matchAll(/\b(?:src|href)=["']([^"']+)["']/gi)]
+    .map(match => match[1])
+    .filter(reference => !/^(?:https?:|mailto:|tel:|#|\/|\?)/i.test(reference));
+  if (relativeReferences.length) {
+    throw new Error(`ARC_ARTIFACT_INVALID: unresolved relative assets: ${[...new Set(relativeReferences)].join(",")}`);
+  }
+  const artifactSecret = clean(handoffArtifactEvidenceSecret);
+  if (artifactSecret.length < 32 || artifactSecret.length > 256) {
+    throw new Error("ARC_ARTIFACT_INVALID: handoff artifact evidence secret must be 32–256 characters");
+  }
+  if (!Number.isFinite(Date.parse(artifactEvidenceIssuedAt)) || new Date(Date.parse(artifactEvidenceIssuedAt)).toISOString() !== artifactEvidenceIssuedAt) {
+    throw new Error("ARC_ARTIFACT_INVALID: evidence issued_at must be canonical ISO-8601");
+  }
+  const artifacts = [
+    { path: "_headers", content: headersFile },
+    { path: "index.html", content: productionHtml }
+  ];
+  const artifactManifest = artifacts.map(({ path: artifactPath, content }) => ({
+    path: artifactPath,
+    sha256: sha256(content),
+    size: Buffer.byteLength(content, "utf8")
+  }));
+  const artifactManifestPrivate = canonicalJson(artifactManifest);
+  const artifactManifestSha256 = sha256(artifactManifestPrivate);
+  const productionContentSha256 = artifactManifest.find(item => item.path === "index.html").sha256;
+  const headersContentSha256 = artifactManifest.find(item => item.path === "_headers").sha256;
+  const bundleFingerprint = sha256(artifacts.map(artifact => `${artifact.path}\0${artifact.content}\0`).join(""));
+  const handoffArtifactEvidencePrivate = canonicalJson({
+    version: "arc2-handoff-artifact-evidence-v1",
+    scope: "netlify-claimable-deploy-artifacts",
+    preview_folder: previewFolder,
+    production_content_sha256: productionContentSha256,
+    artifact_manifest_sha256: artifactManifestSha256,
+    bundle_fingerprint: bundleFingerprint,
+    artifacts: artifactManifest,
+    issued_at: artifactEvidenceIssuedAt
+  });
+  const handoffArtifactEvidenceSha256 = sha256(handoffArtifactEvidencePrivate);
+  const handoffArtifactEvidenceHmacSha256 = createHmac("sha256", artifactSecret)
+    .update(`arc2-handoff-artifact-evidence-signature-v1\n${handoffArtifactEvidencePrivate}`, "utf8")
+    .digest("hex");
   return {
+    status: "READY_FOR_CLAIMABLE_DEPLOY",
     checkoutSessionId: session.id,
     dedupeKey: `arc2:${session.id}`,
     previewFolder,
     previewFilePath: `${previewFolder}/index.html`,
-    productionFolder,
-    productionFilePath: `${productionFolder}/index.html`,
+    productionFilePath: "index.html",
     productionHtml,
-    netlifyConfigPath: `${productionFolder}/netlify.toml`,
-    netlifyConfig,
-    usageGuidePath: `${productionFolder}/USAGE.md`,
-    usageGuide,
-    secureCustomerSetupRequired: true,
+    headersFilePath: "_headers",
+    headersFile,
+    deployArtifacts: artifacts,
+    artifactManifest,
+    artifactManifestPrivate,
+    artifactManifestSha256,
+    handoffArtifactEvidencePrivate,
+    handoffArtifactEvidenceSha256,
+    handoffArtifactEvidenceHmacSha256,
+    claimableDeployRequired: true,
     customerEmail,
     productionContentSha256,
+    headersContentSha256,
     bundleFingerprint,
     leadRouteStatus: hasLeadForm ? "pending_live_staging_evidence" : "not_required",
     leadRouteEvidenceRequired: hasLeadForm,

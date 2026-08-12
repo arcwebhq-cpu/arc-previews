@@ -19,10 +19,8 @@ const response = (status, body, url, headerValues = {}) => ({
 });
 
 const folder = "summit-roofing-a1b2c3d4";
-const deliveryRoot = `deliveries/${folder}`;
-const productionPath = `${deliveryRoot}/index.html`;
-const netlifyPath = `${deliveryRoot}/netlify.toml`;
-const usagePath = `${deliveryRoot}/USAGE.md`;
+const productionPath = "index.html";
+const headersPath = "_headers";
 const stagingName = "arc-lead-route-a1b2c3d4";
 const stagingUrl = `https://${stagingName}.netlify.app/`;
 const siteId = "123e4567-e89b-42d3-a456-426614174000";
@@ -36,26 +34,49 @@ const formName = "summit-lead";
 const recipientEmail = "verified-leads@example.com";
 const netlifyToken = "mock-netlify-token-never-public";
 const evidenceSecret = "arc2-static-lead-route-evidence-secret-v1";
+const artifactEvidenceSecret = "arc2-static-handoff-artifact-evidence-secret-v1";
 const inboxEvidenceSecret = "arc2-static-inbox-receipt-evidence-secret-v1";
 const syntheticProbeToken = "ARC_SYNTHETIC_PROBE_1234567890abcdef";
 const receiptTimestamp = new Date(Date.now() - 5 * 1000).toISOString();
 const inboxReceivedTimestamp = new Date(Date.now() - 1 * 1000).toISOString();
-const productionHtml = `<!doctype html><html><head><meta name="arc-template-version" content="10.0"></head><body data-arc-site-mode="production"><form name="${formName}" method="POST" data-netlify="true" netlify-honeypot="bot-field" action="/?submitted=1"><input type="hidden" name="form-name" value="${formName}"><p hidden><label>Leave blank<input name="bot-field"></label></p><label>Name<input type="text" name="name" required></label><label>Email<input type="email" name="email" required></label><label>Phone<input type="tel" name="phone"></label><label>Project details<textarea name="project_details" required></textarea></label><button type="submit">Send</button></form></body></html>\n`;
+const productionHtml = `<!doctype html><html><head><meta name="arc-template-version" content="10.0"></head><body data-arc-site-mode="production"><form name="${formName}" method="POST" data-netlify="true" netlify-honeypot="bot-field" action="/?submitted=1"><input type="hidden" name="form-name" value="${formName}"><p hidden><label>Leave blank<input name="bot-field"></label></p><label>Name<input type="text" name="name" required></label><label>Email<input type="email" name="email" required></label><label>Phone<input type="tel" name="phone"></label><label>Project details<textarea name="project_details" required></textarea></label><p class="form-status" role="note">By submitting this form, you agree that this business may contact you about your request. Do not include sensitive personal, medical, legal, or financial information.</p><button type="submit">Send</button></form></body></html>\n`;
 const processedHtml = productionHtml
   .replace(' data-netlify="true"', "")
   .replace(' netlify-honeypot="bot-field"', "");
-const netlifyConfig = `[build]\n  publish = "."\n\n[[headers]]\n  for = "/*"\n  [headers.values]\n    X-Content-Type-Options = "nosniff"\n    X-Frame-Options = "DENY"\n    X-Robots-Tag = "noindex, nofollow, noarchive"\n`;
-const usageGuide = `# Launch checklist\n\nVerify lead routing.\n`;
+const headersFile = `/*\n  X-Content-Type-Options: nosniff\n  X-Frame-Options: DENY\n  X-Robots-Tag: noindex, nofollow, noarchive\n`;
 const artifacts = [
-  { path: productionPath, content: productionHtml },
-  { path: netlifyPath, content: netlifyConfig },
-  { path: usagePath, content: usageGuide }
+  { path: headersPath, content: headersFile },
+  { path: productionPath, content: productionHtml }
 ];
 const bundleFingerprint = sha256(artifacts.map(artifact => `${artifact.path}\0${artifact.content}\0`).join(""));
+const canonicalJson = value => {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+  return JSON.stringify(value);
+};
+const artifactManifest = artifacts.map(artifact => ({
+  path: artifact.path,
+  sha256: sha256(artifact.content),
+  size: Buffer.byteLength(artifact.content)
+}));
+const artifactManifestSha256 = sha256(canonicalJson(artifactManifest));
+const artifactEvidenceIssuedAt = new Date(Date.now() - 10 * 1000).toISOString();
+const artifactEvidence = canonicalJson({
+  version: "arc2-handoff-artifact-evidence-v1",
+  scope: "netlify-claimable-deploy-artifacts",
+  preview_folder: folder,
+  production_content_sha256: sha256(productionHtml),
+  artifact_manifest_sha256: artifactManifestSha256,
+  bundle_fingerprint: bundleFingerprint,
+  artifacts: artifactManifest,
+  issued_at: artifactEvidenceIssuedAt
+});
+const artifactEvidenceSignature = createHmac("sha256", artifactEvidenceSecret)
+  .update(`arc2-handoff-artifact-evidence-signature-v1\n${artifactEvidence}`)
+  .digest("hex");
 const rootManifest = [
   { path: "/index.html", sha: sha1(productionHtml), size: Buffer.byteLength(productionHtml), mime_type: "text/html" },
-  { path: "/netlify.toml", sha: sha1(netlifyConfig), size: Buffer.byteLength(netlifyConfig), mime_type: "text/plain" },
-  { path: "/USAGE.md", sha: sha1(usageGuide), size: Buffer.byteLength(usageGuide), mime_type: "text/markdown" }
+  { path: "/_headers", sha: sha1(headersFile), size: Buffer.byteLength(headersFile), mime_type: "text/plain" }
 ];
 const deployFileManifestSha256 = sha256(JSON.stringify(rootManifest.slice().sort((first, second) => first.path.localeCompare(second.path))));
 const stagingRobotsHeader = "noarchive,nofollow,noindex";
@@ -135,8 +156,7 @@ class MockNetlify {
     this.files = rootManifest.map(file => ({ ...file, id: file.path }));
     this.rawFiles = new Map([
       ["/index.html", productionHtml],
-      ["/netlify.toml", netlifyConfig],
-      ["/USAGE.md", usageGuide]
+      ["/_headers", headersFile]
     ]);
     this.snippets = [];
     this.liveFiles = new Map([
@@ -179,6 +199,9 @@ class MockNetlify {
 const input = {
   netlify_access_token: netlifyToken,
   lead_route_evidence_secret: evidenceSecret,
+  handoff_artifact_evidence_secret: artifactEvidenceSecret,
+  handoff_artifact_evidence_private: artifactEvidence,
+  handoff_artifact_evidence_hmac_sha256: artifactEvidenceSignature,
   inbox_receipt_evidence_secret: inboxEvidenceSecret,
   inbox_receipt_evidence: JSON.stringify(signedInboxEvidence.evidence),
   inbox_receipt_evidence_hmac_sha256: signedInboxEvidence.signature,
@@ -196,16 +219,16 @@ const input = {
   production_file_path: productionPath,
   production_content_base64: Buffer.from(productionHtml).toString("base64"),
   production_content_sha256: sha256(productionHtml),
-  netlify_config_path: netlifyPath,
-  netlify_config_base64: Buffer.from(netlifyConfig).toString("base64"),
-  usage_guide_path: usagePath,
-  usage_guide_base64: Buffer.from(usageGuide).toString("base64"),
+  headers_file_path: headersPath,
+  headers_file_base64: Buffer.from(headersFile).toString("base64"),
+  artifact_manifest_sha256: artifactManifestSha256,
   bundle_fingerprint: bundleFingerprint
 };
 
 const mock = new MockNetlify();
 const issued = await runVerifier(input, mock.fetch.bind(mock), Buffer);
-assert.equal(issued.status, "LEAD_ROUTE_EVIDENCE_ISSUED");
+assert.equal(issued.status, "LEAD_ROUTE_VERIFIED");
+assert.equal(issued.claim_invitation_allowed_by_this_step, false);
 assert.equal(issued.send_delivery_email, false);
 assert.equal(issued.github_write_allowed_by_this_step, false);
 assert.equal(issued.evidence_requires_downstream_reverification, true);
@@ -215,6 +238,8 @@ assert.match(issued.lead_route_evidence_hmac_sha256, /^[a-f0-9]{64}$/);
 const evidence = JSON.parse(issued.lead_route_evidence);
 assert.equal(evidence.preview_folder, folder);
 assert.equal(evidence.production_content_sha256, sha256(productionHtml));
+assert.equal(evidence.artifact_manifest_sha256, artifactManifestSha256);
+assert.equal(evidence.handoff_artifact_evidence_sha256, sha256(artifactEvidence));
 assert.equal(evidence.bundle_fingerprint, bundleFingerprint);
 assert.equal(evidence.netlify_account_id, accountId);
 assert.equal(evidence.staging_site_id, siteId);
@@ -329,8 +354,8 @@ badSourceManifest.files[0].sha = "0".repeat(40);
 await assert.rejects(runVerifier(input, badSourceManifest.fetch.bind(badSourceManifest), Buffer), /source manifest mismatch/);
 
 const extraDeployFile = new MockNetlify();
-extraDeployFile.files.push({ id: "/_headers", path: "/_headers", sha: "0".repeat(40), size: 1, mime_type: "text/plain" });
-await assert.rejects(runVerifier(input, extraDeployFile.fetch.bind(extraDeployFile), Buffer), /exact three-file static bundle/);
+extraDeployFile.files.push({ id: "/USAGE.md", path: "/USAGE.md", sha: "0".repeat(40), size: 1, mime_type: "text/markdown" });
+await assert.rejects(runVerifier(input, extraDeployFile.fetch.bind(extraDeployFile), Buffer), /exact claimable bundle/);
 
 const changedRawSource = new MockNetlify();
 changedRawSource.rawFiles.set("/index.html", `${productionHtml}tampered`);
@@ -384,17 +409,42 @@ await assert.rejects(
 );
 assert.equal(noReadOnChangedResolverBytes.requests.length, 0);
 
-const inputForProductionHtml = html => ({
-  ...input,
-  production_content_base64: Buffer.from(html).toString("base64"),
-  production_content_sha256: sha256(html),
-  bundle_fingerprint: sha256([
-    { path: productionPath, content: html },
-    { path: netlifyPath, content: netlifyConfig },
-    { path: usagePath, content: usageGuide }
-  ].map(artifact => `${artifact.path}\0${artifact.content}\0`).join(""))
-});
+const inputForProductionHtml = html => {
+  const nextArtifacts = [{ path: headersPath, content: headersFile }, { path: productionPath, content: html }];
+  const nextManifest = nextArtifacts.map(artifact => ({
+    path: artifact.path,
+    sha256: sha256(artifact.content),
+    size: Buffer.byteLength(artifact.content)
+  }));
+  const nextManifestSha256 = sha256(canonicalJson(nextManifest));
+  const nextFingerprint = sha256(nextArtifacts.map(artifact => `${artifact.path}\0${artifact.content}\0`).join(""));
+  const nextEvidence = canonicalJson({
+    version: "arc2-handoff-artifact-evidence-v1",
+    scope: "netlify-claimable-deploy-artifacts",
+    preview_folder: folder,
+    production_content_sha256: sha256(html),
+    artifact_manifest_sha256: nextManifestSha256,
+    bundle_fingerprint: nextFingerprint,
+    artifacts: nextManifest,
+    issued_at: artifactEvidenceIssuedAt
+  });
+  return {
+    ...input,
+    production_content_base64: Buffer.from(html).toString("base64"),
+    production_content_sha256: sha256(html),
+    artifact_manifest_sha256: nextManifestSha256,
+    bundle_fingerprint: nextFingerprint,
+    handoff_artifact_evidence_private: nextEvidence,
+    handoff_artifact_evidence_hmac_sha256: createHmac("sha256", artifactEvidenceSecret)
+      .update(`arc2-handoff-artifact-evidence-signature-v1\n${nextEvidence}`).digest("hex")
+  };
+};
 for (const [label, unsafeHtml, error] of [
+  [
+    "missing privacy disclosure",
+    productionHtml.replace(/<p class="form-status" role="note">[\s\S]*?<\/p>/, ""),
+    /exact visible lead privacy disclosure/
+  ],
   [
     "conflicting hidden route",
     productionHtml.replace(`name="form-name" value="${formName}"`, 'name="form-name" value="wrong-lead"'),

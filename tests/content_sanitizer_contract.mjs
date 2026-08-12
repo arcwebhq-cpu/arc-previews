@@ -6,6 +6,7 @@ import { fixtures } from "../fixtures/v10_industries.mjs";
 import { renderPreview } from "../scripts/arc_contract.mjs";
 import { sanitizeStructuredMarkup } from "../scripts/content_sanitizer.mjs";
 import { createTestIntakeEvidence } from "./fixtures/intake_evidence.mjs";
+import { createTestPaymentLinkEvidence } from "./fixtures/payment_link_evidence.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const template = await readFile(path.join(root, "ARC_MASTER_TEMPLATE.html"), "utf8");
@@ -18,6 +19,7 @@ const fixture = fixtures[0];
 const paymentLinkUrl = "https://buy.stripe.com/test_00000000000000";
 const checkoutBindingSecret = "arc-test-checkout-binding-secret-32-bytes-minimum";
 const intakeContext = createTestIntakeEvidence();
+const paymentLinkContext = createTestPaymentLinkEvidence({ paymentLinkUrl });
 const rendererOptions = {
   trustedEventPrefix: fixture.id,
   customerEmail: fixture.customerEmail,
@@ -28,8 +30,8 @@ const arc1Input = content => ({
   template_content: template,
   raw_json: JSON.stringify(content),
   customer_email: fixture.customerEmail,
-  payment_link_url: paymentLinkUrl,
   checkout_binding_secret: checkoutBindingSecret,
+  ...paymentLinkContext.privateInputs,
   ...intakeContext.privateInputs
 });
 
@@ -91,6 +93,8 @@ const rejectedContent = [
   ["unsafe CTA scheme", { PRIMARY_CTA_HREF: "javascript:alert(1)" }, /unsafe URL scheme|unsupported URL/],
   ["entity-obfuscated href", { FOOTER_LINKS_HTML: '<a href="java&#x73;cript:alert(1)">Contact</a>' }, /unsafe URL scheme|unsupported URL/],
   ["backslash form escape", { CONTACT_ACTION_HTML: '<form name="lead" method="POST" data-netlify="true" netlify-honeypot="bot" action="/\\evil.test"><input type="hidden" name="form-name" value="lead"><button type="submit">Send</button></form>' }, /form action must stay same-origin/],
+  ["missing success-state route", { CONTACT_ACTION_HTML: fixture.content.CONTACT_ACTION_HTML.replace('action="/?submitted=1"', 'action="/"') }, /exact Netlify form attributes/],
+  ["missing privacy disclosure", { CONTACT_ACTION_HTML: fixture.content.CONTACT_ACTION_HTML.replace(/<p class="form-status" role="note">[\s\S]*?<\/p>/, "") }, /exact visible lead privacy disclosure/],
   ["conflicting hidden form route", { CONTACT_ACTION_HTML: fixture.content.CONTACT_ACTION_HTML.replace('value="roofing-lead"', 'value="wrong-lead"') }, /hidden form-name must uniquely match/],
   ["duplicate hidden form route", { CONTACT_ACTION_HTML: fixture.content.CONTACT_ACTION_HTML.replace('<input type="hidden" name="form-name" value="roofing-lead">', '<input type="hidden" name="form-name" value="wrong-lead"><input type="hidden" name="form-name" value="roofing-lead">') }, /duplicate generated form control name/],
   ["mismatched honeypot route", { CONTACT_ACTION_HTML: fixture.content.CONTACT_ACTION_HTML.replace('netlify-honeypot="bot-field"', 'netlify-honeypot="wrong-field"') }, /exact Netlify form attributes/],
@@ -153,6 +157,8 @@ assert.doesNotMatch(template, /"(?:name|description|areaServed)"\s*:\s*"\[\[/);
 
 const validatorFormAttacks = [
   fixture.content.CONTACT_ACTION_HTML.replace('value="roofing-lead"', 'value="wrong-lead"'),
+  fixture.content.CONTACT_ACTION_HTML.replace('action="/?submitted=1"', 'action="/"'),
+  fixture.content.CONTACT_ACTION_HTML.replace(/<p class="form-status" role="note">[\s\S]*?<\/p>/, ""),
   fixture.content.CONTACT_ACTION_HTML.replace('<input type="hidden" name="form-name" value="roofing-lead">', '<input type="hidden" name="form-name" value="wrong-lead"><input type="hidden" name="form-name" value="roofing-lead">'),
   fixture.content.CONTACT_ACTION_HTML.replace('netlify-honeypot="bot-field"', 'netlify-honeypot="wrong-field"'),
   fixture.content.CONTACT_ACTION_HTML.replace('name="phone"', 'name="children"')

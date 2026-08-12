@@ -54,6 +54,8 @@ export function createTestIntakeEvidence({
   const stateDigestSha256 = sha256(canonicalJson(stateBinding));
   const stateKey = `arc1-intake-claim-v1:${stateDigestSha256}`;
   const totalAssetBytes = assetManifest.reduce((total, entry) => total + entry.size_bytes, 0);
+  const assetManifestText = canonicalJson(assetManifest);
+  const assetManifestSha256 = sha256(assetManifestText);
   const evidence = {
     version: "arc1-intake-evidence-v1",
     scope: "authoritative-netlify-intake-and-assets",
@@ -69,6 +71,7 @@ export function createTestIntakeEvidence({
     public_folder_prefix: publicFolderPrefix,
     submission_data_sha256: submissionDataSha256,
     asset_manifest: assetManifest,
+    asset_manifest_sha256: assetManifestSha256,
     total_asset_bytes: totalAssetBytes,
     state_key: stateKey,
     state_digest_sha256: stateDigestSha256,
@@ -77,8 +80,6 @@ export function createTestIntakeEvidence({
   };
   const intakeEvidencePrivate = canonicalJson(evidence);
   const intakeEvidenceSha256 = sha256(intakeEvidencePrivate);
-  const assetManifestText = canonicalJson(assetManifest);
-  const assetManifestSha256 = sha256(assetManifestText);
   const intakeEvidenceHmacSha256 = createHmac("sha256", evidenceSecret)
     .update(`arc1-intake-evidence-signature-v1\n${intakeEvidencePrivate}`, "utf8")
     .digest("hex");

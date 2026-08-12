@@ -167,7 +167,8 @@ function validateCustomerPreview(html, folder) {
     checkout.password ||
     !/^\/test_[A-Za-z0-9]+$/.test(checkout.pathname) ||
     references.length !== 1 ||
-    !new RegExp(`^${folder.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\.[a-f0-9]{64}$`).test(references[0])
+    references[0].length !== 138 ||
+    !new RegExp(`^${folder.slice(-8)}_[a-f0-9]{64}_[a-f0-9]{64}$`).test(references[0])
   ) {
     throw new Error(`ARC_PAGES_INVALID: ${label} checkout is not bound to this preview in Stripe test mode`);
   }

@@ -44,8 +44,9 @@ const colorKeys = new Set(["PRIMARY_COLOR","BACKGROUND_COLOR","SURFACE_COLOR","T
 const urlKeys = new Set(["PRIMARY_CTA_HREF","SECONDARY_CTA_HREF"]);
 const voidTags = new Set(["br","img","input","source"]);
 const booleanAttributes = new Set(["hidden","required","selected","open","multiple"]);
-const safeClasses = new Set(["service-card","stat","stat-card","process-step","proof-card","gallery-card","visual-direction","contact-form","form-field","form-wide","btn","btn-primary","btn-secondary"]);
+const safeClasses = new Set(["service-card","stat","stat-card","process-step","proof-card","gallery-card","visual-direction","contact-form","form-field","form-wide","form-status","btn","btn-primary","btn-secondary"]);
 const supportedFormControlNames = new Set(["form-name","bot-field","name","email","phone","project_details"]);
+const leadDisclosureHtml='<p class="form-status" role="note">By submitting this form, you agree that this business may contact you about your request. Do not include sensitive personal, medical, legal, or financial information.</p>';
 const commonTextTags = ["span","strong","em","small","p","br"];
 const cardTags = [...commonTextTags,"article","div","h3","ul","ol","li"];
 const mediaTags = ["img","picture","source","figure","figcaption","div","span"];
@@ -148,11 +149,12 @@ const validateGeneratedFormContract=markup=>{
   }
   if(forms.length!==1||formOpenings.length!==1)throw new Error("ARC_CONTENT_UNSAFE: exactly one generated Netlify form is allowed");
   const formBlock=forms[0];
+  if(!formBlock.includes(leadDisclosureHtml))throw new Error("ARC_CONTENT_UNSAFE: exact visible lead privacy disclosure is required");
   if(/<(?:input|textarea|select|button)\b/i.test(markup.replace(formBlock,"")))throw new Error("ARC_CONTENT_UNSAFE: generated form controls escaped the form");
   const formAttributes=attributeMapForCanonicalTag(formOpenings[0],"form");
   const formName=clean(formAttributes.get("name"));
   const honeypotName=clean(formAttributes.get("netlify-honeypot"));
-  if(!/^[A-Za-z][A-Za-z0-9_-]{0,58}-lead$/.test(formName)||formAttributes.get("method")!=="POST"||formAttributes.get("data-netlify")!=="true"||honeypotName!=="bot-field"){
+  if(!/^[A-Za-z][A-Za-z0-9_-]{0,58}-lead$/.test(formName)||formAttributes.get("method")!=="POST"||formAttributes.get("data-netlify")!=="true"||formAttributes.get("action")!=="/?submitted=1"||honeypotName!=="bot-field"){
     throw new Error("ARC_CONTENT_UNSAFE: exact Netlify form attributes are required");
   }
   const namedControls=[];
@@ -342,7 +344,7 @@ if(!intakeEvidence||typeof intakeEvidence!=="object"||Array.isArray(intakeEviden
 const evidenceFields=[
   "version","scope","site_id","site_url","form_id","form_name","submission_id","received_at",
   "intake_version","budget_confirmed","terms_accepted","public_folder_prefix","submission_data_sha256",
-  "asset_manifest","total_asset_bytes","state_key","state_digest_sha256","claim_required_before_build","issued_at"
+  "asset_manifest","asset_manifest_sha256","total_asset_bytes","state_key","state_digest_sha256","claim_required_before_build","issued_at"
 ];
 if(JSON.stringify(Object.keys(intakeEvidence).sort())!==JSON.stringify(evidenceFields.slice().sort())){
   throw new Error("ARC1_INTAKE_INVALID: intake evidence fields");
@@ -395,7 +397,10 @@ for(const entry of evidenceManifest){
   }
   const roleIndex=roleOrder.indexOf(clean(entry.role));
   const exactUrl=String(assetInputs[entry.role]==null?"":assetInputs[entry.role]);
+  let verifiedAssetUrl;
+  try{verifiedAssetUrl=new URL(exactUrl);}catch(error){throw new Error("ARC1_ASSET_INVALID: asset URL/hash/type/size binding");}
   if(roleIndex<=lastRoleIndex||exactUrl!==exactUrl.trim()||!exactUrl||await sha256Text(exactUrl)!==clean(entry.source_url_sha256)||
+    verifiedAssetUrl.protocol!=="https:"||verifiedAssetUrl.username||verifiedAssetUrl.password||verifiedAssetUrl.port||verifiedAssetUrl.search||verifiedAssetUrl.hash||
     !/^[a-f0-9]{64}$/.test(clean(entry.sha256))||!new Set(["image/png","image/jpeg","image/webp"]).has(entry.content_type)||
     !Number.isSafeInteger(entry.size_bytes)||entry.size_bytes<1||entry.size_bytes>2621440){
     throw new Error("ARC1_ASSET_INVALID: asset URL/hash/type/size binding");
@@ -408,6 +413,9 @@ for(const role of roleOrder){
   if(Boolean(supplied)!==evidenceManifest.some(entry=>entry.role===role))throw new Error("ARC1_ASSET_INVALID: unverified or missing mapped asset URL");
 }
 const assetManifestSha256=await sha256Text(canonicalJson(evidenceManifest));
+if(clean(intakeEvidence.asset_manifest_sha256).toLowerCase()!==assetManifestSha256){
+  throw new Error("ARC1_ASSET_INVALID: signed asset manifest SHA-256 mismatch");
+}
 const claimCreatedAt=clean(inputData.intake_claim_created_at),claimCreatedMs=Date.parse(claimCreatedAt);
 if(
   clean(inputData.intake_claim_status).toLowerCase()!=="claimed"||
@@ -449,6 +457,52 @@ for (const key of requiredKeys) {
 }
 const paymentLinkUrl = clean(inputData.payment_link_url);
 if (!paymentLinkUrl) throw new Error("ARC_PAYMENT_LINK_INVALID: test Payment Link URL is required");
+const paymentLinkEvidenceSecret=clean(inputData.payment_link_evidence_secret);
+if(evidenceEncoder.encode(paymentLinkEvidenceSecret).length<32||evidenceEncoder.encode(paymentLinkEvidenceSecret).length>256){
+  throw new Error("ARC_PAYMENT_LINK_INVALID: payment-link evidence secret must be 32–256 UTF-8 bytes");
+}
+const paymentLinkEvidenceRaw=clean(inputData.payment_link_evidence_private);
+let paymentLinkEvidence;
+try{paymentLinkEvidence=JSON.parse(paymentLinkEvidenceRaw);}catch(error){throw new Error("ARC_PAYMENT_LINK_INVALID: payment-link evidence JSON");}
+const paymentLinkEvidenceFields=[
+  "version","scope","payment_link_id","payment_link_url","price_id","amount_total_minor_units",
+  "currency","quantity","terms_version","configuration_sha256","issued_at"
+];
+if(!paymentLinkEvidence||typeof paymentLinkEvidence!=="object"||Array.isArray(paymentLinkEvidence)||
+  canonicalJson(paymentLinkEvidence)!==paymentLinkEvidenceRaw||
+  JSON.stringify(Object.keys(paymentLinkEvidence).sort())!==JSON.stringify(paymentLinkEvidenceFields.slice().sort())){
+  throw new Error("ARC_PAYMENT_LINK_INVALID: canonical payment-link evidence contract");
+}
+const expectedPaymentLinkId=clean(inputData.expected_payment_link_id);
+const expectedPriceId=clean(inputData.expected_price_id);
+const expectedTermsVersion=clean(inputData.expected_terms_version);
+const paymentLinkEvidenceIssuedAt=clean(paymentLinkEvidence.issued_at);
+const paymentLinkEvidenceIssuedMs=Date.parse(paymentLinkEvidenceIssuedAt);
+if(paymentLinkEvidence.version!=="arc1-payment-link-evidence-v1"||
+  paymentLinkEvidence.scope!=="authoritative-stripe-test-payment-link-preflight"||
+  !/^plink_[A-Za-z0-9]+$/.test(expectedPaymentLinkId)||!/^price_[A-Za-z0-9]+$/.test(expectedPriceId)||
+  expectedTermsVersion!=="2026-08-11"||paymentLinkEvidence.payment_link_id!==expectedPaymentLinkId||
+  paymentLinkEvidence.price_id!==expectedPriceId||paymentLinkEvidence.payment_link_url!==paymentLinkUrl||
+  paymentLinkEvidence.amount_total_minor_units!==500000||paymentLinkEvidence.currency!=="usd"||
+  paymentLinkEvidence.quantity!==1||paymentLinkEvidence.terms_version!==expectedTermsVersion||
+  !/^[a-f0-9]{64}$/.test(clean(paymentLinkEvidence.configuration_sha256))||
+  !Number.isFinite(paymentLinkEvidenceIssuedMs)||new Date(paymentLinkEvidenceIssuedMs).toISOString()!==paymentLinkEvidenceIssuedAt||
+  paymentLinkEvidenceIssuedMs<Date.now()-5*60*1000||paymentLinkEvidenceIssuedMs>Date.now()+5*60*1000){
+  throw new Error("ARC_PAYMENT_LINK_INVALID: payment-link evidence identity, configuration, or freshness");
+}
+const paymentLinkEvidenceHmac=clean(inputData.payment_link_evidence_hmac_sha256).toLowerCase();
+if(!/^[a-f0-9]{64}$/.test(paymentLinkEvidenceHmac))throw new Error("ARC_PAYMENT_LINK_INVALID: payment-link evidence HMAC");
+const paymentLinkEvidenceKey=await globalThis.crypto.subtle.importKey(
+  "raw",evidenceEncoder.encode(paymentLinkEvidenceSecret),{name:"HMAC",hash:"SHA-256"},false,["verify"]
+);
+if(!(await globalThis.crypto.subtle.verify(
+  "HMAC",paymentLinkEvidenceKey,
+  Uint8Array.from(paymentLinkEvidenceHmac.match(/../g),byte=>Number.parseInt(byte,16)),
+  evidenceEncoder.encode(`arc1-payment-link-evidence-signature-v1\n${paymentLinkEvidenceRaw}`)
+))){
+  throw new Error("ARC_PAYMENT_LINK_INVALID: payment-link evidence HMAC mismatch");
+}
+const paymentLinkEvidenceSha256=await sha256Text(paymentLinkEvidenceRaw);
 let checkout;
 try {
   checkout = new URL(paymentLinkUrl);
@@ -462,6 +516,9 @@ const checkoutBindingSecret = clean(inputData.checkout_binding_secret);
 if (checkoutBindingSecret.length < 32 || checkoutBindingSecret.length > 256) {
   throw new Error("ARC_PAYMENT_LINK_INVALID: checkout binding secret must be 32–256 characters");
 }
+if(new Set([checkoutBindingSecret,paymentLinkEvidenceSecret,intakeEvidenceSecret]).size!==3){
+  throw new Error("ARC_PAYMENT_LINK_INVALID: intake, payment-link, and checkout secrets must be separate");
+}
 if (!globalThis.crypto?.subtle || typeof TextEncoder !== "function") {
   throw new Error("ARC_PAYMENT_LINK_INVALID: HMAC-SHA-256 runtime unavailable");
 }
@@ -472,14 +529,6 @@ const checkoutBindingKey = await globalThis.crypto.subtle.importKey(
   false,
   ["sign"]
 );
-const checkoutBindingBytes = await globalThis.crypto.subtle.sign(
-  "HMAC",
-  checkoutBindingKey,
-  new TextEncoder().encode(previewFolder)
-);
-const checkoutBinding = [...new Uint8Array(checkoutBindingBytes)].map(byte => byte.toString(16).padStart(2, "0")).join("");
-const checkoutReference = `${previewFolder}.${checkoutBinding}`;
-checkout.searchParams.set("client_reference_id", checkoutReference);
 if (/buy\.stripe\.com/i.test(clean(generated.PRIMARY_CTA_HREF))) {
   throw new Error("ARC_CTA_INVALID: business CTA cannot be an ARC checkout URL");
 }
@@ -497,6 +546,20 @@ const mediaRules = [
 ];
 const expectedMediaProfile = mediaRules.find(([,pattern])=>pattern.test(semanticText))?.[0] || "general";
 html = html.replace(/<body\b/i, `<body data-arc-expected-media-profile="${expectedMediaProfile}"`);
+html=html.trim();
+const approvalContentSha256=await sha256Text(html);
+const checkoutReferenceMessage=`arc-checkout-reference-v2\n${submissionPrefix}\n${approvalContentSha256}`;
+const checkoutBindingBytes = await globalThis.crypto.subtle.sign(
+  "HMAC",
+  checkoutBindingKey,
+  new TextEncoder().encode(checkoutReferenceMessage)
+);
+const checkoutBinding = [...new Uint8Array(checkoutBindingBytes)].map(byte => byte.toString(16).padStart(2, "0")).join("");
+const checkoutReference = `${submissionPrefix}_${approvalContentSha256}_${checkoutBinding}`;
+if (checkoutReference.length !== 138 || !/^[a-f0-9]{8}_[a-f0-9]{64}_[a-f0-9]{64}$/.test(checkoutReference)) {
+  throw new Error("ARC_PAYMENT_LINK_INVALID: client_reference_id does not match the immutable ARC v2 binding");
+}
+checkout.searchParams.set("client_reference_id", checkoutReference);
 const escapeAttribute = value => clean(value)
   .replace(/&/g,"&amp;")
   .replace(/"/g,"&quot;")
@@ -537,6 +600,8 @@ return {
   preview_url: `${pagesBaseUrl}/${previewFolder}/`,
   checkout_url: checkout.toString(),
   checkout_reference: checkoutReference,
+  approval_content_sha256:approvalContentSha256,
+  payment_link_evidence_sha256: paymentLinkEvidenceSha256,
   trusted_event_prefix: submissionPrefix,
   trusted_netlify_submission_id: clean(intakeEvidence.submission_id).toLowerCase(),
   trusted_received_at: receivedAt,

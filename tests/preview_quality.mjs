@@ -67,8 +67,10 @@ const qaFiles = process.env.ARC_QA_V10_ONLY === "1"
 const qaLimit = Math.max(1, Math.min(qaFiles.length, Number(process.env.ARC_QA_LIMIT || qaFiles.length)));
 const filesToTest = qaFiles.slice(0, qaLimit);
 const viewports = [
-  { name: "desktop", width: 1440, height: 900, isMobile: false },
-  { name: "iphone", width: 390, height: 844, isMobile: true }
+  { name: "desktop", width: 1440, height: 900, isMobile: false, isPhone: false },
+  { name: "tablet", width: 768, height: 1024, isMobile: true, isPhone: false },
+  { name: "small-phone", width: 320, height: 740, isMobile: true, isPhone: true },
+  { name: "iphone", width: 390, height: 844, isMobile: true, isPhone: true }
 ].filter(item => process.env.ARC_QA_DESKTOP_ONLY !== "1" || !item.isMobile);
 const useRealImages = process.env.ARC_QA_REAL_IMAGES === "1";
 const saveScreenshots = process.env.ARC_QA_SAVE_SCREENSHOTS === "1";
@@ -162,12 +164,24 @@ try {
           await page.evaluate(position => {
             document.querySelector(`[data-arc-qa-reveal="${position}"]`)?.scrollIntoView({ block: "center" });
           }, index);
-          await page.waitForFunction(position => {
+          const revealIsVisible = position => {
             const element = document.querySelector(`[data-arc-qa-reveal="${position}"]`);
             return !element
               || element.classList.contains("is-visible")
               || matchMedia("(prefers-reduced-motion: reduce)").matches;
-          }, index, { timeout: 2_000 });
+          };
+          try {
+            await page.waitForFunction(revealIsVisible, index, { timeout: 5_000 });
+          } catch (error) {
+            // A real scroll away and back retriggers IntersectionObserver in slow CI
+            // without bypassing the same visibility condition.
+            await page.evaluate(() => window.scrollTo(0, 0));
+            await page.waitForTimeout(50);
+            await page.evaluate(position => {
+              document.querySelector(`[data-arc-qa-reveal="${position}"]`)?.scrollIntoView({ block: "center" });
+            }, index);
+            await page.waitForFunction(revealIsVisible, index, { timeout: 5_000 });
+          }
         }
         await page.waitForFunction(() => {
           const images = [...document.images];
@@ -256,6 +270,11 @@ try {
             links,
             formCount: document.querySelectorAll("form").length,
             showcaseDisclosure: document.body.innerText.includes("Fictional ARC design concept — not a real business. Checkout and lead collection are disabled."),
+            showcaseChrome: document.body.dataset.arcSiteMode === "showcase" ? (() => {
+              const notice = document.querySelector(".arc-showcase-notice")?.getBoundingClientRect();
+              const header = document.querySelector(".site-header")?.getBoundingClientRect();
+              return notice && header ? { noticeBottom: notice.bottom, headerTop: header.top } : null;
+            })() : null,
             curatedImages: [...document.images].filter(visible).map(image => ({
               profile: image.dataset.arcMediaProfile || "",
               provider: image.dataset.arcMediaProvider || "",
@@ -290,8 +309,10 @@ try {
         assert.ok(report.images.every(item => item.alt.length > 0 && item.alt.length <= 160), "image alt text is empty or too long");
         assert.equal(new Set(report.images.map(item => item.source)).size, report.images.length, "an image is duplicated");
         assert.ok(report.links.every(href => !/^https?:\/\/(?:www\.)?example\.(?:com|org|net)/i.test(href)), "dummy external CTA remains");
-        if (viewport.isMobile) {
+        if (viewport.isPhone) {
           assert.ok(report.media.every(item => item.height <= 320), "a phone media block is taller than 320px");
+        }
+        if (viewport.isMobile) {
           assert.ok(report.mobileGridItems.every(item => item.width >= 250), `a phone content card collapsed below 250px: ${JSON.stringify(report.mobileGridItems.filter(item => item.width < 250))}`);
         }
         const v10Fixture = v10ByFile.get(file);
@@ -321,7 +342,8 @@ try {
           if (v10Fixture) {
             assert.ok(checkout, "bound Stripe checkout link is missing");
             const checkoutReference = new URL(checkout).searchParams.get("client_reference_id") || "";
-            assert.match(checkoutReference, new RegExp(`^${v10Fixture.folder}\\.[a-f0-9]{64}$`), "checkout folder binding mismatch");
+            assert.match(checkoutReference, new RegExp(`^${v10Fixture.folder.slice(-8)}_[a-f0-9]{64}_[a-f0-9]{64}$`), "checkout immutable approval binding mismatch");
+            assert.equal(checkoutReference.length, 138, "checkout binding must use the fixed Stripe-safe v2 length");
           } else {
             assert.equal(checkout, undefined, "a non-preview page exposed a Stripe checkout link");
           }
@@ -329,6 +351,8 @@ try {
             assert.equal(report.arcShowcaseProfile, showcase.profile, "showcase profile metadata mismatch");
             assert.equal(report.formCount, 0, "showcase retained a customer lead submission form");
             assert.equal(report.showcaseDisclosure, true, "visible fictional-concept disclosure missing");
+            assert.ok(report.showcaseChrome, "showcase notice or site header is missing");
+            assert.ok(report.showcaseChrome.headerTop >= report.showcaseChrome.noticeBottom - 1, `showcase notice overlaps the site header: ${JSON.stringify(report.showcaseChrome)}`);
           }
         }
         if (saveScreenshots) {

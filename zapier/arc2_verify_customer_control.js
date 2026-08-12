@@ -1,4 +1,5 @@
 // ARC2 read-only customer-control verifier.
+throw new Error("ARC_LEGACY_HANDOFF_DISABLED: customer GitHub/token proof was replaced by Netlify deploy-and-claim verification");
 // A separately approved secure handoff must first place the exact bundle in a
 // repository and Netlify site already controlled by the customer. This step performs GET requests only and issues
 // short-lived signed evidence; it never creates, transfers, deploys, publishes,

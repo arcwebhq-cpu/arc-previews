@@ -320,7 +320,7 @@ for (const asset of requestedAssets) {
     throw new Error(`ARC1_ASSET_INVALID: ${asset.role} URL`);
   }
   if (
-    url.protocol !== "https:" || url.username || url.password || url.port || url.hash || !isSafeDnsHost(url.hostname) ||
+    url.protocol !== "https:" || url.username || url.password || url.port || url.search || url.hash || !isSafeDnsHost(url.hostname) ||
     !allowedOrigins.has(url.origin) || url.pathname === "/"
   ) {
     throw new Error(`ARC1_ASSET_INVALID: ${asset.role} URL is outside the exact HTTPS upload-origin allowlist`);
@@ -417,6 +417,7 @@ return {
   public_folder_prefix: publicFolderPrefix,
   submission_data_sha256: submissionDataSha256,
   asset_manifest: assetManifest,
+  asset_manifest_sha256: assetManifestSha256,
   total_asset_bytes: totalAssetBytes,
   state_key: stateKey,
   state_digest_sha256: stateDigestSha256,

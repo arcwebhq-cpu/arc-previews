@@ -181,6 +181,7 @@ const logoRenderedPass = expectedLogoUrl
 const supportedFormControlNames = new Set([
   "form-name", "bot-field", "name", "email", "phone", "project_details"
 ]);
+const leadDisclosureHtml = '<p class="form-status" role="note">By submitting this form, you agree that this business may contact you about your request. Do not include sensitive personal, medical, legal, or financial information.</p>';
 const canonicalAttributeMap = (tag, tagName) => {
   const match = tag.match(new RegExp(`^<${tagName}\\b([\\s\\S]*?)>$`, "i"));
   if (!match) return null;
@@ -211,11 +212,13 @@ const inspectLeadForm = markup => {
   if (formBlocks.length !== 1 || formOpenings.length !== 1) return { pass: false, formName: "" };
   const formAttributes = canonicalAttributeMap(formOpenings[0], "form");
   if (!formAttributes) return { pass: false, formName: "" };
+  if (!formBlocks[0].includes(leadDisclosureHtml)) return { pass: false, formName: "" };
   const formName = clean(formAttributes.get("name"));
   const honeypotName = clean(formAttributes.get("netlify-honeypot"));
   if (!/^[A-Za-z][A-Za-z0-9_-]{0,58}-lead$/.test(formName) ||
       formAttributes.get("method") !== "POST" ||
       formAttributes.get("data-netlify") !== "true" ||
+      formAttributes.get("action") !== "/?submitted=1" ||
       honeypotName !== "bot-field") {
     return { pass: false, formName };
   }

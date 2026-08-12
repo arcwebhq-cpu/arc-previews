@@ -1,4 +1,4 @@
-import { createHmac } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -168,7 +168,7 @@ export function buildPreviewFolder(businessName, trustedEventPrefix) {
   return `${businessSlug}-${prefix}`;
 }
 
-export function buildCheckoutUrl(paymentLinkUrl, previewFolder, checkoutBindingSecret) {
+export function buildCheckoutUrl(paymentLinkUrl, previewFolder, approvalContentSha256, checkoutBindingSecret) {
   const raw = String(paymentLinkUrl ?? "").trim();
   if (!raw) throw new Error("ARC_PAYMENT_LINK_INVALID: test Payment Link URL is required");
   const url = new URL(raw);
@@ -179,8 +179,18 @@ export function buildCheckoutUrl(paymentLinkUrl, previewFolder, checkoutBindingS
   if (bindingSecret.length < 32 || bindingSecret.length > 256) {
     throw new Error("ARC_PAYMENT_LINK_INVALID: checkout binding secret must be 32–256 characters");
   }
-  const binding = createHmac("sha256", bindingSecret).update(previewFolder, "utf8").digest("hex");
-  url.searchParams.set("client_reference_id", `${previewFolder}.${binding}`);
+  const folderSuffix = String(previewFolder ?? "").trim().toLowerCase().match(/-([a-f0-9]{8})$/)?.[1] || "";
+  const approvalSha256 = String(approvalContentSha256 ?? "").trim().toLowerCase();
+  if (!folderSuffix || !/^[a-f0-9]{64}$/.test(approvalSha256)) {
+    throw new Error("ARC_PAYMENT_LINK_INVALID: immutable approval folder suffix and SHA-256 are required");
+  }
+  const bindingMessage = `arc-checkout-reference-v2\n${folderSuffix}\n${approvalSha256}`;
+  const binding = createHmac("sha256", bindingSecret).update(bindingMessage, "utf8").digest("hex");
+  const checkoutReference = `${folderSuffix}_${approvalSha256}_${binding}`;
+  if (checkoutReference.length !== 138 || !/^[a-f0-9]{8}_[a-f0-9]{64}_[a-f0-9]{64}$/.test(checkoutReference)) {
+    throw new Error("ARC_PAYMENT_LINK_INVALID: client_reference_id exceeds Stripe's allowed syntax");
+  }
+  url.searchParams.set("client_reference_id", checkoutReference);
   return url.toString();
 }
 
@@ -196,7 +206,7 @@ function injectPreviewToolbar(html, checkoutUrl) {
   if (!checkoutUrl) return html;
   const markup = `<aside class="arc-preview-toolbar" aria-label="ARC preview purchase"><span><strong>ARC preview</strong>Built for this business. Purchase only if approved.</span><a data-arc-checkout href="${escapeAttribute(checkoutUrl)}">Own this website — $5,000</a></aside>`;
   if (!/<\/body>/i.test(html)) throw new Error("ARC_TEMPLATE_INVALID: closing body tag is missing");
-  return html.replace(/<\/body>/i, `${markup}\n</body>`);
+  return html.replace(/<\/body>/i, `${markup}\n</body>`) + "\n";
 }
 
 export function renderPreview(template, content, options) {
@@ -209,7 +219,6 @@ export function renderPreview(template, content, options) {
     heroImageUrl: options?.heroImageUrl,
     supportingImageUrl: options?.supportingImageUrl
   });
-  const checkoutUrl = buildCheckoutUrl(options?.paymentLinkUrl, folder, options?.checkoutBindingSecret);
   const templateKeys = [...template.matchAll(/\[\[([A-Z0-9_]+)\]\]/g)].map(match => match[1]);
   const uniqueTemplateKeys = [...new Set(templateKeys)];
   if (uniqueTemplateKeys.length !== 58 || uniqueTemplateKeys.some(key => !REQUIRED_KEYS.includes(key))) {
@@ -222,6 +231,14 @@ export function renderPreview(template, content, options) {
   }
   const expectedMediaProfile = detectMediaProfile(safeContent);
   html = html.replace(/<body\b/i, `<body data-arc-expected-media-profile="${expectedMediaProfile}"`);
+  html = html.trim();
+  const approvalContentSha256 = createHash("sha256").update(html, "utf8").digest("hex");
+  const checkoutUrl = buildCheckoutUrl(
+    options?.paymentLinkUrl,
+    folder,
+    approvalContentSha256,
+    options?.checkoutBindingSecret
+  );
   html = injectPreviewToolbar(html, checkoutUrl);
   const unresolved = [...html.matchAll(/\[\[([A-Z0-9_]+)\]\]/g)].map(match => match[1]);
   if (unresolved.length) throw new Error(`ARC_INJECTION_FAILED: unresolved=${[...new Set(unresolved)].join(",")}`);
@@ -239,6 +256,7 @@ export function renderPreview(template, content, options) {
     filePath,
     html,
     checkoutUrl,
+    approvalContentSha256,
     expectedMediaProfile,
     previewUrl: `${pagesBaseUrl}/${folder}/`,
     templatePlaceholderCount: uniqueTemplateKeys.length,

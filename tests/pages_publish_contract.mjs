@@ -27,11 +27,12 @@ function showcase(profile) {
 }
 
 function customerPreview(folder, { proofFolder = folder, checkoutFolder = folder, checkoutPath = "test_safe" } = {}) {
+  const checkoutSuffix = checkoutFolder.slice(-8);
   const unsigned = `<!doctype html><html><head>
 <meta name="robots" content="noindex,nofollow,noarchive">
 <meta name="arc-template-version" content="10.0">
 </head><body data-arc-site-mode="preview">
-<a data-arc-checkout href="https://buy.stripe.com/${checkoutPath}?client_reference_id=${checkoutFolder}.${"a".repeat(64)}">Own this website</a>
+<a data-arc-checkout href="https://buy.stripe.com/${checkoutPath}?client_reference_id=${checkoutSuffix}_${"a".repeat(64)}_${"b".repeat(64)}">Own this website</a>
 </body></html>`;
   const proof = `<!-- ARC_PREVIEW_PROOF_START -->\n<meta name="arc-preview-folder" content="${proofFolder}">\n<meta name="arc-preview-source-sha256" content="${sha256(unsigned)}">\n<!-- ARC_PREVIEW_PROOF_END -->\n`;
   return unsigned.replace("</head>", `${proof}</head>`);

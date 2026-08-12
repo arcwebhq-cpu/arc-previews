@@ -8,12 +8,14 @@ const rawJson = clean(inputData.raw_json)
 const filePath = clean(inputData.file_path);
 const businessName = clean(inputData.business_name);
 const customerEmail = clean(inputData.customer_email);
-const submissionId = clean(inputData.submission_id);
+const trustedEventPrefix = clean(inputData.trusted_event_prefix).toLowerCase();
 const previewUrl = clean(inputData.preview_url);
 const expectedCta = clean(inputData.expected_cta || inputData.main_call_to_action);
 const mappedCta = clean(inputData.main_call_to_action);
 const expectedLogoUrl = clean(inputData.expected_logo_url || inputData.logo_file_url);
 const mappedLogoUrl = clean(inputData.logo_file_url);
+const expectedHeroUrl = clean(inputData.expected_hero_image_url || inputData.hero_image_url);
+const expectedSupportingUrl = clean(inputData.expected_supporting_image_url || inputData.supporting_image_url);
 
 let generated = {};
 let jsonParsePass = true;
@@ -121,17 +123,26 @@ const filePathPass =
   );
 const submissionPathPass =
   Boolean(filePathMatch) &&
-  (
-    !/^[a-f0-9]{8,}$/i.test(submissionId) ||
-    pathSubmissionPrefix === submissionId.slice(0, 8).toLowerCase()
-  );
+  /^[a-f0-9]{8}$/.test(trustedEventPrefix) &&
+  pathSubmissionPrefix === trustedEventPrefix;
 const previewPathPass =
   !previewUrl ||
   previewUrl.toLowerCase().includes(`/${filePath.replace(/index\.html$/i, "").toLowerCase()}`);
 const previewProtocolPass = !previewUrl || /^https:\/\//i.test(previewUrl);
-const idempotencyKeyPass = Boolean(submissionId) && submissionPathPass;
+const idempotencyKeyPass = submissionPathPass;
 
-const normalize = value => clean(value).replace(/\s+/g, " ").toLowerCase();
+const decodeHtmlEntities = value => String(value == null ? "" : value)
+  .replace(/&#(\d+);?/g, (_, code) => String.fromCodePoint(Number(code)))
+  .replace(/&#x([0-9a-f]+);?/gi, (_, code) => String.fromCodePoint(Number.parseInt(code, 16)))
+  .replace(/&(amp|quot|apos|lt|gt|#39);/gi, (_, name) => ({
+    amp: "&",
+    quot: '"',
+    apos: "'",
+    lt: "<",
+    gt: ">",
+    "#39": "'"
+  })[name.toLowerCase()]);
+const normalize = value => decodeHtmlEntities(clean(value)).replace(/\s+/g, " ").toLowerCase();
 const generatedCta = clean(generated.PRIMARY_CTA_LABEL);
 const ctaContractPass = !expectedCta || normalize(generatedCta) === normalize(expectedCta);
 const mappedCtaPass = !mappedCta || !expectedCta || normalize(mappedCta) === normalize(expectedCta);
@@ -167,19 +178,82 @@ const logoRenderedPass = expectedLogoUrl
     (expectedLogoFilename && html.includes(expectedLogoFilename))
   : true;
 
+const supportedFormControlNames = new Set([
+  "form-name", "bot-field", "name", "email", "phone", "project_details"
+]);
+const canonicalAttributeMap = (tag, tagName) => {
+  const match = tag.match(new RegExp(`^<${tagName}\\b([\\s\\S]*?)>$`, "i"));
+  if (!match) return null;
+  const attributes = new Map();
+  let remaining = match[1].trim();
+  while (remaining) {
+    const nameMatch = remaining.match(/^([A-Za-z_:][A-Za-z0-9_.:-]*)/);
+    if (!nameMatch) return null;
+    const name = nameMatch[1].toLowerCase();
+    if (attributes.has(name)) return null;
+    remaining = remaining.slice(nameMatch[0].length).trimStart();
+    let value = name;
+    if (remaining.startsWith("=")) {
+      remaining = remaining.slice(1).trimStart();
+      if (remaining[0] !== '"') return null;
+      const end = remaining.indexOf('"', 1);
+      if (end < 0) return null;
+      value = remaining.slice(1, end);
+      remaining = remaining.slice(end + 1).trimStart();
+    }
+    attributes.set(name, value);
+  }
+  return attributes;
+};
+const inspectLeadForm = markup => {
+  const formBlocks = markup.match(/<form\b[^>]*>[\s\S]*?<\/form>/gi) || [];
+  const formOpenings = markup.match(/<form\b[^>]*>/gi) || [];
+  if (formBlocks.length !== 1 || formOpenings.length !== 1) return { pass: false, formName: "" };
+  const formAttributes = canonicalAttributeMap(formOpenings[0], "form");
+  if (!formAttributes) return { pass: false, formName: "" };
+  const formName = clean(formAttributes.get("name"));
+  const honeypotName = clean(formAttributes.get("netlify-honeypot"));
+  if (!/^[A-Za-z][A-Za-z0-9_-]{0,58}-lead$/.test(formName) ||
+      formAttributes.get("method") !== "POST" ||
+      formAttributes.get("data-netlify") !== "true" ||
+      honeypotName !== "bot-field") {
+    return { pass: false, formName };
+  }
+  const namedControls = [];
+  for (const tag of formBlocks[0].match(/<(?:input|textarea|select|button)\b[^>]*>/gi) || []) {
+    const tagName = tag.match(/^<([a-z]+)/i)?.[1].toLowerCase();
+    const attributes = canonicalAttributeMap(tag, tagName);
+    if (!attributes) return { pass: false, formName };
+    const name = clean(attributes.get("name"));
+    if (name) namedControls.push({ tagName, name, attributes });
+  }
+  const names = namedControls.map(control => control.name);
+  if (new Set(names).size !== names.length ||
+      names.some(name => !supportedFormControlNames.has(name)) ||
+      [...supportedFormControlNames].some(name => !names.includes(name))) {
+    return { pass: false, formName };
+  }
+  const control = name => namedControls.find(item => item.name === name);
+  const type = name => clean(control(name)?.attributes.get("type")).toLowerCase();
+  const required = name => control(name)?.attributes.has("required");
+  const submitButtons = formBlocks[0].match(/<button\b[^>]*type="submit"[^>]*>/gi) || [];
+  const pass =
+    control("form-name")?.tagName === "input" && type("form-name") === "hidden" &&
+    clean(control("form-name")?.attributes.get("value")) === formName &&
+    control(honeypotName)?.tagName === "input" && new Set(["", "text"]).has(type(honeypotName)) &&
+    control("name")?.tagName === "input" && type("name") === "text" && required("name") &&
+    control("email")?.tagName === "input" && type("email") === "email" && required("email") &&
+    control("phone")?.tagName === "input" && type("phone") === "tel" &&
+    control("project_details")?.tagName === "textarea" && required("project_details") &&
+    submitButtons.length === 1;
+  return { pass, formName };
+};
 const formHtml = clean(generated.CONTACT_ACTION_HTML);
 const formExists = /<form\b/i.test(formHtml);
-const formContractPass =
-  !formExists ||
-  (
-    /method=["']POST["']/i.test(formHtml) &&
-    /\bdata-netlify=["']true["']/i.test(formHtml) &&
-    /\bname=["'][^"']+["']/i.test(formHtml) &&
-    /netlify-honeypot=/i.test(formHtml) &&
-    /type=["']email["']/i.test(formHtml) &&
-    /type=["']submit["']/i.test(formHtml)
-  );
-const formRenderedPass = !formExists || html.includes("data-netlify=") && html.includes("form-name");
+const generatedFormInspection = formExists ? inspectLeadForm(formHtml) : { pass: !/<(?:input|textarea|select|button)\b/i.test(formHtml), formName: "" };
+const renderedFormInspection = formExists ? inspectLeadForm(html) : { pass: true, formName: "" };
+const formContractPass = generatedFormInspection.pass;
+const formRenderedPass = !formExists || renderedFormInspection.pass && renderedFormInspection.formName === generatedFormInspection.formName;
 
 const parseHex = value => {
   const raw = clean(value).replace(/^#/, "");
@@ -206,19 +280,50 @@ const buttonContrast = contrast(generated.PRIMARY_BUTTON_TEXT, generated.PRIMARY
 
 const generatedMarkup = requiredKeys
   .filter(key => /_HTML$/.test(key))
+  .concat(["ABOUT_BODY"])
   .map(key => clean(generated[key]))
   .join("\n");
 const markupSafetyPass =
-  !/<script\b/i.test(generatedMarkup) &&
+  !/<(?:script|style|iframe|object|embed|meta|link|base)\b/i.test(generatedMarkup) &&
   !/\bon[a-z]+\s*=/i.test(generatedMarkup) &&
-  !/javascript\s*:/i.test(generatedMarkup) &&
-  !/<iframe\b/i.test(generatedMarkup);
+  !/\bstyle\s*=/i.test(generatedMarkup) &&
+  !/\bsrcdoc\s*=/i.test(generatedMarkup) &&
+  !/(?:java|vb)script\s*:/i.test(generatedMarkup) &&
+  !/\b(?:href|src|srcset)\s*=\s*["']\s*data\s*:/i.test(generatedMarkup) &&
+  !/class\s*=\s*["'][^"']*\barc-/i.test(generatedMarkup);
 const generatedHrefValues = [...generatedMarkup.matchAll(/\bhref\s*=\s*["']([^"']+)["']/gi)]
   .map(match => clean(match[1]))
   .filter(Boolean);
 const generatedLinkSafetyPass = generatedHrefValues.every(value =>
   /^(#|https?:\/\/|tel:|mailto:|\/)/i.test(value)
 );
+const scalarUrlValues = [generated.PRIMARY_CTA_HREF, generated.SECONDARY_CTA_HREF].map(clean);
+const scalarUrlSafetyPass = scalarUrlValues.every(value =>
+  /^(?:#[A-Za-z][A-Za-z0-9_.:-]*|\/(?![\\/])[^\\\s]*|https?:\/\/[^\s]+|tel:\+?[0-9(). -]{5,32}|mailto:[^\s@]+@[^\s@]+\.[^\s@?]+(?:\?[^\s]*)?)$/i.test(value) &&
+  !/^https?:\/\/buy\.stripe\.com(?:[/:?#]|$)/i.test(value)
+);
+const structuredMarkupKeys = new Set([
+  "LOGO_HTML","TRUST_LINE_HTML","HERO_MEDIA_HTML","HERO_CHIPS_HTML","TICKER_HTML","SERVICES_HTML",
+  "DIFFERENTIATORS_HTML","ABOUT_BODY","ABOUT_STATS_HTML","ABOUT_MEDIA_HTML","PROCESS_HTML","PROOF_HTML",
+  "GALLERY_HTML","FAQ_HTML","CONTACT_ACTION_HTML","CONTACT_DETAILS_HTML","FOOTER_LINKS_HTML"
+]);
+const nonTextKeys = new Set([
+  ...structuredMarkupKeys,
+  "PRIMARY_COLOR","BACKGROUND_COLOR","SURFACE_COLOR","TEXT_COLOR","MUTED_COLOR","ACCENT_COLOR","PRIMARY_BUTTON_TEXT",
+  "PRIMARY_CTA_HREF","SECONDARY_CTA_HREF"
+]);
+const escapeScalar = value => clean(value)
+  .replace(/&/g, "&amp;")
+  .replace(/</g, "&lt;")
+  .replace(/>/g, "&gt;")
+  .replace(/"/g, "&quot;");
+const scalarRenderEscapingPass = requiredKeys
+  .filter(key => !nonTextKeys.has(key))
+  .every(key => {
+    const raw = clean(generated[key]);
+    const escaped = escapeScalar(raw);
+    return html.includes(escaped) && (!/[<>]/.test(raw) || !html.includes(raw));
+  });
 const generatedImages = [...generatedMarkup.matchAll(/<img\b[^>]*>/gi)].map(match => match[0]);
 const generatedAltValues = generatedImages.map(tag => {
   const match = tag.match(/\balt\s*=\s*["']([^"']*)["']/i);
@@ -278,6 +383,56 @@ const duplicateMediaSources = [...new Set(
   mediaSources.filter((source, index) => mediaSources.indexOf(source) !== index)
 )];
 const uniqueMediaPass = duplicateMediaSources.length === 0;
+const approvedClientMedia = [expectedHeroUrl, expectedSupportingUrl]
+  .filter(Boolean)
+  .map(value => value.split("?")[0]);
+const generatedStockSources = mediaSources.filter(source =>
+  /(?:images\.unsplash\.com|images\.pexels\.com)/i.test(source)
+);
+const unapprovedClientMedia = mediaSources.filter(source => {
+  if (/^(?:data:|blob:)/i.test(source)) return true;
+  return !approvedClientMedia.some(approved => source === approved || source.endsWith(approved));
+});
+const generatedMediaOwnershipPass =
+  generatedStockSources.length === 0 &&
+  (mediaSources.length === 0 || approvedClientMedia.length > 0 && unapprovedClientMedia.length === 0);
+
+const semanticText = [
+  generated.INDUSTRY_LABEL,
+  generated.BUSINESS_NAME,
+  generated.SERVICES_HEADING,
+  generated.SERVICES_INTRO,
+  plainText(generated.SERVICES_HTML)
+].map(normalize).join(" ");
+const semanticProfiles = [
+  ["roofing", /\b(roof(?:er|ing)?|shingles?|siding|gutters?|(?:home|residential) exteriors?)\b/],
+  ["hvac", /\b(hvac|air conditioning|air conditioner|heating|furnace|heat pump|climate control)\b/],
+  ["remodeling", /\b(remodel(?:ing|er)?|renovat(?:e|ion|ing)?|kitchen|bathroom|home improvement)\b/],
+  ["landscaping", /\b(landscap(?:e|er|ing)?|lawn care|gardener|gardening|hardscape|yard care|tree service)\b/],
+  ["auto_detailing", /\b(auto detailing|car detailing|detailer|ceramic coating|paint correction|car wash)\b/],
+  ["dental", /\b(dent(?:al|ist|istry)|orthodont(?:ic|ics|ist)|oral surgery)\b/],
+  ["plumbing", /\b(plumb(?:er|ing)?|drain service|water heater|boiler repair)\b/],
+  ["home_services", /\b(contractor|construction|home service|specialty contractor|handyman|painting contractor)\b/],
+  ["medical_spa", /\b(med(?:ical)? spa|medspa|aesthetic(?:s)?|injectables?|botox|facial treatment|skin rejuvenation)\b/],
+  ["healthcare", /\b(medical|health(?:care)?|clinic|doctor|physician|chiropract(?:ic|or)|physical therapy|therapist|urgent care)\b/],
+  ["restaurant", /\b(restaurant|food|hospitality|cafe|bakery|cater(?:er|ing)?)\b/],
+  ["real_estate", /\b(real estate|realtor|property|brokerage|home builder|architect(?:ure)?)\b/],
+  ["fitness", /\b(fitness|gym|wellness|personal trainer|yoga|strength club)\b/],
+  ["legal", /\b(law|legal|attorney|lawyer|law firm)\b/],
+  ["finance", /\b(account(?:ant|ing)?|cpa|finance|financial|insurance|bookkeep(?:er|ing)?|tax)\b/],
+  ["web_design", /\b(web design|web designer|website design|web development|digital studio|digital agency|creative agency|ui\/ux|ux design|product design|ecommerce design)\b/],
+  ["technology", /\b(software|technology|saas|consulting|it services?|tech company)\b/],
+  ["beauty", /\b(beauty|salon|barber|spa|cosmetic|skincare|skin care)\b/]
+];
+const semanticProfile = semanticProfiles.find(([,pattern]) => pattern.test(semanticText))?.[0] || "general";
+const expectedMediaProfile = clean(html.match(/<body\b[^>]*\bdata-arc-expected-media-profile=["']([^"']+)["']/i)?.[1]);
+const semanticProfilePass =
+  expectedMediaProfile === semanticProfile &&
+  html.includes("ARC_MEDIA_MANIFEST_START v10.0") &&
+  html.includes(`key:\"${semanticProfile}\"`) &&
+  html.includes("expectedMediaProfile") &&
+  html.includes("dataset.arcMediaProfile=media.key") &&
+  html.includes("replaceMismatchedStock");
 
 const baseStructurePass =
   /<!doctype html>/i.test(html) &&
@@ -300,8 +455,8 @@ const dummyLinkPass = generatedHrefValues.every(value =>
   !/^https?:\/\/(?:www\.)?(?:example\.(?:com|org|net)|localhost)(?:[/:?#]|$)/i.test(value) &&
   value !== "#"
 );
-const v9QualityPass =
-  templateVersion < 9 ||
+const v10QualityPass =
+  templateVersion < 10 ||
   (
     /data-industry=/i.test(html) &&
     html.includes("mediaPresets") &&
@@ -321,7 +476,7 @@ const v9QualityPass =
     (
       templateVersion < 9.5 ||
       (
-        html.includes("Curated preview imagery") &&
+        html.includes("replaceMismatchedStock") &&
         html.includes("fitLogo") &&
         html.includes("arcHeroVisual")
       )
@@ -329,8 +484,12 @@ const v9QualityPass =
     (
       templateVersion < 9.6 ||
       (
-        html.includes("ARC production hardening v9.6") &&
-        privatePreviewPass
+        html.includes("ARC production hardening v10.0") &&
+        html.includes("ARC premium composition v10.0") &&
+        html.includes("ARC adaptive mobile grid fix v10.0") &&
+        html.includes("ARC_MEDIA_MANIFEST_START v10.0") &&
+        privatePreviewPass &&
+        semanticProfilePass
       )
     )
   );
@@ -339,9 +498,9 @@ const checks = {
   json_parse_pass: jsonParsePass,
   exact_58_key_contract_pass:
     jsonParsePass && generatedKeys.length === 58 && missingKeys.length === 0 && extraKeys.length === 0,
-  template_version_pass: Number.isFinite(templateVersion) && templateVersion >= 9.6,
+  template_version_pass: Number.isFinite(templateVersion) && templateVersion >= 10,
   template_marker_pass: Boolean(markerMatch),
-  template_quality_pass: v9QualityPass,
+  template_quality_pass: v10QualityPass,
   html_size_pass: html.length >= 30000,
   html_count_pass:
     Number.isFinite(declaredHtmlCount) && Math.abs(declaredHtmlCount - html.length) <= 8,
@@ -371,11 +530,15 @@ const checks = {
   button_contrast_pass: buttonContrast >= 4.5,
   generated_markup_safety_pass: markupSafetyPass,
   generated_link_safety_pass: generatedLinkSafetyPass,
+  scalar_url_safety_pass: scalarUrlSafetyPass,
+  scalar_render_escaping_pass: scalarRenderEscapingPass,
   dummy_link_pass: dummyLinkPass,
   media_alt_text_pass: mediaAltPass,
   seo_contract_pass: seoContractPass,
   concise_copy_contract_pass: copyDensityPass,
-  unique_media_contract_pass: uniqueMediaPass
+  unique_media_contract_pass: uniqueMediaPass,
+  generated_media_ownership_pass: generatedMediaOwnershipPass,
+  semantic_media_profile_pass: semanticProfilePass
 };
 
 const failedChecks = Object.entries(checks)
@@ -389,7 +552,7 @@ if (failedChecks.length) {
 return {
   status: "ALL_VALIDATIONS_PASSED",
   validation_pass: true,
-  semantic_validation_pass: true,
+  semantic_validation_pass: semanticProfilePass && generatedMediaOwnershipPass,
   failed_checks: "none",
   validation_check_count: Object.keys(checks).length,
   template_version_detected: String(templateVersion),
@@ -399,7 +562,7 @@ return {
   html_character_count: html.length,
   business_name: businessName,
   customer_email: customerEmail,
-  submission_id: submissionId,
+  trusted_event_prefix: trustedEventPrefix,
   file_path: filePath,
   preview_url: previewUrl,
   expected_cta: expectedCta,
@@ -414,6 +577,10 @@ return {
   seo_description_length: seoDescriptionLength,
   copy_density_breaches: copyDensityBreaches.join(", ") || "none",
   generated_media_source_count: mediaSources.length,
+  generated_stock_source_count: generatedStockSources.length,
+  unapproved_client_media: unapprovedClientMedia.join(", ") || "none",
+  semantic_media_profile: semanticProfile,
+  expected_media_profile: expectedMediaProfile,
   duplicate_media_sources: duplicateMediaSources.join(", ") || "none",
   missing_keys: missingKeys.join(", ") || "none",
   extra_keys: extraKeys.join(", ") || "none",

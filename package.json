@@ -3,9 +3,19 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "sync:media": "node scripts/sync_media_manifest.mjs",
+    "build:fixtures": "node scripts/build_v10_fixtures.mjs",
+    "build": "npm run sync:media && npm run build:fixtures",
     "audit": "node scripts/audit_previews.mjs",
+    "test:sanitizer": "node tests/content_sanitizer_contract.mjs",
+    "test:arc1-intake-assets": "node tests/arc1_intake_asset_contract.mjs",
+    "test:pipeline": "node tests/pipeline_contract.mjs",
+    "test:arc1-pr-gate": "node tests/arc1_pr_gate_contract.mjs",
+    "test:arc2-pr-gate": "node tests/arc2_pr_gate_contract.mjs",
+    "test:wiring": "node tests/zapier_wiring_contract.mjs",
     "test:browser": "node tests/preview_quality.mjs",
-    "test": "npm run audit && npm run test:browser"
+    "test:images": "ARC_QA_REAL_IMAGES=1 ARC_QA_V10_ONLY=1 ARC_QA_SAVE_SCREENSHOTS=1 node tests/preview_quality.mjs",
+    "test": "npm run build && npm run audit && npm run test:sanitizer && npm run test:arc1-intake-assets && npm run test:pipeline && npm run test:arc1-pr-gate && npm run test:arc2-pr-gate && npm run test:wiring && npm run test:browser"
   },
   "devDependencies": {
     "@sparticuz/chromium": "149.0.0",

@@ -9,5 +9,25 @@ npm ci
 npm test
 ```
 
-The gate audits all public preview files and renders ten industries at desktop and iPhone widths.
-GitHub CI also verifies the real external image URLs; local runs use deterministic image fixtures.
+The gate audits every preview/delivery artifact, validates the strict payment and PR pipelines,
+rejects generated-content injection, and renders every ARC v10 media profile plus the retained
+legacy QA set at desktop and iPhone widths. GitHub CI also verifies real external image URLs;
+local runs use deterministic image fixtures unless `npm run test:images` is requested.
+
+ARC1 accepts an intake only after an authenticated Netlify API lookup binds the trigger-issued
+submission ID and received time, the exact deployed disclosures, a create-only private claim,
+and hashes of server-validated PNG/JPEG/WEBP uploads. Browser-provided identity, timestamps,
+route status, and upload metadata are not authoritative.
+
+ARC2 remains fail closed until an ARC-controlled temporary Netlify site proves the exact
+three-file source bundle and the expected Netlify-processed form through an immutable deploy
+URL. The proof also binds a rendered-form probe to a separately signed receipt from the
+verified test inbox. Publish, merge, and delivery-email gates independently re-query the
+current Netlify deploy, form, hook, submission, file manifest, snippets, and staging security
+headers before unlocking their action. Temporary staging must remain `noindex` and must be
+disabled or deleted after delivery.
+
+Real external verification is intentionally incomplete in this repository. Do not enable
+customer delivery until the ARC Netlify account/site, recipient hook, verified test inbox,
+live post-processing fixture, durable idempotent email provider, and staging cleanup authority
+are configured and their wiring-contract flags are set only from live evidence.

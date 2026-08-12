@@ -1,0 +1,452 @@
+{
+  "schema": "arc-zapier-wiring-contract-v1",
+  "live_complete": false,
+  "configuration_state": "local-contract-not-applied",
+  "observed_external_state": {
+    "zapier_arc1_enabled": false,
+    "zapier_arc2_enabled": false,
+    "arc2_allow_test_mode_events": false,
+    "live_steps_match_this_contract": false
+  },
+  "safety": {
+    "apollo_enabled": false,
+    "outreach_allowed": false,
+    "stripe_mode": "test",
+    "allow_test_mode_events": true,
+    "allow_live_mode_events": false,
+    "real_charges_allowed": false
+  },
+  "secrets": {
+    "repository_values_present": false,
+    "credential_values_present": false,
+    "runtime_secret_store_required": true,
+    "required_runtime_names": [
+      "STRIPE_TEST_API_KEY",
+      "ARC_CHECKOUT_BINDING_SECRET",
+      "GITHUB_DELIVERY_TOKEN",
+      "ARC_EMAIL_CLAIM_SECRET",
+      "NETLIFY_ACCESS_TOKEN",
+      "ARC1_INTAKE_EVIDENCE_SECRET",
+      "ARC_LEAD_ROUTE_EVIDENCE_SECRET",
+      "ARC_INBOX_RECEIPT_EVIDENCE_SECRET"
+    ]
+  },
+  "arc1": {
+    "purpose": "validated-unlisted-preview",
+    "ordered_steps": [
+      "zapier/arc1_verify_intake_and_assets.js",
+      "private-state/arc1-atomic-intake-claim",
+      "zapier/arc1_inject.js",
+      "arc_step7_validator.js",
+      "zapier/arc1_publish_preview_pr.js",
+      "zapier/arc1_merge_preview_pr.js",
+      "zapier/arc1_preview_email_gate.js"
+    ],
+    "publish_mode": "pull-request-only",
+    "direct_main_publish_allowed": false,
+    "authoritative_intake": {
+      "source": "authenticated-netlify-api",
+      "trigger_submission_id_must_resolve_exactly_once": true,
+      "trusted_received_at_source": "submission.created_at",
+      "public_folder_prefix_derivation": "sha256(\"arc-preview-folder-v1\\n\" + site_id + \"\\n\" + form_id + \"\\n\" + submission_id + \"\\n\" + received_at)[0:8]",
+      "client_submission_id_authoritative": false,
+      "client_received_at_authoritative": false,
+      "client_form_started_at_authoritative": false,
+      "client_lead_route_status_authoritative": false,
+      "required_intake_version": "arc-intake-v7",
+      "required_budget_confirmation": "Yes, understands the finished ARC website is $5,000 only after preview approval",
+      "required_terms_acceptance": "Accepted ARC preview terms, privacy policy, refund policy, and service scope dated 2026-08-11; separate adult checkout acceptance required",
+      "maximum_submission_age_seconds": 86400,
+      "maximum_future_clock_skew_seconds": 300
+    },
+    "asset_validation": {
+      "before_build_required": true,
+      "exact_https_origin_allowlist_required": true,
+      "redirects_allowed": false,
+      "allowed_content_types": [
+        "image/png",
+        "image/jpeg",
+        "image/webp"
+      ],
+      "magic_byte_and_container_validation_required": true,
+      "active_content_and_polyglot_rejected": true,
+      "maximum_file_bytes": 2621440,
+      "maximum_total_bytes": 7864320,
+      "per_asset_sha256_private_state_required": true,
+      "signed_intake_evidence_required_by_injector_and_publisher": true
+    },
+    "private_state": {
+      "provider": "Zapier Tables",
+      "record_key": "state_key",
+      "claim_mode": "atomic-create-only-before-build",
+      "initial_status": "PENDING",
+      "required_fields": [
+        "state_key",
+        "state_digest_sha256",
+        "intake_evidence_sha256",
+        "trusted_netlify_submission_id",
+        "trusted_received_at",
+        "public_folder_prefix",
+        "submission_data_sha256",
+        "asset_manifest_sha256",
+        "preview_folder",
+        "content_sha256",
+        "head_sha",
+        "pr_number",
+        "recipient_sha256",
+        "token_sha256",
+        "created_at",
+        "expires_at",
+        "status"
+      ],
+      "maximum_pending_ttl_hours": 24
+    },
+    "preview_email": {
+      "allowed_before_gate": false,
+      "gate_must_bind_exact_pr_head_sha": true,
+      "gate_must_require_latest_named_check_success": true,
+      "gate_must_verify_merged_main_content": true,
+      "gate_must_verify_pages_live_bytes": true,
+      "gate_must_verify_preview_noindex": true,
+      "gate_must_claim_private_outbox_first": true
+    }
+  },
+  "arc2": {
+    "purpose": "paid-production-delivery",
+    "trigger": {
+      "event": "checkout.session.completed",
+      "allow_test_mode_events": true,
+      "allow_live_mode_events": false,
+      "trigger_sample_is_authoritative": false
+    },
+    "authoritative_session_retrieval": {
+      "required": true,
+      "authenticated": true,
+      "method": "GET",
+      "resource": "/v1/checkout/sessions/{CHECKOUT_SESSION_ID}",
+      "credential_source": "runtime-secret-store",
+      "require_full_session_object": true
+    },
+    "required_session_contract": {
+      "id_pattern": "^cs_test_[A-Za-z0-9_]+$",
+      "livemode": false,
+      "amount_total": 500000,
+      "amount_units": "usd-minor-units",
+      "amount_conversion_allowed": false,
+      "currency": "usd",
+      "payment_status": "paid",
+      "payment_link_must_equal_expected_id": true,
+      "terms_consent": "accepted",
+      "terms_version_source": "static-config",
+      "expected_terms_version": "2026-08-11",
+      "checkout_reference_must_bind_preview_folder": true,
+      "checkout_binding_secret_source": "runtime-secret-store"
+    },
+    "expected_payment_link_id": null,
+    "checkout_configuration": {
+      "payment_link_url": null,
+      "price_mode": "one-time",
+      "amount_total_minor_units": 500000,
+      "currency": "usd",
+      "terms_of_service_consent_required": true,
+      "adult_purchaser_acceptance_required": true,
+      "terms_version_metadata": "2026-08-11",
+      "scope_summary_required_before_payment": true,
+      "live_configuration_verified": false
+    },
+    "ordered_steps": [
+      "zapier/arc2_resolve_and_finalize.js",
+      "netlify/claim-arc-controlled-temporary-site",
+      "netlify/deploy-exact-three-file-bundle",
+      "netlify/enable-form-detection-and-configure-recipient-hook",
+      "browser/submit-synthetic-probe-through-rendered-form",
+      "inbox-provider/issue-authoritative-receipt-attestation",
+      "zapier/arc2_verify_lead_route_staging.js",
+      "zapier/arc2_publish_delivery_pr.js",
+      "zapier/arc2_merge_delivery_pr.js",
+      "zapier/arc2_delivery_email_gate.js",
+      "email-provider/send-with-durable-idempotency",
+      "inbox-provider/issue-customer-delivery-receipt-attestation",
+      "netlify/disable-or-delete-temporary-site"
+    ],
+    "publish_mode": "pull-request-only",
+    "direct_main_publish_allowed": false,
+    "forbidden_steps": [
+      "zapier/arc2_publish_delivery.js"
+    ],
+    "legacy_direct_publisher": {
+      "live_script_present": false,
+      "regression_fixture": "tests/fixtures/arc2_publish_delivery_direct_regression.js",
+      "copy_to_zapier_forbidden": true
+    },
+    "delivery_artifacts": {
+      "exact_count": 4,
+      "paths": [
+        "index.html",
+        "netlify.toml",
+        "USAGE.md",
+        ".arc-handoff.json"
+      ],
+      "additional_paths_allowed": false
+    },
+    "delivery_email": {
+      "allowed_before_gate": false,
+      "gate_must_bind_exact_pr_head_sha": true,
+      "gate_must_verify_merged_main_artifacts": true,
+      "gate_must_reverify_fresh_lead_route_evidence": true,
+      "gate_must_reverify_immutable_processed_staging_bytes": true,
+      "gate_must_requery_current_netlify_state": true,
+      "gate_must_claim_private_outbox_first": true
+    },
+    "lead_route_gate": {
+      "required_before_delivery_pr_write": true,
+      "independently_reverified_before_merge": true,
+      "independently_reverified_before_email_claim": true,
+      "immutable_processed_staging_html_required_at_each_gate": true,
+      "current_site_deploy_manifest_form_hook_and_submission_requeried_at_each_gate": true,
+      "authoritative_inbox_receipt_required": true,
+      "caller_status_string_is_authoritative": false
+    }
+  },
+  "lead_routing": {
+    "source": "zapier/arc2_verify_lead_route_staging.js",
+    "evidence_version": "arc-lead-route-evidence-v1",
+    "evidence_scope": "arc-controlled-netlify-staging",
+    "signature_algorithm": "HMAC-SHA-256",
+    "signature_secret_source": "runtime-secret-store",
+    "caller_status_string_is_authoritative": false,
+    "maximum_receipt_age_seconds": 21600,
+    "maximum_age_when_evidence_is_issued_seconds": 1800,
+    "maximum_future_clock_skew_seconds": 300,
+    "required_evidence_fields": [
+      "preview_folder",
+      "production_content_sha256",
+      "bundle_fingerprint",
+      "netlify_account_id",
+      "staging_site_id",
+      "staging_site_url",
+      "staging_deploy_id",
+      "staging_deploy_url",
+      "deploy_file_manifest_sha256",
+      "served_html_sha256",
+      "staging_robots_header_sha256",
+      "staging_form_id",
+      "notification_hook_id",
+      "form_name",
+      "recipient_hmac_sha256",
+      "synthetic_submission_id",
+      "synthetic_probe_sha256",
+      "netlify_submission_timestamp",
+      "inbox_provider",
+      "inbox_account_hmac_sha256",
+      "inbox_message_id_hmac_sha256",
+      "inbox_received_timestamp",
+      "inbox_receipt_evidence_sha256"
+    ],
+    "authoritative_inbox_attestation": {
+      "required": true,
+      "source": null,
+      "external_configuration_verified": false,
+      "evidence_version": "arc-inbox-receipt-evidence-v1",
+      "evidence_scope": "authoritative-inbox-delivery",
+      "signature_algorithm": "HMAC-SHA-256",
+      "signature_secret_source": "runtime-secret-store",
+      "separate_from_lead_route_signing_secret": true,
+      "maximum_age_when_lead_route_evidence_is_issued_seconds": 1800,
+      "must_be_at_or_after_netlify_submission": true,
+      "required_evidence_fields": [
+        "provider",
+        "account_hmac_sha256",
+        "recipient_hmac_sha256",
+        "synthetic_submission_id",
+        "synthetic_probe_sha256",
+        "message_id_hmac_sha256",
+        "inbox_received_timestamp"
+      ],
+      "raw_account_id_or_message_id_allowed": false
+    },
+    "verifier": {
+      "read_only": true,
+      "write_methods_allowed": false,
+      "authoritative_netlify_api_reads_required": [
+        "GET /sites/{site_id}",
+        "GET /sites/{site_id}/deploys/{deploy_id}",
+        "GET /sites/{site_id}/files",
+        "GET /sites/{site_id}/files/{file_path} (original raw bytes)",
+        "GET /sites/{site_id}/snippets",
+        "GET /sites/{site_id}/forms",
+        "GET /hooks?site_id={site_id}",
+        "GET /forms/{form_id}/submissions"
+      ],
+      "exact_published_deploy_required": true,
+      "exact_original_uploaded_artifact_bytes_required": true,
+      "documented_netlify_post_processing_transform_required": true,
+      "immutable_and_current_processed_html_must_match": true,
+      "exact_three_file_manifest_and_no_snippets_required": true,
+      "unique_exact_form_required": true,
+      "unique_synthetic_submission_required": true,
+      "enabled_exact_recipient_hook_required": true,
+      "synthetic_probe_submitted_through_rendered_project_details_control": true,
+      "raw_recipient_or_probe_in_evidence_allowed": false
+    },
+    "staging_site": {
+      "temporary": true,
+      "arc_account_id_must_equal_static_config": true,
+      "hostname_prefix": "arc-lead-route-",
+      "hostname_suffix": ".netlify.app",
+      "immutable_deploy_url_required": true,
+      "staging_x_robots_tag_required": "noindex,nofollow,noarchive",
+      "cleanup_after_customer_delivery_receipt_required": true,
+      "exact_source_bytes_and_expected_processed_html_required": true
+    },
+    "replay_policy": {
+      "same_exact_delivery_revalidation_allowed": true,
+      "cross_artifact_replay_allowed": false,
+      "cross_recipient_replay_allowed": false,
+      "cross_site_or_deploy_replay_allowed": false,
+      "stale_receipt_replay_allowed": false
+    },
+    "verified_recipient": null,
+    "stripe_customer_email_allowed": false,
+    "stripe_customer_details_email_allowed": false,
+    "public_artifact_recipient_allowed": false,
+    "public_evidence_allowed": false,
+    "raw_recipient_public_allowed": false
+  },
+  "email_outbox": {
+    "storage": "private-durable-store",
+    "provider": "Zapier Tables",
+    "atomic_claim_authority": "deterministic-github-ref",
+    "table_write_required_before_email": true,
+    "public_marker_allowed": false,
+    "applies_to": [
+      "arc1-preview-email",
+      "arc2-delivery-email"
+    ],
+    "states": [
+      "PENDING",
+      "CLAIMED",
+      "SENT"
+    ],
+    "allowed_transitions": [
+      "PENDING->CLAIMED",
+      "CLAIMED->SENT"
+    ],
+    "claim_must_be_atomic": true,
+    "send_only_after_claim": true,
+    "claimed_but_unsent": {
+      "automatic_resend_allowed": false,
+      "alert_required": true,
+      "manual_recovery_required": true
+    }
+  },
+  "github_controls": {
+    "main_branch_protected": false,
+    "required_check_configured": false,
+    "required_check_name": "ARC preview quality/preview-quality",
+    "required_check_app_slug": "github-actions",
+    "required_check_app_id": 15368,
+    "squash_merge_only_for_automation": true,
+    "external_verification_required": true
+  },
+  "required_test_scenarios": [
+    {
+      "niche": "roofing",
+      "stripe_test_e2e_verified": false
+    },
+    {
+      "niche": "hvac",
+      "stripe_test_e2e_verified": false
+    },
+    {
+      "niche": "remodeling",
+      "stripe_test_e2e_verified": false
+    },
+    {
+      "niche": "landscaping",
+      "stripe_test_e2e_verified": false
+    },
+    {
+      "niche": "auto-detailing",
+      "stripe_test_e2e_verified": false
+    }
+  ],
+  "external_verification": {
+    "zapier_arc1_wired": false,
+    "arc1_authoritative_netlify_intake_verified": false,
+    "arc1_asset_bytes_verified": false,
+    "arc1_atomic_intake_claim_verified": false,
+    "zapier_arc2_wired": false,
+    "stripe_test_trigger_verified": false,
+    "stripe_authenticated_session_retrieval_verified": false,
+    "github_preview_pr_merge_verified": false,
+    "github_delivery_pr_merge_verified": false,
+    "pages_preview_live_bytes_verified": false,
+    "preview_email_delivery_verified": false,
+    "delivery_email_delivery_verified": false,
+    "delivery_replay_dedupe_verified": false,
+    "five_stripe_test_scenarios_verified": false,
+    "netlify_claim_deploy_handoff_verified": false,
+    "netlify_staging_artifact_deploy_verified": false,
+    "netlify_synthetic_form_submission_receipt_verified": false,
+    "netlify_lead_form_delivery_verified": false,
+    "netlify_form_postprocessing_fixture_verified": false,
+    "netlify_staging_noindex_headers_verified": false,
+    "netlify_gate_time_revalidation_verified": false,
+    "netlify_staging_cleanup_verified": false,
+    "authoritative_inbox_receipt_attestation_verified": false,
+    "analytics_receiver_verified": false
+  },
+  "unresolved": {
+    "expected_payment_link_id": null,
+    "analytics_receiver": null,
+    "analytics_dashboard": null,
+    "verified_lead_routing_recipient": null,
+    "authoritative_inbox_provider": null,
+    "verified_test_inbox": null,
+    "netlify_form_postprocessing_fixture": null,
+    "netlify_staging_cleanup_authority": null,
+    "delivery_email_idempotent_provider": null,
+    "arc1_netlify_site_id": null,
+    "arc1_netlify_form_id": null,
+    "arc1_netlify_form_name": null,
+    "arc1_asset_upload_origin_allowlist": null,
+    "arc_netlify_account_id": null,
+    "adult_contracting_representative": null,
+    "legal_operator": null,
+    "legal_entity": null,
+    "mailing_address": null,
+    "governing_venue": null,
+    "branded_sender": null
+  },
+  "gates": [
+    {
+      "gate": 1,
+      "complete": false
+    },
+    {
+      "gate": 2,
+      "complete": false
+    },
+    {
+      "gate": 3,
+      "complete": false
+    },
+    {
+      "gate": 4,
+      "complete": false
+    },
+    {
+      "gate": 5,
+      "complete": false
+    },
+    {
+      "gate": 6,
+      "complete": false
+    },
+    {
+      "gate": 7,
+      "complete": false
+    }
+  ]
+}

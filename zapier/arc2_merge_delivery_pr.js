@@ -1,4 +1,5 @@
 // ARC2 merge step — require one exact Actions check and squash-merge the bound delivery PR.
+throw new Error("ARC_LEGACY_HANDOFF_DISABLED: private delivery PR merges were replaced by the Netlify claimable-deploy flow");
 // This step never authorizes or sends customer email.
 const clean = value => String(value == null ? "" : value).trim();
 const owner = clean(inputData.github_owner);
@@ -101,7 +102,7 @@ if (!(await globalThis.crypto.subtle.verify(
 ))) {
   throw new Error("ARC_PAYMENT_INVALID: payment evidence HMAC mismatch");
 }
-const signedReference = rawClientReferenceId.match(/^((?:[a-z0-9][a-z0-9-]*-[a-f0-9]{8})|(?:[a-f0-9]{8}))\.([a-f0-9]{64})$/i);
+const signedReference = rawClientReferenceId.match(/^((?:[a-z0-9][a-z0-9-]*-[a-f0-9]{8})|(?:[a-f0-9]{8}))_([a-f0-9]{64})$/i);
 const checkoutLookupReference = signedReference?.[1].toLowerCase() || "";
 const checkoutLookupMatchesPreview = checkoutLookupReference === previewFolder ||
   (/^[a-f0-9]{8}$/.test(checkoutLookupReference) && previewFolder.endsWith(`-${checkoutLookupReference}`));

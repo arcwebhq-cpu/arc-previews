@@ -4,6 +4,8 @@
 const clean = value => String(value == null ? "" : value).trim();
 const netlifyToken = clean(inputData.netlify_access_token);
 const leadRouteEvidenceSecret = clean(inputData.lead_route_evidence_secret);
+const handoffArtifactEvidenceSecret = clean(inputData.handoff_artifact_evidence_secret);
+const handoffArtifactEvidenceHmacSha256 = clean(inputData.handoff_artifact_evidence_hmac_sha256).toLowerCase();
 const inboxReceiptEvidenceSecret = clean(inputData.inbox_receipt_evidence_secret);
 const inboxReceiptEvidenceSignature = clean(inputData.inbox_receipt_evidence_hmac_sha256).toLowerCase();
 const expectedNetlifyAccountId = clean(inputData.expected_netlify_account_id);
@@ -17,14 +19,17 @@ const expectedFormName = clean(inputData.lead_route_form_name);
 const verifiedLeadNotificationEmail = clean(inputData.verified_lead_notification_email).toLowerCase();
 const expectedRecipientHmacSha256 = clean(inputData.lead_route_recipient_hmac_sha256).toLowerCase();
 const productionPath = clean(inputData.production_file_path).replace(/^\/+/, "");
-const netlifyPath = clean(inputData.netlify_config_path).replace(/^\/+/, "");
-const usagePath = clean(inputData.usage_guide_path).replace(/^\/+/, "");
+const headersPath = clean(inputData.headers_file_path).replace(/^\/+/, "");
 const expectedProductionSha256 = clean(inputData.production_content_sha256).toLowerCase();
+const expectedArtifactManifestSha256 = clean(inputData.artifact_manifest_sha256).toLowerCase();
 const expectedBundleFingerprint = clean(inputData.bundle_fingerprint).toLowerCase();
 
 if (!netlifyToken) throw new Error("ARC_LEAD_ROUTE_VERIFY_INVALID: Netlify access token is required");
 if (leadRouteEvidenceSecret.length < 32 || leadRouteEvidenceSecret.length > 256) {
   throw new Error("ARC_LEAD_ROUTE_VERIFY_INVALID: evidence secret must be 32–256 characters");
+}
+if (handoffArtifactEvidenceSecret.length < 32 || handoffArtifactEvidenceSecret.length > 256) {
+  throw new Error("ARC_ARTIFACT_INVALID: evidence secret must be 32–256 characters");
 }
 if (inboxReceiptEvidenceSecret.length < 32 || inboxReceiptEvidenceSecret.length > 256) {
   throw new Error("ARC_INBOX_RECEIPT_INVALID: evidence secret must be 32–256 characters");
@@ -56,13 +61,21 @@ if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(verifiedLeadNotificationEmail)) {
 if (syntheticProbeToken.length < 32 || syntheticProbeToken.length > 128 || !/^[A-Za-z0-9_-]+$/.test(syntheticProbeToken)) {
   throw new Error("ARC_LEAD_ROUTE_VERIFY_INVALID: synthetic probe token");
 }
-if (!/^[a-f0-9]{64}$/.test(expectedProductionSha256) || !/^[a-f0-9]{64}$/.test(expectedBundleFingerprint)) {
+if (!/^[a-f0-9]{64}$/.test(expectedProductionSha256) || !/^[a-f0-9]{64}$/.test(expectedArtifactManifestSha256) ||
+    !/^[a-f0-9]{64}$/.test(expectedBundleFingerprint)) {
   throw new Error("ARC_LEAD_ROUTE_VERIFY_INVALID: artifact SHA-256");
 }
-if (!globalThis.crypto?.subtle || typeof TextEncoder !== "function") {
+if (!globalThis.crypto?.subtle || typeof TextEncoder !== "function" || typeof Buffer !== "function") {
   throw new Error("ARC_CRYPTO_UNAVAILABLE: HMAC-SHA-256 and SHA-256 are required");
 }
 const encoder = new TextEncoder();
+const canonicalJson = value => {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+};
 const sha256Hex = async value => {
   const digest = await globalThis.crypto.subtle.digest("SHA-256", encoder.encode(value));
   return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("");
@@ -77,6 +90,13 @@ const evidenceKey = await globalThis.crypto.subtle.importKey(
   { name: "HMAC", hash: "SHA-256" },
   false,
   ["sign"]
+);
+const artifactEvidenceKey = await globalThis.crypto.subtle.importKey(
+  "raw",
+  encoder.encode(handoffArtifactEvidenceSecret),
+  { name: "HMAC", hash: "SHA-256" },
+  false,
+  ["verify"]
 );
 const inboxEvidenceKey = await globalThis.crypto.subtle.importKey(
   "raw",
@@ -97,27 +117,74 @@ const decodeBase64 = (value, label) => {
   return Buffer.from(normalized, "base64").toString("utf8");
 };
 const productionHtml = decodeBase64(inputData.production_content_base64, "production HTML");
-const netlifyConfig = decodeBase64(inputData.netlify_config_base64, "Netlify config");
-const usageGuide = decodeBase64(inputData.usage_guide_base64, "usage guide");
-const deliveryRoot = `deliveries/${previewFolder}`;
-const expectedPaths = [
-  `${deliveryRoot}/index.html`,
-  `${deliveryRoot}/netlify.toml`,
-  `${deliveryRoot}/USAGE.md`
-];
-if (JSON.stringify([productionPath, netlifyPath, usagePath]) !== JSON.stringify(expectedPaths)) {
-  throw new Error("ARC_LEAD_ROUTE_VERIFY_INVALID: artifact paths escaped the exact delivery folder");
+const headersFile = decodeBase64(inputData.headers_file_base64, "headers file");
+if (productionPath !== "index.html" || headersPath !== "_headers") {
+  throw new Error("ARC_LEAD_ROUTE_VERIFY_INVALID: artifacts must be root index.html and _headers");
 }
 const artifacts = [
-  { path: productionPath, content: productionHtml },
-  { path: netlifyPath, content: netlifyConfig },
-  { path: usagePath, content: usageGuide }
+  { path: headersPath, content: headersFile },
+  { path: productionPath, content: productionHtml }
 ];
 const productionSha256 = await sha256Hex(productionHtml);
 const bundleFingerprint = await sha256Hex(artifacts.map(artifact => `${artifact.path}\0${artifact.content}\0`).join(""));
-if (productionSha256 !== expectedProductionSha256 || bundleFingerprint !== expectedBundleFingerprint) {
+const artifactManifest = [];
+for (const artifact of artifacts) {
+  artifactManifest.push({
+    path: artifact.path,
+    sha256: await sha256Hex(artifact.content),
+    size: encoder.encode(artifact.content).length
+  });
+}
+const artifactManifestPrivate = canonicalJson(artifactManifest);
+const artifactManifestSha256 = await sha256Hex(artifactManifestPrivate);
+if (productionSha256 !== expectedProductionSha256 || artifactManifestSha256 !== expectedArtifactManifestSha256 ||
+    bundleFingerprint !== expectedBundleFingerprint) {
   throw new Error("ARC_LEAD_ROUTE_VERIFY_INVALID: resolver artifact bytes changed");
 }
+let handoffArtifactEvidence;
+try {
+  handoffArtifactEvidence = JSON.parse(clean(inputData.handoff_artifact_evidence_private));
+} catch (error) {
+  throw new Error("ARC_ARTIFACT_INVALID: evidence JSON");
+}
+const artifactEvidenceFields = [
+  "version", "scope", "preview_folder", "production_content_sha256", "artifact_manifest_sha256",
+  "bundle_fingerprint", "artifacts", "issued_at"
+];
+if (!handoffArtifactEvidence || typeof handoffArtifactEvidence !== "object" || Array.isArray(handoffArtifactEvidence) ||
+    JSON.stringify(Object.keys(handoffArtifactEvidence).sort()) !== JSON.stringify(artifactEvidenceFields.slice().sort())) {
+  throw new Error("ARC_ARTIFACT_INVALID: evidence fields");
+}
+const canonicalArtifactEvidence = canonicalJson(handoffArtifactEvidence);
+const artifactEvidenceIssuedAt = clean(handoffArtifactEvidence.issued_at);
+const artifactEvidenceIssuedMs = Date.parse(artifactEvidenceIssuedAt);
+if (canonicalArtifactEvidence !== clean(inputData.handoff_artifact_evidence_private) ||
+    clean(handoffArtifactEvidence.version) !== "arc2-handoff-artifact-evidence-v1" ||
+    clean(handoffArtifactEvidence.scope) !== "netlify-claimable-deploy-artifacts" ||
+    clean(handoffArtifactEvidence.preview_folder).toLowerCase() !== previewFolder ||
+    clean(handoffArtifactEvidence.production_content_sha256).toLowerCase() !== productionSha256 ||
+    clean(handoffArtifactEvidence.artifact_manifest_sha256).toLowerCase() !== artifactManifestSha256 ||
+    clean(handoffArtifactEvidence.bundle_fingerprint).toLowerCase() !== bundleFingerprint ||
+    canonicalJson(handoffArtifactEvidence.artifacts) !== artifactManifestPrivate ||
+    !Number.isFinite(artifactEvidenceIssuedMs) || new Date(artifactEvidenceIssuedMs).toISOString() !== artifactEvidenceIssuedAt) {
+  throw new Error("ARC_ARTIFACT_INVALID: evidence bindings");
+}
+if (!/^[a-f0-9]{64}$/.test(handoffArtifactEvidenceHmacSha256)) {
+  throw new Error("ARC_ARTIFACT_INVALID: evidence HMAC");
+}
+const artifactSignatureBytes = Uint8Array.from(
+  handoffArtifactEvidenceHmacSha256.match(/../g),
+  byte => Number.parseInt(byte, 16)
+);
+if (!(await globalThis.crypto.subtle.verify(
+  "HMAC",
+  artifactEvidenceKey,
+  artifactSignatureBytes,
+  encoder.encode(`arc2-handoff-artifact-evidence-signature-v1\n${canonicalArtifactEvidence}`)
+))) {
+  throw new Error("ARC_ARTIFACT_INVALID: evidence HMAC mismatch");
+}
+const handoffArtifactEvidenceSha256 = await sha256Hex(canonicalArtifactEvidence);
 const canonicalAttributes = (tag, tagName) => {
   const match = tag.match(new RegExp(`^<${tagName}\\b([\\s\\S]*?)>$`, "i"));
   if (!match) return null;
@@ -142,16 +209,21 @@ const canonicalAttributes = (tag, tagName) => {
   return attributes;
 };
 const supportedLeadControlNames = new Set(["form-name", "bot-field", "name", "email", "phone", "project_details"]);
+const leadDisclosureHtml = '<p class="form-status" role="note">By submitting this form, you agree that this business may contact you about your request. Do not include sensitive personal, medical, legal, or financial information.</p>';
 const sourceFormBlocks = productionHtml.match(/<form\b[^>]*>[\s\S]*?<\/form>/gi) || [];
 const sourceFormTags = productionHtml.match(/<form\b[^>]*>/gi) || [];
 if (sourceFormBlocks.length !== 1 || sourceFormTags.length !== 1) {
   throw new Error("ARC_LEAD_ROUTE_VERIFY_INVALID: production must contain exactly one Netlify-managed form");
 }
+if (!sourceFormBlocks[0].includes(leadDisclosureHtml)) {
+  throw new Error("ARC_LEAD_ROUTE_VERIFY_INVALID: exact visible lead privacy disclosure is required");
+}
 const sourceFormAttributes = canonicalAttributes(sourceFormTags[0], "form");
 const artifactFormName = clean(sourceFormAttributes?.get("name"));
 const artifactHoneypot = clean(sourceFormAttributes?.get("netlify-honeypot"));
 if (artifactFormName !== expectedFormName || !/^[A-Za-z][A-Za-z0-9_-]{0,58}-lead$/.test(artifactFormName) ||
-    sourceFormAttributes?.get("method") !== "POST" || sourceFormAttributes?.get("data-netlify") !== "true" || artifactHoneypot !== "bot-field") {
+    sourceFormAttributes?.get("method") !== "POST" || sourceFormAttributes?.get("action") !== "/?submitted=1" ||
+    sourceFormAttributes?.get("data-netlify") !== "true" || artifactHoneypot !== "bot-field") {
   throw new Error("ARC_LEAD_ROUTE_VERIFY_INVALID: production form attributes mismatch");
 }
 const sourceControls = [];
@@ -267,7 +339,7 @@ const rootArtifacts = await Promise.all(artifacts.map(async artifact => ({
 })));
 const deployFiles = await readJson(`/sites/${encodeURIComponent(siteId)}/files`);
 if (!Array.isArray(deployFiles) || deployFiles.length !== rootArtifacts.length) {
-  throw new Error("ARC_LEAD_ROUTE_VERIFY_INVALID: current deploy file manifest is not the exact three-file static bundle");
+  throw new Error("ARC_LEAD_ROUTE_VERIFY_INVALID: current deploy file manifest is not the exact claimable bundle");
 }
 const normalizedManifest = [];
 for (const expected of rootArtifacts) {
@@ -277,6 +349,9 @@ for (const expected of rootArtifacts) {
   }
   if (expected.path === "/index.html" && clean(matches[0].mime_type).toLowerCase() !== "text/html") {
     throw new Error("ARC_LEAD_ROUTE_VERIFY_INVALID: source index MIME type mismatch");
+  }
+  if (expected.path === "/_headers" && clean(matches[0].mime_type).toLowerCase() !== "text/plain") {
+    throw new Error("ARC_LEAD_ROUTE_VERIFY_INVALID: source headers MIME type mismatch");
   }
   const rawPath = `/sites/${encodeURIComponent(siteId)}/files/${expected.path.slice(1).split("/").map(encodeURIComponent).join("/")}`;
   if (await readRaw(rawPath) !== expected.content) {
@@ -453,6 +528,8 @@ const evidence = {
   scope: "arc-controlled-netlify-staging",
   preview_folder: previewFolder,
   production_content_sha256: productionSha256,
+  artifact_manifest_sha256: artifactManifestSha256,
+  handoff_artifact_evidence_sha256: handoffArtifactEvidenceSha256,
   bundle_fingerprint: bundleFingerprint,
   netlify_account_id: expectedNetlifyAccountId,
   staging_site_id: siteId,
@@ -480,7 +557,8 @@ const evidenceSignatureHmacSha256 = await hmacHex(`arc-lead-route-evidence-signa
 const evidenceSha256 = await sha256Hex(canonicalEvidence);
 
 return {
-  status: "LEAD_ROUTE_EVIDENCE_ISSUED",
+  status: "LEAD_ROUTE_VERIFIED",
+  claim_invitation_allowed_by_this_step: false,
   send_delivery_email: false,
   github_write_allowed_by_this_step: false,
   evidence_requires_downstream_reverification: true,
@@ -490,6 +568,8 @@ return {
   lead_route_evidence: canonicalEvidence,
   lead_route_evidence_hmac_sha256: evidenceSignatureHmacSha256,
   lead_route_evidence_sha256: evidenceSha256,
+  artifact_manifest_sha256: artifactManifestSha256,
+  handoff_artifact_evidence_sha256: handoffArtifactEvidenceSha256,
   staging_site_id: siteId,
   staging_deploy_id: deployId,
   staging_deploy_url: immutableDeployUrl.toString(),

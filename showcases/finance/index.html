@@ -1574,8 +1574,12 @@
     })();
   </script>
   <style>
-    .arc-showcase-notice{position:relative;z-index:1000;padding:10px 20px;text-align:center;background:#111;color:#fff;font:700 12px/1.4 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:.02em}
+    body[data-arc-site-mode="showcase"]{--arc-showcase-notice-height:38px;padding-top:var(--arc-showcase-notice-height)}
+    body[data-arc-site-mode="showcase"] .site-header{top:var(--arc-showcase-notice-height)}
+    body[data-arc-site-mode="showcase"] .progress{top:var(--arc-showcase-notice-height)}
+    .arc-showcase-notice{position:fixed;z-index:1000;inset:0 0 auto;display:grid;place-items:center;min-height:var(--arc-showcase-notice-height);padding:6px 20px;text-align:center;background:#111;color:#fff;font:700 12px/1.35 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:.02em}
     .showcase-form-disabled{padding:18px;border:1px solid currentColor;border-radius:12px;font-weight:700;line-height:1.5}
+    @media(max-width:600px){body[data-arc-site-mode="showcase"]{--arc-showcase-notice-height:60px}.arc-showcase-notice{padding-inline:14px;font-size:11px}}
   </style>
 </head>
 <body data-arc-expected-media-profile="finance" data-style="premium" data-industry="Accounting and Financial Planning" data-arc-site-mode="showcase">

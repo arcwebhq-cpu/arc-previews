@@ -73,7 +73,7 @@ try {
 const evidenceFields = [
   "version", "scope", "site_id", "site_url", "form_id", "form_name", "submission_id", "received_at",
   "intake_version", "budget_confirmed", "terms_accepted", "public_folder_prefix", "submission_data_sha256",
-  "asset_manifest", "total_asset_bytes", "state_key", "state_digest_sha256", "claim_required_before_build", "issued_at"
+  "asset_manifest", "asset_manifest_sha256", "total_asset_bytes", "state_key", "state_digest_sha256", "claim_required_before_build", "issued_at"
 ];
 if (
   !intakeEvidence || typeof intakeEvidence !== "object" || Array.isArray(intakeEvidence) ||
@@ -138,6 +138,7 @@ if (!assetManifest || assetManifest.length > 3 || canonicalJson(assetManifest) !
 }
 const assetManifestSha256 = await sha256Hex(canonicalJson(assetManifest));
 if (
+  clean(intakeEvidence.asset_manifest_sha256).toLowerCase() !== assetManifestSha256 ||
   clean(inputData.intake_evidence_sha256).toLowerCase() !== intakeEvidenceSha256 ||
   clean(inputData.asset_manifest_sha256).toLowerCase() !== assetManifestSha256 ||
   clean(inputData.intake_state_key) !== clean(intakeEvidence.state_key) ||

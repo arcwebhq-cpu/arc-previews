@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash, createHmac } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import { canonicalJson } from "./fixtures/intake_evidence.mjs";
 
 const source = await readFile(new URL("../zapier/arc1_verify_intake_and_assets.js", import.meta.url), "utf8");
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
@@ -166,6 +167,12 @@ for (const item of issued.asset_manifest) {
   assert.equal("url" in item, false);
 }
 const evidence = JSON.parse(issued.intake_evidence_private);
+assert.deepEqual(Object.keys(evidence).sort(), [
+  "version", "scope", "site_id", "site_url", "form_id", "form_name", "submission_id", "received_at",
+  "intake_version", "budget_confirmed", "terms_accepted", "public_folder_prefix", "submission_data_sha256",
+  "asset_manifest", "asset_manifest_sha256", "total_asset_bytes", "state_key", "state_digest_sha256",
+  "claim_required_before_build", "issued_at"
+].sort());
 assert.equal(evidence.site_id, siteId);
 assert.equal(evidence.form_id, formId);
 assert.equal(evidence.form_name, formName);
@@ -179,6 +186,8 @@ assert.equal(evidence.state_key, issued.state_key);
 assert.equal(evidence.state_digest_sha256, issued.state_digest_sha256);
 assert.equal(evidence.submission_data_sha256, issued.submission_data_sha256);
 assert.equal(evidence.total_asset_bytes, png.length + jpeg.length + webp.length);
+assert.equal(evidence.asset_manifest_sha256, sha256Text(canonicalJson(evidence.asset_manifest)));
+assert.equal(issued.asset_manifest_sha256, evidence.asset_manifest_sha256);
 assert.equal(sha256Text(issued.intake_evidence_private), issued.intake_evidence_sha256);
 assert.equal(
   createHmac("sha256", evidenceSecret)
@@ -251,6 +260,9 @@ await expectReject(mock => {
 }, /outside the exact HTTPS upload-origin allowlist/);
 await expectReject(mock => {
   mock.submissions[0].data.logo_file = `${urls.logo_file}#client-fragment`;
+}, /outside the exact HTTPS upload-origin allowlist/);
+await expectReject(mock => {
+  mock.submissions[0].data.logo_file = `${urls.logo_file}?token=must-not-publish`;
 }, /outside the exact HTTPS upload-origin allowlist/);
 
 await expectReject(mock => {

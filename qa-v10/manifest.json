@@ -5,7 +5,7 @@
     "expectedProfile": "roofing",
     "isLaunch": true,
     "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/ironwood-roofing-concept-a1000001/",
-    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=ironwood-roofing-concept-a1000001.363f0ff6c83f6017fda6ec52a3dd23dbdfb98fd13a5272e3403c615faf7eeee4",
+    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=a1000001_15d6643216f10f769c5030bd78037c0aed636778d8d83cc6b664df94d1a7ce0c_5da8c693db694a284a139624005e44fa59a148a7309c324ac2e7d5fb80fcecbe",
     "expectedMediaProfile": "roofing",
     "validationChecks": 42
   },
@@ -15,7 +15,7 @@
     "expectedProfile": "hvac",
     "isLaunch": true,
     "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/blue-peak-heating-air-concept-a1000002/",
-    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=blue-peak-heating-air-concept-a1000002.1747fea5649e6409efe330da221e6169e402154f22c6075f189198afaf3f94b5",
+    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=a1000002_eae4d7fed0ea67484b65a24ae098c4c4636379401b5613d5139a8cb71f9b104c_76e0da33312b31bc4a164866ba49173c8f1214ff45e04b98f4d2c297ad9a126f",
     "expectedMediaProfile": "hvac",
     "validationChecks": 42
   },
@@ -25,7 +25,7 @@
     "expectedProfile": "remodeling",
     "isLaunch": true,
     "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/atelier-house-remodeling-concept-a1000003/",
-    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=atelier-house-remodeling-concept-a1000003.fc7cfb7efa2e5d216ea0cd695c5e1fa17c0fe77e9732413ea99493ba79a5e5d6",
+    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=a1000003_24040bb12d527b1a35717524e47a96394e7136d16c99dbc3b9d3972316f7641d_ef3f510247e00511045ca4a90b2bc9494a2c442f93adc0de709ae81c0bf370f1",
     "expectedMediaProfile": "remodeling",
     "validationChecks": 42
   },
@@ -35,7 +35,7 @@
     "expectedProfile": "landscaping",
     "isLaunch": true,
     "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/wildfern-landscape-concept-a1000004/",
-    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=wildfern-landscape-concept-a1000004.af042284224f94a31fb25fe3c5ceb874d63110e562ab3a0a90b715fede6cc002",
+    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=a1000004_6eb06b06acdfd00c41607bfd71f70e70f3140b47c847e8871afcb5edac064e24_7e7d801d8ce0d87ddc0e690b645641251555d301509a7c042f5c8dbba7f064af",
     "expectedMediaProfile": "landscaping",
     "validationChecks": 42
   },
@@ -45,7 +45,7 @@
     "expectedProfile": "auto_detailing",
     "isLaunch": true,
     "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/obsidian-auto-studio-concept-a1000005/",
-    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=obsidian-auto-studio-concept-a1000005.55d121890f22ea6cd7b695fa864bb612ac2035397d2b2970520c75d95689556a",
+    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=a1000005_e00169233fc5b74fa97ffe19ccbb072d63d7ec34a0b53c5541e011a9d0420644_1e069396fabb63f617ba715038de9a1e8c5c143ccbe8338dd5226a587449afc0",
     "expectedMediaProfile": "auto_detailing",
     "validationChecks": 42
   },
@@ -55,7 +55,7 @@
     "expectedProfile": "dental",
     "isLaunch": false,
     "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/cedar-dental-concept-b2000001/",
-    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=cedar-dental-concept-b2000001.e2137e77a7d2128e063b4cae985962493a739e9fc7f0c189e5e2ac5e0ab51785",
+    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=b2000001_5f41cc489b1e41975663e813bb1cbf8ca93e2f692c22d00d5c517cb7a541b41e_c07a171efb4f83822c77c4792fbde21c5b75b7d62a952df35ab33d0f47ffaad6",
     "expectedMediaProfile": "dental",
     "validationChecks": 42
   },
@@ -65,7 +65,7 @@
     "expectedProfile": "plumbing",
     "isLaunch": false,
     "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/copperline-plumbing-concept-b2000002/",
-    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=copperline-plumbing-concept-b2000002.55add9498360ae051a0d81b75125ec14205ee6bd19ace5f75d08d3842b313142",
+    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=b2000002_417190974b794ef57496ad710a0fb49e8b8ad39bfbc3d0412ef62376b8b70ecb_de3703e96af29f9a59ed94e67bd9c5b6d41855d0fce6de2566a3c25e3c0f0b13",
     "expectedMediaProfile": "plumbing",
     "validationChecks": 42
   },
@@ -75,7 +75,7 @@
     "expectedProfile": "home_services",
     "isLaunch": false,
     "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/northstar-contractor-concept-b2000003/",
-    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=northstar-contractor-concept-b2000003.cf7b844b0eb79cd598ec68f81e285cdf254aa81da8bf669ac9a8470ee0686960",
+    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=b2000003_55283e0da4d34b224948b4b990932acc793ac99a275bf1f14494343cc0f98ef4_09ddb175f5d4c7ed016afe88d0079e74b7781092c1d309c9b1d4ec0eed5ffd3f",
     "expectedMediaProfile": "home_services",
     "validationChecks": 42
   },
@@ -85,7 +85,7 @@
     "expectedProfile": "medical_spa",
     "isLaunch": false,
     "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/aster-medical-spa-concept-b2000004/",
-    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=aster-medical-spa-concept-b2000004.26264a3e268d572673cdf749d7d08f90f44c2b43f75d66bd8dc255ef7a3c162c",
+    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=b2000004_8dcb1339048fdeb7c954fc26a15d5f8199a6a2bd464906f438a4eb87760e787d_c8b4ff9c771b2407063b7a276256d0bb9777d587e75f0bbe414660463f723f62",
     "expectedMediaProfile": "medical_spa",
     "validationChecks": 42
   },
@@ -95,7 +95,7 @@
     "expectedProfile": "healthcare",
     "isLaunch": false,
     "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/harbor-health-clinic-concept-b2000005/",
-    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=harbor-health-clinic-concept-b2000005.d8811c3159b8428b5c6d9ceca2c697b96131f3f695fb1939e362a87b3d9b223a",
+    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=b2000005_12587fc08a5924d9fd565c063232060349096f78c5c562f7c7b8da3568a7974b_398073776991195dfa42e530c8ee33acfaced0869af7dbb48ebf046ee7aca637",
     "expectedMediaProfile": "healthcare",
     "validationChecks": 42
   },
@@ -105,7 +105,7 @@
     "expectedProfile": "restaurant",
     "isLaunch": false,
     "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/juniper-table-concept-b2000006/",
-    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=juniper-table-concept-b2000006.1b0002e016e9f4228125e89429107834d0761c0b3d1e9365ce6df212da6a67e2",
+    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=b2000006_f0a31685a81b727f57e185efd8d8889e7da2d20c9669a984463850fd5d934e09_b44ddab7c320af2e9416e4235ff257be7dbf9ab5a483f2a3ac4f1cb16b64ba46",
     "expectedMediaProfile": "restaurant",
     "validationChecks": 42
   },
@@ -115,7 +115,7 @@
     "expectedProfile": "real_estate",
     "isLaunch": false,
     "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/stonebridge-realty-concept-b2000007/",
-    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=stonebridge-realty-concept-b2000007.55287ec416de05bd3ac4f43d375d88b63693c805ef6d2d4f0137a522305647ea",
+    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=b2000007_3604d3cbbc1f677dd6cdbf0c5b8b391b56fb09e50ca555185d86023233fe6447_debed462d621ac0020db84df09b46084082a7384f719aca2107a0da2798c2e44",
     "expectedMediaProfile": "real_estate",
     "validationChecks": 42
   },
@@ -125,7 +125,7 @@
     "expectedProfile": "fitness",
     "isLaunch": false,
     "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/foundry-fitness-concept-b2000008/",
-    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=foundry-fitness-concept-b2000008.1a311ae5e920d520244a9809e9f60b2835065b1a923f9c3f163814d01b4a5739",
+    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=b2000008_7cf9405713d9a912100c1d96e9db0eebf15b21148ca986896e0ede65b38a81ac_fd675755cc6633aefa4c5c706a8d80cc692ea55bf04f75d4d497778fedb1b9a7",
     "expectedMediaProfile": "fitness",
     "validationChecks": 42
   },
@@ -135,7 +135,7 @@
     "expectedProfile": "legal",
     "isLaunch": false,
     "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/northline-law-concept-b2000009/",
-    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=northline-law-concept-b2000009.d9ddc42912fd1f6cc6bb3078b4c73cd06e4312e14c85b5a82734eedef7c749bb",
+    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=b2000009_e03a006941a3a636fd7d3f2790df1ad18d2187acf771830bbe21022f1098b3e7_726eacadef0e7b81721d2842e68222a549f20f4f56e2e582e6b8f013b7478736",
     "expectedMediaProfile": "legal",
     "validationChecks": 42
   },
@@ -145,7 +145,7 @@
     "expectedProfile": "finance",
     "isLaunch": false,
     "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/clearwater-finance-concept-b2000010/",
-    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=clearwater-finance-concept-b2000010.2f4e0ec56e22b4743b2b361e9c70b248ef26d98e48e1848608fdad74624f45e6",
+    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=b2000010_083e361bf8d7f47d9306435e10a993381cea47a0c4532cd3a28d6ffc4712eafa_b24e063c2d361294634173add76924c772eb7be503213dcf326e4fec8da4fc93",
     "expectedMediaProfile": "finance",
     "validationChecks": 42
   },
@@ -155,7 +155,7 @@
     "expectedProfile": "web_design",
     "isLaunch": false,
     "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/arc-digital-studio-concept-b2000011/",
-    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=arc-digital-studio-concept-b2000011.3e76d58a343cd7e368a571dffe4e8fd2cd266a41c839a40661b5f35ce1b3dc36",
+    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=b2000011_4513119df6ccb5c2694375bc1f8f4ff2e8d365514a9a6c85e71b0815caeb8f73_af72364c9c3485af4088c2ddfa8df863f986ae43d76dda091d4dbd869c8d9fa1",
     "expectedMediaProfile": "web_design",
     "validationChecks": 42
   },
@@ -165,7 +165,7 @@
     "expectedProfile": "technology",
     "isLaunch": false,
     "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/signal-technology-concept-b2000012/",
-    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=signal-technology-concept-b2000012.793376b65bff2d35f24a1eec8094a20167f4b6c9fa38eb37baea9ca6d52594de",
+    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=b2000012_649513948c1baf609f5e4e63181e03935ec5115b7a37b8fb715e6b8ccd9899e8_2ff59ee04831e253f5fa471f31d5b78fec90eae1a89bf338c9cffbf8ea6797a4",
     "expectedMediaProfile": "technology",
     "validationChecks": 42
   },
@@ -175,7 +175,7 @@
     "expectedProfile": "beauty",
     "isLaunch": false,
     "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/sable-beauty-concept-b2000013/",
-    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=sable-beauty-concept-b2000013.05544cca65e5d3e976c6bb070966810b2b32935ec2847cfcf5e730c6d578e829",
+    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=b2000013_d6a1f802edfc782bc374870b991172ff0bfaa9e1f5611e314510023ff994bf17_e62d5fad82f09385e3b42cc1782804ec5c64f7ba90d90a13f45ddfdbfaa64ae7",
     "expectedMediaProfile": "beauty",
     "validationChecks": 42
   },
@@ -185,7 +185,7 @@
     "expectedProfile": "general",
     "isLaunch": false,
     "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/main-street-business-concept-b2000014/",
-    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=main-street-business-concept-b2000014.f83af93438565fc2439b15c8072ffa105ff737e843b14439d8a768268a667e62",
+    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=b2000014_99acf99aba147ed004908c10d345626752515e0f2d3a039ddbba464d405709ce_260978f152b105561a1633e5e149927f20b26e9b1c33b51b28ef86e9ab7bb947",
     "expectedMediaProfile": "general",
     "validationChecks": 42
   }

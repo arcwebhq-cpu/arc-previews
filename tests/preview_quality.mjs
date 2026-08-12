@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createReadStream } from "node:fs";
-import { mkdir, stat } from "node:fs/promises";
+import { mkdir, readFile, readdir, stat } from "node:fs/promises";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,7 +12,7 @@ const { default: serverlessChromium } = await import("@sparticuz/chromium");
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const output = path.join(root, "test-results");
-const qaFiles = [
+const legacyQaFiles = [
   "northline-roofing-qa-6a776d95/index.html",
   "harborview-dental-qa-6a776c67/index.html",
   "evergreen-injury-law-qa-6a776e0e/index.html",
@@ -24,13 +24,51 @@ const qaFiles = [
   "northwest-ledger-cpa-qa-6a7770f1/index.html",
   "prism-auto-detail-qa-6a77713f/index.html"
 ];
+const v10Manifest = JSON.parse(await readFile(path.join(root, "qa-v10/manifest.json"), "utf8"));
+const mediaManifest = JSON.parse(await readFile(path.join(root, "config/media-manifest.json"), "utf8"));
+const v10ByFile = new Map(v10Manifest.map(item => [item.file, item]));
+const launchV10Manifest = v10Manifest.filter(item => item.isLaunch);
+
+async function discoverV10PreviewFiles(directory = root) {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    if ([".git", "node_modules", "deliveries", "test-results"].includes(entry.name)) continue;
+    const absolute = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...await discoverV10PreviewFiles(absolute));
+    } else if (entry.isFile() && entry.name === "index.html") {
+      const html = await readFile(absolute, "utf8");
+      if (/<meta\s+name=["']arc-template-version["']\s+content=["']10\.0["']/i.test(html)) {
+        files.push(path.relative(root, absolute).split(path.sep).join("/"));
+      }
+    }
+  }
+  return files;
+}
+
+const discoveredV10Files = (await discoverV10PreviewFiles()).sort();
+for (const fixture of v10Manifest) {
+  assert.ok(discoveredV10Files.includes(fixture.file), `v10 fixture is missing from browser discovery: ${fixture.file}`);
+}
+const qaFiles = process.env.ARC_QA_V10_ONLY === "1"
+  ? discoveredV10Files
+  : [...legacyQaFiles, ...discoveredV10Files];
 const qaLimit = Math.max(1, Math.min(qaFiles.length, Number(process.env.ARC_QA_LIMIT || qaFiles.length)));
 const filesToTest = qaFiles.slice(0, qaLimit);
 const viewports = [
   { name: "desktop", width: 1440, height: 900, isMobile: false },
   { name: "iphone", width: 390, height: 844, isMobile: true }
-];
+].filter(item => process.env.ARC_QA_DESKTOP_ONLY !== "1" || !item.isMobile);
 const useRealImages = process.env.ARC_QA_REAL_IMAGES === "1";
+const saveScreenshots = process.env.ARC_QA_SAVE_SCREENSHOTS === "1";
+const compositionOrders = {
+  impact: ["top", "ticker", "services", "why", "process", "gallery", "about", "proof", "faq", "contact"],
+  trusted: ["top", "ticker", "proof", "services", "process", "about", "why", "faq", "gallery", "contact"],
+  editorial: ["top", "ticker", "about", "gallery", "services", "why", "process", "proof", "faq", "contact"],
+  balanced: ["top", "ticker", "services", "about", "why", "process", "proof", "gallery", "faq", "contact"]
+};
+const seenV10Compositions = new Set();
 const mockImage = `<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000"><rect width="1600" height="1000" fill="#2a2d33"/><path d="M0 760 410 420l270 240 260-330 660 670H0Z" fill="#414650"/></svg>`;
 const contentTypes = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8" };
 
@@ -97,8 +135,30 @@ try {
         await page.waitForFunction(() => document.images.length >= 5, null, { timeout: 5_000 });
         await page.evaluate(() => {
           for (const image of document.images) image.loading = "eager";
-          window.scrollTo(0, document.documentElement.scrollHeight);
         });
+        const revealCount = await page.evaluate(() => {
+          let visibleIndex = 0;
+          for (const element of document.querySelectorAll(".reveal")) {
+            const rect = element.getBoundingClientRect();
+            const style = getComputedStyle(element);
+            if (rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden") {
+              element.dataset.arcQaReveal = String(visibleIndex);
+              visibleIndex += 1;
+            }
+          }
+          return visibleIndex;
+        });
+        for (let index = 0; index < revealCount; index += 1) {
+          await page.evaluate(position => {
+            document.querySelector(`[data-arc-qa-reveal="${position}"]`)?.scrollIntoView({ block: "center" });
+          }, index);
+          await page.waitForFunction(position => {
+            const element = document.querySelector(`[data-arc-qa-reveal="${position}"]`);
+            return !element
+              || element.classList.contains("is-visible")
+              || matchMedia("(prefers-reduced-motion: reduce)").matches;
+          }, index, { timeout: 2_000 });
+        }
         await page.waitForFunction(() => {
           const images = [...document.images];
           return images.length >= 5 && images.every(image => image.complete && image.naturalWidth > 0);
@@ -142,6 +202,9 @@ try {
           const controls = [...document.querySelectorAll(".btn,button,input,textarea,select")]
             .filter(visible)
             .map(element => ({ label: element.textContent.trim() || element.getAttribute("aria-label") || element.tagName, height: element.getBoundingClientRect().height }));
+          const mobileGridItems = [...document.querySelectorAll(".service-grid>*,.why-grid>*,.process-list>*,.proof-grid>*,.about-grid>*")]
+            .filter(visible)
+            .map(element => ({ className: element.className, width: element.getBoundingClientRect().width }));
           const darkSections = [...document.querySelectorAll(".why,.gallery,.contact-card")]
             .filter(visible)
             .map(element => {
@@ -157,14 +220,35 @@ try {
           const links = [...document.querySelectorAll("a[href]")].map(link => link.getAttribute("href"));
           return {
             robots: document.querySelector('meta[name="robots"]')?.content || "",
+            arcTemplateVersion: document.querySelector('meta[name="arc-template-version"]')?.content || "",
+            arcSiteMode: document.body.dataset.arcSiteMode || "",
+            arcMediaProfile: document.body.dataset.arcMediaProfile || "",
+            arcMediaProvider: document.body.dataset.arcMediaProvider || "",
+            arcMediaVersion: document.body.dataset.arcMediaVersion || "",
+            arcExpectedMediaProfile: document.body.dataset.arcExpectedMediaProfile || "",
+            arcLayout: document.body.dataset.arcLayout || "",
+            arcVariant: document.body.dataset.arcVariant || "",
+            mainOrder: [...(document.querySelector("#content")?.children || [])].map(element => element.id || (element.classList.contains("ticker") ? "ticker" : "")),
+            hiddenReveals: [...document.querySelectorAll(".reveal")].filter(element => {
+              const rect = element.getBoundingClientRect();
+              const style = getComputedStyle(element);
+              return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden" && Number(style.opacity) < 0.9;
+            }).map(element => element.className),
             overflow: document.documentElement.scrollWidth - innerWidth,
             unresolved: document.documentElement.innerHTML.match(/\[\[[A-Z0-9_]+\]\]/g) || [],
             headings,
             media,
             controls,
+            mobileGridItems,
             darkSections,
             images,
             links,
+            curatedImages: [...document.images].filter(visible).map(image => ({
+              profile: image.dataset.arcMediaProfile || "",
+              provider: image.dataset.arcMediaProvider || "",
+              version: image.dataset.arcMediaVersion || "",
+              source: (image.currentSrc || image.src).split("?")[0]
+            })),
             privateEmail: /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(document.documentElement.innerHTML)
           };
         });
@@ -174,6 +258,7 @@ try {
         assert.ok(report.overflow <= 1, `horizontal overflow is ${report.overflow}px`);
         assert.equal(report.unresolved.length, 0, "unresolved placeholders remain");
         assert.equal(report.privateEmail, false, "private requester email is visible");
+        assert.equal(report.hiddenReveals.length, 0, `scroll-reveal content remained hidden: ${JSON.stringify(report.hiddenReveals)}`);
         assert.equal(pageErrors.length, 0, `page errors: ${pageErrors.join(" | ")}`);
         const escapedHeadings = report.headings.filter(item => item.left < -1 || item.right > viewport.width + 1);
         assert.equal(escapedHeadings.length, 0, `heading leaves the viewport: ${JSON.stringify(escapedHeadings)}`);
@@ -187,6 +272,40 @@ try {
         assert.ok(report.links.every(href => !/^https?:\/\/(?:www\.)?example\.(?:com|org|net)/i.test(href)), "dummy external CTA remains");
         if (viewport.isMobile) {
           assert.ok(report.media.every(item => item.height <= 320), "a phone media block is taller than 320px");
+          assert.ok(report.mobileGridItems.every(item => item.width >= 250), `a phone content card collapsed below 250px: ${JSON.stringify(report.mobileGridItems.filter(item => item.width < 250))}`);
+        }
+        const v10Fixture = v10ByFile.get(file);
+        if (report.arcTemplateVersion === "10.0") {
+          const expectedProfile = v10Fixture?.expectedProfile || report.arcExpectedMediaProfile;
+          const profile = mediaManifest.profiles.find(item => item.key === expectedProfile);
+          assert.ok(profile, `media manifest profile ${expectedProfile} is missing`);
+          assert.equal(report.arcSiteMode, "preview", "v10 fixture is not in preview mode");
+          assert.equal(report.arcMediaProfile, expectedProfile, "semantic media profile mismatch");
+          assert.equal(report.arcExpectedMediaProfile, expectedProfile, "server-selected media profile mismatch");
+          assert.equal(report.arcMediaProvider, profile.provider, "media provider mismatch");
+          assert.equal(report.arcMediaVersion, mediaManifest.version, "media manifest version mismatch");
+          assert.equal(report.arcLayout, profile.layout, "industry composition layout mismatch");
+          assert.equal(report.arcVariant, String(profile.variant), "industry composition variant mismatch");
+          assert.deepEqual(report.mainOrder, compositionOrders[profile.layout], "industry section order mismatch");
+          if (v10Fixture?.isLaunch) seenV10Compositions.add(`${report.arcLayout}:${report.arcVariant}`);
+          assert.ok(report.curatedImages.every(item => item.profile === expectedProfile), "an image escaped the selected media profile");
+          assert.ok(report.curatedImages.every(item => item.provider === profile.provider), "an image has the wrong provider tag");
+          assert.ok(report.curatedImages.every(item => item.version === mediaManifest.version), "an image has a stale manifest tag");
+          const allowed = profile.provider === "pexels"
+            ? new Set(profile.photo_ids.map(id => `/photos/${id}/pexels-photo-${id}.jpeg`))
+            : profile.provider === "unsplash"
+              ? new Set(profile.photo_ids.map(id => `/${id}`))
+              : new Set(profile.urls.map(value => new URL(value).pathname));
+          assert.ok(report.curatedImages.every(item => allowed.has(new URL(item.source).pathname)), "an image URL is outside the selected profile pool");
+          const checkout = report.links.find(href => href?.includes("buy.stripe.com"));
+          assert.ok(checkout, "bound Stripe checkout link is missing");
+          const expectedFolder = v10Fixture?.folder || path.basename(path.dirname(file));
+          const checkoutReference = new URL(checkout).searchParams.get("client_reference_id") || "";
+          assert.match(checkoutReference, new RegExp(`^${expectedFolder}\\.[a-f0-9]{64}$`), "checkout folder binding mismatch");
+        }
+        if (saveScreenshots) {
+          const slug = file.replace(/\/index\.html$/i, "").replace(/[^a-z0-9_-]+/gi, "-");
+          await page.screenshot({ path: path.join(output, `${slug}-${viewport.name}.png`), fullPage: true });
         }
         console.log(`PASS ${file} [${viewport.name}]`);
       } catch (error) {
@@ -215,4 +334,8 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(`Browser audit passed: ${filesToTest.length * viewports.length}/${filesToTest.length * 2} desktop and iPhone renders.`);
+if (launchV10Manifest.every(item => filesToTest.includes(item.file))) {
+  assert.equal(seenV10Compositions.size, 5, "the five launch niches must retain five distinct layout/variant compositions");
+}
+
+console.log(`Browser audit passed: ${filesToTest.length * viewports.length}/${filesToTest.length * viewports.length} requested renders.`);

@@ -1,0 +1,192 @@
+[
+  {
+    "folder": "ironwood-roofing-concept-a1000001",
+    "file": "qa-v10/ironwood-roofing-concept-a1000001/index.html",
+    "expectedProfile": "roofing",
+    "isLaunch": true,
+    "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/ironwood-roofing-concept-a1000001/",
+    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=ironwood-roofing-concept-a1000001.363f0ff6c83f6017fda6ec52a3dd23dbdfb98fd13a5272e3403c615faf7eeee4",
+    "expectedMediaProfile": "roofing",
+    "validationChecks": 42
+  },
+  {
+    "folder": "blue-peak-heating-air-concept-a1000002",
+    "file": "qa-v10/blue-peak-heating-air-concept-a1000002/index.html",
+    "expectedProfile": "hvac",
+    "isLaunch": true,
+    "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/blue-peak-heating-air-concept-a1000002/",
+    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=blue-peak-heating-air-concept-a1000002.1747fea5649e6409efe330da221e6169e402154f22c6075f189198afaf3f94b5",
+    "expectedMediaProfile": "hvac",
+    "validationChecks": 42
+  },
+  {
+    "folder": "atelier-house-remodeling-concept-a1000003",
+    "file": "qa-v10/atelier-house-remodeling-concept-a1000003/index.html",
+    "expectedProfile": "remodeling",
+    "isLaunch": true,
+    "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/atelier-house-remodeling-concept-a1000003/",
+    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=atelier-house-remodeling-concept-a1000003.fc7cfb7efa2e5d216ea0cd695c5e1fa17c0fe77e9732413ea99493ba79a5e5d6",
+    "expectedMediaProfile": "remodeling",
+    "validationChecks": 42
+  },
+  {
+    "folder": "wildfern-landscape-concept-a1000004",
+    "file": "qa-v10/wildfern-landscape-concept-a1000004/index.html",
+    "expectedProfile": "landscaping",
+    "isLaunch": true,
+    "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/wildfern-landscape-concept-a1000004/",
+    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=wildfern-landscape-concept-a1000004.af042284224f94a31fb25fe3c5ceb874d63110e562ab3a0a90b715fede6cc002",
+    "expectedMediaProfile": "landscaping",
+    "validationChecks": 42
+  },
+  {
+    "folder": "obsidian-auto-studio-concept-a1000005",
+    "file": "qa-v10/obsidian-auto-studio-concept-a1000005/index.html",
+    "expectedProfile": "auto_detailing",
+    "isLaunch": true,
+    "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/obsidian-auto-studio-concept-a1000005/",
+    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=obsidian-auto-studio-concept-a1000005.55d121890f22ea6cd7b695fa864bb612ac2035397d2b2970520c75d95689556a",
+    "expectedMediaProfile": "auto_detailing",
+    "validationChecks": 42
+  },
+  {
+    "folder": "cedar-dental-concept-b2000001",
+    "file": "qa-v10/cedar-dental-concept-b2000001/index.html",
+    "expectedProfile": "dental",
+    "isLaunch": false,
+    "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/cedar-dental-concept-b2000001/",
+    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=cedar-dental-concept-b2000001.e2137e77a7d2128e063b4cae985962493a739e9fc7f0c189e5e2ac5e0ab51785",
+    "expectedMediaProfile": "dental",
+    "validationChecks": 42
+  },
+  {
+    "folder": "copperline-plumbing-concept-b2000002",
+    "file": "qa-v10/copperline-plumbing-concept-b2000002/index.html",
+    "expectedProfile": "plumbing",
+    "isLaunch": false,
+    "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/copperline-plumbing-concept-b2000002/",
+    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=copperline-plumbing-concept-b2000002.55add9498360ae051a0d81b75125ec14205ee6bd19ace5f75d08d3842b313142",
+    "expectedMediaProfile": "plumbing",
+    "validationChecks": 42
+  },
+  {
+    "folder": "northstar-contractor-concept-b2000003",
+    "file": "qa-v10/northstar-contractor-concept-b2000003/index.html",
+    "expectedProfile": "home_services",
+    "isLaunch": false,
+    "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/northstar-contractor-concept-b2000003/",
+    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=northstar-contractor-concept-b2000003.cf7b844b0eb79cd598ec68f81e285cdf254aa81da8bf669ac9a8470ee0686960",
+    "expectedMediaProfile": "home_services",
+    "validationChecks": 42
+  },
+  {
+    "folder": "aster-medical-spa-concept-b2000004",
+    "file": "qa-v10/aster-medical-spa-concept-b2000004/index.html",
+    "expectedProfile": "medical_spa",
+    "isLaunch": false,
+    "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/aster-medical-spa-concept-b2000004/",
+    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=aster-medical-spa-concept-b2000004.26264a3e268d572673cdf749d7d08f90f44c2b43f75d66bd8dc255ef7a3c162c",
+    "expectedMediaProfile": "medical_spa",
+    "validationChecks": 42
+  },
+  {
+    "folder": "harbor-health-clinic-concept-b2000005",
+    "file": "qa-v10/harbor-health-clinic-concept-b2000005/index.html",
+    "expectedProfile": "healthcare",
+    "isLaunch": false,
+    "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/harbor-health-clinic-concept-b2000005/",
+    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=harbor-health-clinic-concept-b2000005.d8811c3159b8428b5c6d9ceca2c697b96131f3f695fb1939e362a87b3d9b223a",
+    "expectedMediaProfile": "healthcare",
+    "validationChecks": 42
+  },
+  {
+    "folder": "juniper-table-concept-b2000006",
+    "file": "qa-v10/juniper-table-concept-b2000006/index.html",
+    "expectedProfile": "restaurant",
+    "isLaunch": false,
+    "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/juniper-table-concept-b2000006/",
+    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=juniper-table-concept-b2000006.1b0002e016e9f4228125e89429107834d0761c0b3d1e9365ce6df212da6a67e2",
+    "expectedMediaProfile": "restaurant",
+    "validationChecks": 42
+  },
+  {
+    "folder": "stonebridge-realty-concept-b2000007",
+    "file": "qa-v10/stonebridge-realty-concept-b2000007/index.html",
+    "expectedProfile": "real_estate",
+    "isLaunch": false,
+    "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/stonebridge-realty-concept-b2000007/",
+    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=stonebridge-realty-concept-b2000007.55287ec416de05bd3ac4f43d375d88b63693c805ef6d2d4f0137a522305647ea",
+    "expectedMediaProfile": "real_estate",
+    "validationChecks": 42
+  },
+  {
+    "folder": "foundry-fitness-concept-b2000008",
+    "file": "qa-v10/foundry-fitness-concept-b2000008/index.html",
+    "expectedProfile": "fitness",
+    "isLaunch": false,
+    "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/foundry-fitness-concept-b2000008/",
+    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=foundry-fitness-concept-b2000008.1a311ae5e920d520244a9809e9f60b2835065b1a923f9c3f163814d01b4a5739",
+    "expectedMediaProfile": "fitness",
+    "validationChecks": 42
+  },
+  {
+    "folder": "northline-law-concept-b2000009",
+    "file": "qa-v10/northline-law-concept-b2000009/index.html",
+    "expectedProfile": "legal",
+    "isLaunch": false,
+    "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/northline-law-concept-b2000009/",
+    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=northline-law-concept-b2000009.d9ddc42912fd1f6cc6bb3078b4c73cd06e4312e14c85b5a82734eedef7c749bb",
+    "expectedMediaProfile": "legal",
+    "validationChecks": 42
+  },
+  {
+    "folder": "clearwater-finance-concept-b2000010",
+    "file": "qa-v10/clearwater-finance-concept-b2000010/index.html",
+    "expectedProfile": "finance",
+    "isLaunch": false,
+    "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/clearwater-finance-concept-b2000010/",
+    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=clearwater-finance-concept-b2000010.2f4e0ec56e22b4743b2b361e9c70b248ef26d98e48e1848608fdad74624f45e6",
+    "expectedMediaProfile": "finance",
+    "validationChecks": 42
+  },
+  {
+    "folder": "arc-digital-studio-concept-b2000011",
+    "file": "qa-v10/arc-digital-studio-concept-b2000011/index.html",
+    "expectedProfile": "web_design",
+    "isLaunch": false,
+    "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/arc-digital-studio-concept-b2000011/",
+    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=arc-digital-studio-concept-b2000011.3e76d58a343cd7e368a571dffe4e8fd2cd266a41c839a40661b5f35ce1b3dc36",
+    "expectedMediaProfile": "web_design",
+    "validationChecks": 42
+  },
+  {
+    "folder": "signal-technology-concept-b2000012",
+    "file": "qa-v10/signal-technology-concept-b2000012/index.html",
+    "expectedProfile": "technology",
+    "isLaunch": false,
+    "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/signal-technology-concept-b2000012/",
+    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=signal-technology-concept-b2000012.793376b65bff2d35f24a1eec8094a20167f4b6c9fa38eb37baea9ca6d52594de",
+    "expectedMediaProfile": "technology",
+    "validationChecks": 42
+  },
+  {
+    "folder": "sable-beauty-concept-b2000013",
+    "file": "qa-v10/sable-beauty-concept-b2000013/index.html",
+    "expectedProfile": "beauty",
+    "isLaunch": false,
+    "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/sable-beauty-concept-b2000013/",
+    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=sable-beauty-concept-b2000013.05544cca65e5d3e976c6bb070966810b2b32935ec2847cfcf5e730c6d578e829",
+    "expectedMediaProfile": "beauty",
+    "validationChecks": 42
+  },
+  {
+    "folder": "main-street-business-concept-b2000014",
+    "file": "qa-v10/main-street-business-concept-b2000014/index.html",
+    "expectedProfile": "general",
+    "isLaunch": false,
+    "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/main-street-business-concept-b2000014/",
+    "checkoutUrl": "https://buy.stripe.com/test_00000000000000?client_reference_id=main-street-business-concept-b2000014.f83af93438565fc2439b15c8072ffa105ff737e843b14439d8a768268a667e62",
+    "expectedMediaProfile": "general",
+    "validationChecks": 42
+  }
+]

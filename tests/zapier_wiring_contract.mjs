@@ -11,6 +11,10 @@ const arc2LeadRouteVerifierSource = await readFile(
   new URL("../zapier/arc2_verify_lead_route_staging.js", import.meta.url),
   "utf8"
 );
+const arc2CustomerControlVerifierSource = await readFile(
+  new URL("../zapier/arc2_verify_customer_control.js", import.meta.url),
+  "utf8"
+);
 await assert.rejects(
   readFile(new URL("../zapier/arc2_publish_delivery.js", import.meta.url), "utf8"),
   error => error?.code === "ENOENT"
@@ -46,13 +50,23 @@ assert.equal(contract.secrets.runtime_secret_store_required, true);
 assert.deepEqual(contract.secrets.required_runtime_names, [
   "STRIPE_TEST_API_KEY",
   "ARC_CHECKOUT_BINDING_SECRET",
+  "GITHUB_PREVIEW_SOURCE_READ_TOKEN",
   "GITHUB_DELIVERY_TOKEN",
   "ARC_EMAIL_CLAIM_SECRET",
   "NETLIFY_ACCESS_TOKEN",
   "ARC1_INTAKE_EVIDENCE_SECRET",
   "ARC_LEAD_ROUTE_EVIDENCE_SECRET",
   "ARC_INBOX_RECEIPT_EVIDENCE_SECRET",
+  "ARC_CUSTOMER_CONTROL_EVIDENCE_SECRET",
 ]);
+assert.deepEqual(contract.secrets.customer_authorization, {
+  source: "external-secure-handoff",
+  repository_storage_allowed: false,
+  long_lived_shared_token_allowed: false,
+  per_customer_short_lived_read_only_authorization_required: true,
+  zapier_field_log_redaction_verified: false,
+  revocation_after_verification_required: true,
+});
 
 assert.deepEqual(contract.arc1.ordered_steps, [
   "zapier/arc1_verify_intake_and_assets.js",
@@ -113,6 +127,15 @@ assert.equal(contract.arc1.private_state.record_key, "state_key");
 assert.equal(contract.arc1.private_state.claim_mode, "atomic-create-only-before-build");
 assert.equal(contract.arc1.private_state.initial_status, "PENDING");
 assert.equal(contract.arc1.private_state.maximum_pending_ttl_hours, 24);
+assert.deepEqual(contract.arc1.abuse_controls, {
+  per_submission_replay_claim_required: true,
+  unique_submission_rate_limit_required_before_build: true,
+  authoritative_rate_limit_provider: null,
+  maximum_builds_per_rolling_window: null,
+  maximum_builds_per_day: null,
+  live_configuration_verified: false,
+  fail_closed_when_limit_state_is_unavailable: true,
+});
 assert.deepEqual(contract.arc1.private_state.required_fields, [
   "state_key",
   "state_digest_sha256",
@@ -158,6 +181,8 @@ assert.deepEqual(contract.arc2.ordered_steps, [
   "zapier/arc2_verify_lead_route_staging.js",
   "zapier/arc2_publish_delivery_pr.js",
   "zapier/arc2_merge_delivery_pr.js",
+  "external-secure-handoff/customer-creates-owned-github-repo-and-netlify-site",
+  "zapier/arc2_verify_customer_control.js",
   "zapier/arc2_delivery_email_gate.js",
   "email-provider/send-with-durable-idempotency",
   "inbox-provider/issue-customer-delivery-receipt-attestation",
@@ -165,6 +190,31 @@ assert.deepEqual(contract.arc2.ordered_steps, [
 ]);
 assert.equal(contract.arc2.publish_mode, "pull-request-only");
 assert.equal(contract.arc2.direct_main_publish_allowed, false);
+assert.deepEqual(contract.arc2.repositories, {
+  preview_source: {
+    access: "read-only",
+    owner: "arcwebhq-cpu",
+    repository: "arc-previews",
+    contains_paid_delivery_artifacts: false,
+  },
+  delivery_target: {
+    access: "write",
+    visibility_required: "private",
+    owner: null,
+    repository: null,
+    must_not_equal_preview_source: true,
+    required_ci_workflow_must_already_be_installed: true,
+    required_ci_workflow_verified: false,
+    github_pages_delivery_allowed: false,
+  },
+});
+assert.deepEqual(contract.arc2.handoff, {
+  mode: "external-secure-manual",
+  one_click_repository_transfer_claim_allowed: false,
+  one_click_deploy_url_allowed: false,
+  customer_accounts_must_exist_before_verification: true,
+  customer_control_evidence_required_before_email: true,
+});
 assert.deepEqual(contract.arc2.forbidden_steps, ["zapier/arc2_publish_delivery.js"]);
 assert.equal(contract.arc2.ordered_steps.includes("zapier/arc2_publish_delivery.js"), false);
 assert.deepEqual(contract.arc2.legacy_direct_publisher, {
@@ -214,6 +264,15 @@ assert.deepEqual(contract.arc2.checkout_configuration, {
   scope_summary_required_before_payment: true,
   live_configuration_verified: false,
 });
+assert.deepEqual(contract.arc2.payment_evidence_gate, {
+  evidence_version: "arc2-payment-evidence-v1",
+  signature_algorithm: "HMAC-SHA-256",
+  signature_secret_source: "ARC_CHECKOUT_BINDING_SECRET",
+  publisher_must_verify_signature_and_exact_bindings: true,
+  merge_must_verify_signature_and_exact_bindings: true,
+  email_gate_must_verify_signature_and_exact_bindings: true,
+  caller_digest_is_authoritative: false,
+});
 assert.equal(contract.arc2.delivery_email.allowed_before_gate, false);
 for (const [name, required] of Object.entries(contract.arc2.delivery_email)) {
   if (name !== "allowed_before_gate") assert.equal(required, true, `ARC2 gate requirement ${name} must fail closed.`);
@@ -227,6 +286,41 @@ assert.deepEqual(contract.arc2.lead_route_gate, {
   authoritative_inbox_receipt_required: true,
   caller_status_string_is_authoritative: false,
 });
+assert.deepEqual(contract.arc2.customer_control_gate, {
+  source: "zapier/arc2_verify_customer_control.js",
+  read_only: true,
+  write_methods_allowed: false,
+  evidence_version: "arc-customer-control-evidence-v1",
+  evidence_scope: "customer-owned-github-and-netlify",
+  signature_algorithm: "HMAC-SHA-256",
+  signature_secret_source: "runtime-secret-store",
+  maximum_evidence_age_seconds: 1800,
+  required_bindings: [
+    "payment_evidence_sha256",
+    "merge_commit_sha",
+    "recipient_hmac_sha256",
+    "customer_github_repository",
+    "customer_github_commit_sha",
+    "customer_github_repository_tree_sha256",
+    "customer_netlify_account_id",
+    "customer_netlify_site_id",
+    "customer_netlify_deploy_id",
+    "customer_netlify_deploy_file_manifest_sha256",
+    "served_html_sha256",
+  ],
+  exact_customer_repository_bytes_required: true,
+  exact_customer_netlify_source_bytes_required: true,
+  immutable_customer_netlify_served_bytes_required: true,
+  customer_github_admin_control_required: true,
+  customer_netlify_account_owner_control_required: true,
+  caller_status_string_is_authoritative: false,
+});
+assert.match(arc2CustomerControlVerifierSource, /method:\s*"GET"/);
+assert.doesNotMatch(arc2CustomerControlVerifierSource, /method:\s*"(?:POST|PUT|PATCH|DELETE)"/);
+assert.match(arc2CustomerControlVerifierSource, /arc-customer-control-evidence-signature-v1/);
+assert.match(arc2CustomerControlVerifierSource, /repository\.permissions\?\.admin !== true/);
+assert.match(arc2CustomerControlVerifierSource, /account\.owner_ids/);
+assert.match(arc2CustomerControlVerifierSource, /payment_evidence_sha256/);
 
 assert.equal(contract.arc2.delivery_artifacts.exact_count, 4);
 assert.deepEqual(contract.arc2.delivery_artifacts.paths, [
@@ -390,11 +484,17 @@ for (const field of [
   "arc1_authoritative_netlify_intake_verified",
   "arc1_asset_bytes_verified",
   "arc1_atomic_intake_claim_verified",
+  "arc1_unique_submission_rate_limit_verified",
   "authoritative_inbox_receipt_attestation_verified",
   "netlify_form_postprocessing_fixture_verified",
   "netlify_staging_noindex_headers_verified",
   "netlify_gate_time_revalidation_verified",
   "netlify_staging_cleanup_verified",
+  "private_delivery_repository_verified",
+  "private_delivery_ci_workflow_verified",
+  "secure_customer_handoff_verified",
+  "customer_authorization_redaction_verified",
+  "customer_control_evidence_verified",
 ]) {
   assert.equal(contract.external_verification[field], false, `${field} must remain externally unverified.`);
 }
@@ -413,6 +513,9 @@ for (const field of [
   "arc1_netlify_form_id",
   "arc1_netlify_form_name",
   "arc1_asset_upload_origin_allowlist",
+  "arc1_rate_limit_authority",
+  "arc1_rolling_build_limit",
+  "arc1_daily_build_limit",
   "arc_netlify_account_id",
   "adult_contracting_representative",
   "legal_operator",
@@ -420,6 +523,13 @@ for (const field of [
   "mailing_address",
   "governing_venue",
   "branded_sender",
+  "private_delivery_repository_owner",
+  "private_delivery_repository_name",
+  "private_delivery_required_ci_workflow",
+  "secure_customer_handoff_authority",
+  "customer_authorization_broker",
+  "customer_control_evidence_secret_configured",
+  "customer_control_verifier_configuration",
 ]) {
   assert.equal(contract.unresolved[field], null, `${field} must remain unresolved rather than invented.`);
 }

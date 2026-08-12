@@ -14,6 +14,13 @@ rejects generated-content injection, and renders every ARC v10 media profile plu
 legacy QA set at desktop and iPhone widths. GitHub CI also verifies real external image URLs;
 local runs use deterministic image fixtures unless `npm run test:images` is requested.
 
+GitHub Pages must use **GitHub Actions** as its build source. On each push to `main`, the
+deployment job waits for the full quality gate and then publishes only `.pages-dist`, built by
+`npm run build:pages`. That artifact contains a noindex inert directory, the three fixed fictional showcases, and
+proof-bound ARC v10 customer preview folders at the repository root. It excludes `qa-v10`,
+legacy previews, `deliveries`, source, configuration, tests, and dependencies. Do not switch
+Pages back to branch/root publishing; doing so exposes the repository instead of the allowlist.
+
 ARC1 accepts an intake only after an authenticated Netlify API lookup binds the trigger-issued
 submission ID and received time, the exact deployed disclosures, a create-only private claim,
 and hashes of server-validated PNG/JPEG/WEBP uploads. Browser-provided identity, timestamps,

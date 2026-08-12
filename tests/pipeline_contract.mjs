@@ -33,6 +33,11 @@ const expectedPaymentLinkId = "plink_1ArcV10Test5000";
 const expectedTermsVersion = "2026-08-11";
 const checkoutBindingSecret = "arc-test-checkout-binding-secret-32-bytes-minimum";
 const leadRouteEvidenceSecret = "arc-test-lead-route-evidence-secret-32-bytes-minimum";
+const stripeTestApiKey = "sk_test_arc_contract_key_000000000000";
+const previewSourceOwner = "arcwebhq-cpu";
+const previewSourceRepository = "arc-previews";
+const deliveryOwner = "arc-delivery-owner";
+const deliveryRepository = "arc-delivery-private";
 const sha256 = value => createHash("sha256").update(value, "utf8").digest("hex");
 const signedCheckoutReference = folder =>
   `${folder}.${createHmac("sha256", checkoutBindingSecret).update(folder, "utf8").digest("hex")}`;
@@ -70,14 +75,18 @@ for (const [index, item] of rendered.entries()) {
   const checkoutReference = signedCheckoutReference(preview.folder);
   const session = {
     id: `cs_test_arcv10_${String(index + 1).padStart(2, "0")}`,
+    object: "checkout.session",
     client_reference_id: checkoutReference,
     livemode: false,
+    mode: "payment",
+    status: "complete",
     payment_status: "paid",
     currency: "usd",
     amount_total: 500000,
     payment_link: expectedPaymentLinkId,
     consent: { terms_of_service: "accepted" },
     metadata: { terms_version: expectedTermsVersion },
+    custom_fields: [{ key: "adult_purchaser_ack", dropdown: { value: "accepted" } }],
     customer_details: { email: fixture.customerEmail }
   };
   const verifiedLeadNotificationEmail = `verified-${fixture.expectedProfile}@example.test`;
@@ -107,7 +116,7 @@ for (const [index, item] of rendered.entries()) {
   assert.match(handoff.productionHtml, /data-arc-site-mode="production"/i);
   assert.doesNotMatch(handoff.productionHtml, /\[ARC TEST\]/i);
   assert.doesNotMatch(handoff.productionHtml, /<aside\b[^>]*arc-preview-toolbar|data-arc-checkout|buy\.stripe\.com/i);
-  assert.match(handoff.productionHtml, /<link rel="canonical" href="https:\/\/arcwebhq-cpu\.github\.io\/arc-previews\/deliveries\//i);
+  assert.doesNotMatch(handoff.productionHtml, /<link\s+rel=["']canonical["']|<meta\s+property=["']og:url["']/i);
   assert.equal(handoff.netlifyConfigPath, `deliveries/${preview.folder}/netlify.toml`);
   assert.equal(handoff.usageGuidePath, `deliveries/${preview.folder}/USAGE.md`);
   assert.match(handoff.netlifyConfig, /publish = "\."/);
@@ -119,8 +128,8 @@ for (const [index, item] of rendered.entries()) {
   assert.equal(handoff.leadRouteFormName, expectedLeadRouteFormName);
   assert.equal(handoff.leadRouteRecipientHmacSha256, expectedRecipientHmac);
   assert.equal(handoff.verifiedLeadNotificationEmail, verifiedLeadNotificationEmail);
-  assert.equal(new URL(handoff.deployUrl).searchParams.get("create_from_path"), `deliveries/${preview.folder}`);
-  assert.ok(handoff.productionUrl.endsWith(`/deliveries/${preview.folder}/`));
+  assert.equal(handoff.secureCustomerSetupRequired, true);
+  assert.equal(Object.hasOwn(handoff, "deployUrl"), false);
 
   const arc1Input = {
     template_content: template,
@@ -139,6 +148,12 @@ for (const [index, item] of rendered.entries()) {
   assert.equal(arc1.intake_state_key, intake.evidence.state_key);
   assert.equal(arc1.intake_evidence_sha256, intake.intakeEvidenceSha256);
   assert.equal(arc1.submission_data_sha256, intake.evidence.submission_data_sha256);
+  assert.equal(arc1.render_content_sha256, sha256(arc1.html_content));
+  assert.match(arc1.render_evidence_hmac_sha256, /^[a-f0-9]{64}$/);
+  const renderEvidence = JSON.parse(arc1.render_evidence_private);
+  assert.equal(renderEvidence.preview_folder, preview.folder);
+  assert.equal(renderEvidence.content_sha256, arc1.render_content_sha256);
+  assert.equal(renderEvidence.intake_evidence_sha256, intake.intakeEvidenceSha256);
   assert.equal(arc1.file_path, preview.filePath);
   assert.equal(new URL(arc1.checkout_url).searchParams.get("client_reference_id"), checkoutReference);
   assert.equal(arc1.checkout_reference, checkoutReference);
@@ -170,7 +185,21 @@ for (const [index, item] of rendered.entries()) {
     /<\/head>/i,
     `<!-- ARC_PREVIEW_PROOF_START -->\n<meta name="arc-preview-folder" content="${preview.folder}">\n<meta name="arc-preview-source-sha256" content="${approvedSourceSha256}">\n<!-- ARC_PREVIEW_PROOF_END -->\n</head>`
   );
-  const mockFetch = async url => {
+  const mockFetch = async (url, options = {}) => {
+    if (url === `https://api.stripe.com/v1/checkout/sessions/${session.id}`) {
+      assert.equal(options.method, "GET");
+      assert.equal(options.redirect, "error");
+      assert.equal(
+        Buffer.from(String(options.headers?.Authorization || "").replace(/^Basic\s+/, ""), "base64").toString("utf8"),
+        `${stripeTestApiKey}:`
+      );
+      return {
+        ok: true,
+        status: 200,
+        url,
+        json: async () => session
+      };
+    }
     if (url.includes("/git/trees/")) {
       return {
         ok: true,
@@ -193,21 +222,28 @@ for (const [index, item] of rendered.entries()) {
   };
   const arc2Input = {
     checkout_session_id: session.id,
-    client_reference_id: session.client_reference_id,
+    stripe_test_api_key: stripeTestApiKey,
     checkout_binding_secret: checkoutBindingSecret,
-    livemode: session.livemode,
-    payment_status: session.payment_status,
-    currency: session.currency,
-    amount_total_minor_units: session.amount_total,
-    payment_link_id: session.payment_link,
     expected_payment_link_id: expectedPaymentLinkId,
-    terms_of_service_consent: session.consent.terms_of_service,
-    metadata_terms_version: session.metadata.terms_version,
     expected_terms_version: expectedTermsVersion,
-    customer_email: fixture.customerEmail,
+    // Caller-mapped Stripe fields are deliberately false. The resolver must ignore them.
+    client_reference_id: "attacker-deadbeef." + "0".repeat(64),
+    livemode: true,
+    payment_status: "unpaid",
+    currency: "eur",
+    amount_total_minor_units: 1,
+    payment_link_id: "plink_1WrongCaller",
+    terms_of_service_consent: "",
+    metadata_terms_version: "stale-caller-value",
+    customer_email: "wrong-recipient@example.test",
     verified_lead_notification_email: verifiedLeadNotificationEmail,
     lead_route_evidence_secret: leadRouteEvidenceSecret,
     github_token: "test-token",
+    preview_source_github_owner: previewSourceOwner,
+    preview_source_github_repo: previewSourceRepository,
+    preview_source_github_branch: "main",
+    delivery_github_owner: deliveryOwner,
+    delivery_github_repo: deliveryRepository,
     // These caller claims must never unlock the delivery PR write.
     lead_route_status: "verified",
     lead_route_verified: true,
@@ -221,13 +257,16 @@ for (const [index, item] of rendered.entries()) {
   assert.equal(arc2.lead_route_evidence_version, "arc-lead-route-evidence-v1");
   assert.equal(arc2.lead_route_form_name, expectedLeadRouteFormName);
   assert.equal(arc2.lead_route_recipient_hmac_sha256, expectedRecipientHmac);
-  assert.equal(arc2.payment_verification_status, "verified_test_payment");
+  assert.equal(arc2.payment_verification_status, "verified_test_payment_from_stripe_api");
+  assert.equal(arc2.stripe_session_retrieved, true);
   assert.equal(arc2.client_reference_id, checkoutReference);
   assert.equal(arc2.livemode, false);
   assert.equal(arc2.amount_total_minor_units, 500000);
   assert.equal(arc2.payment_link_id, expectedPaymentLinkId);
   assert.equal(arc2.terms_of_service_consent, "accepted");
   assert.equal(arc2.terms_version, expectedTermsVersion);
+  assert.equal(arc2.adult_purchaser_acknowledgement, "accepted");
+  assert.equal(arc2.customer_email, fixture.customerEmail);
   assert.equal(arc2.preview_folder, preview.folder);
   assert.equal(arc2.production_file_path, `deliveries/${preview.folder}/index.html`);
   const arc2Html = Buffer.from(arc2.production_content_base64, "base64").toString("utf8");
@@ -239,7 +278,11 @@ for (const [index, item] of rendered.entries()) {
   assert.match(arc2.production_content_sha256, /^[a-f0-9]{64}$/);
   assert.match(arc2.bundle_fingerprint, /^[a-f0-9]{64}$/);
   assert.doesNotMatch(Buffer.from(arc2.usage_guide_base64, "base64").toString("utf8"), /@|cs_test_/i);
-  assert.equal(new URL(arc2.deploy_url).searchParams.get("create_from_path"), `deliveries/${preview.folder}`);
+  assert.equal(arc2.secure_customer_setup_required, true);
+  assert.equal(Object.hasOwn(arc2, "deploy_url"), false);
+  assert.equal(arc2.preview_source_repository, `${previewSourceOwner}/${previewSourceRepository}`);
+  assert.equal(arc2.private_delivery_repository, `${deliveryOwner}/${deliveryRepository}`);
+  assert.equal(Object.hasOwn(arc2, "production_url"), false);
 
   const noCallerClaimInput = { ...arc2Input };
   delete noCallerClaimInput.lead_route_status;
@@ -253,7 +296,14 @@ for (const [index, item] of rendered.entries()) {
 
   if (index === 0) {
     const suffixReference = signedCheckoutReference(intake.publicFolderPrefix);
-    const suffixResolved = await runArc2({ ...arc2Input, client_reference_id: suffixReference }, mockFetch, Buffer);
+    const suffixSession = { ...session, client_reference_id: suffixReference };
+    const suffixFetch = async (url, options = {}) => {
+      if (url === `https://api.stripe.com/v1/checkout/sessions/${session.id}`) {
+        return { ok: true, status: 200, url, json: async () => suffixSession };
+      }
+      return mockFetch(url, options);
+    };
+    const suffixResolved = await runArc2(arc2Input, suffixFetch, Buffer);
     assert.equal(suffixResolved.preview_folder, preview.folder);
     assert.equal(suffixResolved.status, "PENDING_LIVE_STAGING_EVIDENCE");
     const collisionFetch = async url => {
@@ -267,10 +317,10 @@ for (const [index, item] of rendered.entries()) {
           })
         };
       }
-      return mockFetch(url);
+      return suffixFetch(url);
     };
     await assert.rejects(
-      runArc2({ ...arc2Input, client_reference_id: suffixReference }, collisionFetch, Buffer),
+      runArc2(arc2Input, collisionFetch, Buffer),
       /expected one match.*found 2/
     );
     await assert.rejects(
@@ -281,7 +331,7 @@ for (const [index, item] of rendered.entries()) {
       runArc2({ ...arc2Input, lead_route_evidence_secret: "", lead_route_status: "verified" }, mockFetch, Buffer),
       /lead-route evidence secret/
     );
-    const tamperedProofFetch = async url => {
+    const tamperedProofFetch = async (url, options = {}) => {
       if (url.includes("/git/trees/")) {
         return {
           ok: true,
@@ -295,7 +345,7 @@ for (const [index, item] of rendered.entries()) {
           json: async () => ({ sha: "tampered-proof", content: Buffer.from(tampered, "utf8").toString("base64") })
         };
       }
-      return { ok: false, status: 404, statusText: "Not Found", json: async () => ({}) };
+      return mockFetch(url, options);
     };
     await assert.rejects(runArc2(arc2Input, tamperedProofFetch, Buffer), /approved preview proof hash mismatch/);
 
@@ -304,7 +354,7 @@ for (const [index, item] of rendered.entries()) {
       /<\/head>/i,
       `<!-- ARC_PREVIEW_PROOF_START -->\n<meta name="arc-preview-folder" content="${preview.folder}">\n<meta name="arc-preview-source-sha256" content="${sha256(conflictingFormSource)}">\n<!-- ARC_PREVIEW_PROOF_END -->\n</head>`
     );
-    const conflictingFormFetch = async url => {
+    const conflictingFormFetch = async (url, options = {}) => {
       if (url.includes("/git/trees/")) {
         return {
           ok: true,
@@ -317,7 +367,7 @@ for (const [index, item] of rendered.entries()) {
           json: async () => ({ sha: "conflicting-form-proof", content: Buffer.from(conflictingFormProof, "utf8").toString("base64") })
         };
       }
-      return { ok: false, status: 404, statusText: "Not Found", json: async () => ({}) };
+      return mockFetch(url, options);
     };
     await assert.rejects(runArc2(arc2Input, conflictingFormFetch, Buffer), /lead control semantics/);
   }
@@ -342,26 +392,35 @@ assert.equal(legacyPublisherFetchCalls, 0, "legacy direct publisher must fail be
 
 const validPaidSession = {
   id: "cs_test_contract_negative",
+  object: "checkout.session",
   client_reference_id: rendered[0].preview.folder,
   livemode: false,
+  mode: "payment",
+  status: "complete",
   payment_status: "paid",
   currency: "usd",
   amount_total: 500000,
   payment_link: expectedPaymentLinkId,
   consent: { terms_of_service: "accepted" },
   metadata: { terms_version: expectedTermsVersion },
+  custom_fields: [{ key: "adult_purchaser_ack", dropdown: { value: "accepted" } }],
   customer_details: { email: rendered[0].fixture.customerEmail }
 };
 const paymentExpectations = { expectedPaymentLinkId, expectedTermsVersion };
 assert.throws(() => validatePaidSession({ ...validPaidSession, amount_total: 499999 }, paymentExpectations), /500000 minor units/);
 assert.throws(() => validatePaidSession({ ...validPaidSession, amount_total: "500000" }, paymentExpectations), /500000 minor units/);
+assert.throws(() => validatePaidSession({ ...validPaidSession, object: "payment_intent" }, paymentExpectations), /object identity/);
 assert.throws(() => validatePaidSession({ ...validPaidSession, id: "cs_live_forbidden", livemode: true }, paymentExpectations), /test checkout session id/);
 assert.throws(() => validatePaidSession({ ...validPaidSession, livemode: true }, paymentExpectations), /livemode must be false/);
+assert.throws(() => validatePaidSession({ ...validPaidSession, mode: "subscription" }, paymentExpectations), /completed one-time payment/);
+assert.throws(() => validatePaidSession({ ...validPaidSession, status: "open" }, paymentExpectations), /completed one-time payment/);
 assert.throws(() => validatePaidSession(validPaidSession, { ...paymentExpectations, expectedPaymentLinkId: "" }), /expected Payment Link id/);
 assert.throws(() => validatePaidSession({ ...validPaidSession, payment_link: "plink_1WrongIdentity" }, paymentExpectations), /identity mismatch/);
 assert.throws(() => validatePaidSession({ ...validPaidSession, consent: {} }, paymentExpectations), /consent must be accepted/);
 assert.throws(() => validatePaidSession(validPaidSession, { ...paymentExpectations, expectedTermsVersion: "" }), /expected terms version/);
 assert.throws(() => validatePaidSession({ ...validPaidSession, metadata: { terms_version: "stale-terms" } }, paymentExpectations), /terms version mismatch/);
+assert.throws(() => validatePaidSession({ ...validPaidSession, custom_fields: [] }, paymentExpectations), /adult purchaser acknowledgement/);
+assert.throws(() => validatePaidSession({ ...validPaidSession, customer_email: "different@example.test" }, paymentExpectations), /email fields disagree/);
 assert.throws(() => buildProductionHandoff({
   session: validPaidSession,
   treePaths,
@@ -438,38 +497,103 @@ await assert.rejects(
 
 const arc2PaymentNegativeInput = {
   checkout_session_id: validPaidSession.id,
-  client_reference_id: signedCheckoutReference(rendered[0].preview.folder),
+  stripe_test_api_key: stripeTestApiKey,
   checkout_binding_secret: checkoutBindingSecret,
-  livemode: false,
-  payment_status: "paid",
-  currency: "usd",
-  amount_total_minor_units: "500000",
-  payment_link_id: expectedPaymentLinkId,
   expected_payment_link_id: expectedPaymentLinkId,
-  terms_of_service_consent: "accepted",
-  metadata_terms_version: expectedTermsVersion,
   expected_terms_version: expectedTermsVersion,
-  github_token: "test-token"
+  github_token: "test-token",
+  preview_source_github_owner: previewSourceOwner,
+  preview_source_github_repo: previewSourceRepository,
+  preview_source_github_branch: "main",
+  delivery_github_owner: deliveryOwner,
+  delivery_github_repo: deliveryRepository
 };
-const unreachableFetch = async () => { throw new Error("payment gate unexpectedly reached GitHub"); };
-await assert.rejects(
-  runArc2({ ...arc2PaymentNegativeInput, amount_total_minor_units: "5,000", amount_total: 500000 }, unreachableFetch, Buffer),
-  /amount_total_minor_units/
-);
-await assert.rejects(runArc2({ ...arc2PaymentNegativeInput, amount_total_minor_units: "0500000" }, unreachableFetch, Buffer), /amount_total_minor_units/);
-await assert.rejects(runArc2({ ...arc2PaymentNegativeInput, livemode: true }, unreachableFetch, Buffer), /livemode must be false/);
-await assert.rejects(runArc2({ ...arc2PaymentNegativeInput, github_branch: "arc-preview/unmerged" }, unreachableFetch, Buffer), /approved preview from main/);
-await assert.rejects(runArc2({ ...arc2PaymentNegativeInput, payment_link_id: "plink_1WrongIdentity" }, unreachableFetch, Buffer), /identity mismatch/);
-await assert.rejects(runArc2({ ...arc2PaymentNegativeInput, terms_of_service_consent: "" }, unreachableFetch, Buffer), /consent must be accepted/);
-await assert.rejects(runArc2({ ...arc2PaymentNegativeInput, metadata_terms_version: "" }, unreachableFetch, Buffer), /terms version mismatch/);
-const validSignedReference = arc2PaymentNegativeInput.client_reference_id;
+const authoritativeNegativeSession = {
+  ...validPaidSession,
+  client_reference_id: signedCheckoutReference(rendered[0].preview.folder)
+};
 await assert.rejects(
   runArc2({
     ...arc2PaymentNegativeInput,
+    delivery_github_owner: previewSourceOwner,
+    delivery_github_repo: previewSourceRepository
+  }, async () => { throw new Error("network must not run"); }, Buffer),
+  /private delivery repository separate from the preview source/
+);
+const paymentFetch = override => async (url, options = {}) => {
+  if (url === `https://api.stripe.com/v1/checkout/sessions/${validPaidSession.id}`) {
+    return { ok: true, status: 200, url, json: async () => ({ ...authoritativeNegativeSession, ...override }) };
+  }
+  throw new Error("payment gate unexpectedly reached GitHub");
+};
+await assert.rejects(
+  runArc2(arc2PaymentNegativeInput, paymentFetch({ amount_total: "500000" }), Buffer),
+  /amount_total must be exactly 500000/
+);
+await assert.rejects(runArc2(arc2PaymentNegativeInput, paymentFetch({ amount_total: 499999 }), Buffer), /amount_total must be exactly 500000/);
+await assert.rejects(runArc2(arc2PaymentNegativeInput, paymentFetch({ livemode: true }), Buffer), /livemode must be false/);
+await assert.rejects(runArc2(arc2PaymentNegativeInput, paymentFetch({ mode: "subscription" }), Buffer), /completed one-time payment/);
+await assert.rejects(runArc2(arc2PaymentNegativeInput, paymentFetch({ status: "open" }), Buffer), /completed one-time payment/);
+await assert.rejects(runArc2(arc2PaymentNegativeInput, paymentFetch({ payment_link: "plink_1WrongIdentity" }), Buffer), /identity mismatch/);
+await assert.rejects(runArc2(arc2PaymentNegativeInput, paymentFetch({ consent: {} }), Buffer), /consent must be accepted/);
+await assert.rejects(runArc2(arc2PaymentNegativeInput, paymentFetch({ metadata: { terms_version: "" } }), Buffer), /terms version mismatch/);
+await assert.rejects(runArc2(arc2PaymentNegativeInput, paymentFetch({ custom_fields: [] }), Buffer), /adult purchaser acknowledgement/);
+await assert.rejects(
+  runArc2(arc2PaymentNegativeInput, paymentFetch({ customer_details: { email: "one@example.test" }, customer_email: "two@example.test" }), Buffer),
+  /customer email fields disagree/
+);
+await assert.rejects(runArc2({ ...arc2PaymentNegativeInput, preview_source_github_branch: "arc-preview/unmerged" }, paymentFetch({}), Buffer), /approved preview from main/);
+await assert.rejects(
+  runArc2({ ...arc2PaymentNegativeInput, stripe_test_api_key: "sk_live_forbidden" }, async () => { throw new Error("Stripe fetch must not run"); }, Buffer),
+  /Stripe test API key/
+);
+await assert.rejects(
+  runArc2({ ...arc2PaymentNegativeInput, expected_terms_version: "stale-terms" }, async () => { throw new Error("Stripe fetch must not run"); }, Buffer),
+  /configured terms version/
+);
+const validSignedReference = authoritativeNegativeSession.client_reference_id;
+await assert.rejects(
+  runArc2(arc2PaymentNegativeInput, paymentFetch({
     client_reference_id: `${validSignedReference.slice(0, -1)}${validSignedReference.endsWith("0") ? "1" : "0"}`
-  }, unreachableFetch, Buffer),
+  }), Buffer),
   /checkout reference signature mismatch/
 );
+
+// Caller-mapped Stripe fields cannot override the authenticated session.
+const callerTamperingResult = await runArc2({
+  ...arc2PaymentNegativeInput,
+  client_reference_id: "attacker-deadbeef." + "0".repeat(64),
+  livemode: true,
+  payment_status: "unpaid",
+  amount_total_minor_units: 1,
+  payment_link_id: "plink_1WrongIdentity",
+  terms_of_service_consent: "",
+  metadata_terms_version: "stale",
+  customer_email: "attacker@example.test",
+  verified_lead_notification_email: "verified-roofing@example.test",
+  lead_route_evidence_secret: leadRouteEvidenceSecret
+}, async (url, options = {}) => {
+  if (url === `https://api.stripe.com/v1/checkout/sessions/${validPaidSession.id}`) {
+    return { ok: true, status: 200, url, json: async () => authoritativeNegativeSession };
+  }
+  if (url.includes("/git/trees/")) {
+    return { ok: true, json: async () => ({ truncated: false, tree: treePaths.map(filePath => ({ type: "blob", path: filePath })) }) };
+  }
+  if (url.includes("/contents/")) {
+    const preview = rendered[0].preview;
+    const source = preview.html.trim();
+    const sourceHash = sha256(source);
+    const approved = source.replace(
+      /<\/head>/i,
+      `<!-- ARC_PREVIEW_PROOF_START -->\n<meta name="arc-preview-folder" content="${preview.folder}">\n<meta name="arc-preview-source-sha256" content="${sourceHash}">\n<!-- ARC_PREVIEW_PROOF_END -->\n</head>`
+    );
+    return { ok: true, json: async () => ({ sha: "authoritative-caller-tamper", content: Buffer.from(approved).toString("base64") }) };
+  }
+  throw new Error(`unexpected URL ${url}`);
+}, Buffer);
+assert.equal(callerTamperingResult.customer_email, validPaidSession.customer_details.email);
+assert.equal(callerTamperingResult.payment_link_id, expectedPaymentLinkId);
+assert.equal(callerTamperingResult.amount_total_minor_units, 500000);
 
 console.log(
   `Pipeline contract passed: ${rendered.length}/${rendered.length} signed ARC1 intake payloads, ` +

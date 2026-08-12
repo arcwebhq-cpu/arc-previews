@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const v10Manifest = JSON.parse(await readFile(path.join(root, "qa-v10/manifest.json"), "utf8"));
+const showcaseManifest = JSON.parse(await readFile(path.join(root, "showcases/manifest.json"), "utf8"));
 const mediaManifest = JSON.parse(await readFile(path.join(root, "config/media-manifest.json"), "utf8"));
 const qaFiles = [
   "northline-roofing-qa-6a776d95/index.html",
@@ -28,7 +29,7 @@ async function listHtmlFiles(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
   const files = [];
   for (const entry of entries) {
-    if (entry.name === ".git" || entry.name === "node_modules") continue;
+    if ([".git", ".pages-dist", "node_modules", "test-results"].includes(entry.name)) continue;
     const absolute = path.join(directory, entry.name);
     if (entry.isDirectory()) files.push(...await listHtmlFiles(absolute));
     if (entry.isFile() && entry.name.endsWith(".html")) files.push(absolute);
@@ -37,9 +38,11 @@ async function listHtmlFiles(directory) {
 }
 
 const allHtmlFiles = await listHtmlFiles(root);
+const showcaseFileSet = new Set(showcaseManifest.map(item => path.normalize(item.file)));
 const previewFiles = allHtmlFiles.filter(file =>
   path.basename(file) !== "ARC_MASTER_TEMPLATE.html" &&
-  !path.relative(root, file).split(path.sep).includes("deliveries")
+  !path.relative(root, file).split(path.sep).includes("deliveries") &&
+  !showcaseFileSet.has(path.normalize(path.relative(root, file)))
 );
 const productionFiles = allHtmlFiles.filter(file =>
   path.relative(root, file).split(path.sep).includes("deliveries")
@@ -52,6 +55,45 @@ for (const file of previewFiles) {
   assert.match(html, /<meta\s+name=["']robots["']\s+content=["'][^"']*noindex[^"']*nofollow/i, `${relative}: private robots metadata missing`);
   assert.doesNotMatch(html, /content=["']\s*index\s*,?\s*follow/i, `${relative}: public indexing is still enabled`);
   assert.doesNotMatch(html, emailAddressPattern, `${relative}: an email address leaked into public HTML`);
+}
+
+assert.deepEqual(
+  showcaseManifest.map(({ profile, name, sourceFile, file }) => ({ profile, name, sourceFile, file })),
+  [
+    {
+      profile: "roofing",
+      name: "Ironwood Roofing Concept",
+      sourceFile: "qa-v10/ironwood-roofing-concept-a1000001/index.html",
+      file: "showcases/roofing/index.html"
+    },
+    {
+      profile: "dental",
+      name: "Cedar Dental Concept",
+      sourceFile: "qa-v10/cedar-dental-concept-b2000001/index.html",
+      file: "showcases/dental/index.html"
+    },
+    {
+      profile: "finance",
+      name: "Clearwater Finance Concept",
+      sourceFile: "qa-v10/clearwater-finance-concept-b2000010/index.html",
+      file: "showcases/finance/index.html"
+    }
+  ],
+  "The public showcase aliases changed without an explicit contract update"
+);
+for (const showcase of showcaseManifest) {
+  const html = await readFile(path.join(root, showcase.file), "utf8");
+  const sourceHtml = await readFile(path.join(root, showcase.sourceFile), "utf8");
+  assert.match(sourceHtml, /data-arc-site-mode=["']preview["']/i, `${showcase.sourceFile}: private source stopped being a preview`);
+  assert.match(sourceHtml, /data-arc-checkout[^>]+buy\.stripe\.com/i, `${showcase.sourceFile}: private v10 checkout contract was weakened`);
+  assert.match(html, /arc-template-version["']\s+content=["']10\.0/i, `${showcase.file}: v10 marker missing`);
+  assert.match(html, /<meta\s+name=["']robots["']\s+content=["'][^"']*noindex[^"']*nofollow/i, `${showcase.file}: noindex/nofollow missing`);
+  assert.match(html, new RegExp(`<meta\\s+name=["']arc-showcase-profile["']\\s+content=["']${showcase.profile}["']`, "i"), `${showcase.file}: showcase profile missing`);
+  assert.match(html, /<meta\s+name=["']arc-site-mode["']\s+content=["']showcase["']/i, `${showcase.file}: showcase metadata mode missing`);
+  assert.match(html, /data-arc-site-mode=["']showcase["']/i, `${showcase.file}: inert showcase mode missing`);
+  assert.match(html, /Fictional ARC design concept — not a real business\. Checkout and lead collection are disabled\./, `${showcase.file}: visible fictional-concept disclosure missing`);
+  assert.doesNotMatch(html, /<form\b|\bdata-netlify\b|\bnetlify-honeypot\b|data-arc-checkout|buy\.stripe\.com/i, `${showcase.file}: checkout or customer lead submission remained active`);
+  assert.doesNotMatch(html, emailAddressPattern, `${showcase.file}: an email address leaked into showcase HTML`);
 }
 
 for (const file of productionFiles) {
@@ -133,10 +175,11 @@ const arc1EmailGate = await readFile(path.join(root, "zapier/arc1_preview_email_
 const arc2PrPublisher = await readFile(path.join(root, "zapier/arc2_publish_delivery_pr.js"), "utf8");
 const arc2PrMerge = await readFile(path.join(root, "zapier/arc2_merge_delivery_pr.js"), "utf8");
 const arc2EmailGate = await readFile(path.join(root, "zapier/arc2_delivery_email_gate.js"), "utf8");
+const arc2CustomerControl = await readFile(path.join(root, "zapier/arc2_verify_customer_control.js"), "utf8");
 new Function("inputData", validator);
 new Function("inputData", `return (async () => {${arc1}})()`);
 new Function("inputData", "fetch", "Buffer", `return (async () => {${arc2}})()`);
-for (const source of [arc1PrPublisher, arc1PrMerge, arc1EmailGate, arc2LeadRouteVerifier, arc2PrPublisher, arc2PrMerge, arc2EmailGate]) {
+for (const source of [arc1PrPublisher, arc1PrMerge, arc1EmailGate, arc2LeadRouteVerifier, arc2PrPublisher, arc2PrMerge, arc2EmailGate, arc2CustomerControl]) {
   new Function("inputData", "fetch", "Buffer", `return (async () => {${source}})()`);
 }
 assert.ok(validator.includes("customer_email_not_exposed_pass"), "Validator does not block requester-email exposure");
@@ -157,6 +200,10 @@ assert.match(arc1, /test-mode Payment Link/, "ARC1 does not require a test-mode 
 assert.match(arc1, /checkout_binding_secret/, "ARC1 does not cryptographically bind checkout to the preview folder");
 assert.match(arc1, /HMAC/, "ARC1 checkout binding is not HMAC based");
 assert.match(arc2, /amount_total_minor_units/, "ARC2 amount semantics are ambiguous");
+assert.match(arc2, /api\.stripe\.com\/v1\/checkout\/sessions/, "ARC2 does not retrieve the authoritative Stripe session");
+assert.match(arc2, /preview_source_github_owner/, "ARC2 does not separate its public preview source identity");
+assert.match(arc2, /delivery_github_owner/, "ARC2 does not require a separate private delivery repository identity");
+assert.doesNotMatch(arc2, /github\.io|pages_base_url|production_url:/i, "ARC2 still treats ARC Pages as paid-delivery hosting");
 assert.match(arc2, /livemode must be false/, "ARC2 does not reject live mode");
 assert.match(arc2, /terms_of_service consent must be accepted/, "ARC2 does not require checkout terms consent");
 assert.match(arc2, /checkout reference signature mismatch/, "ARC2 does not verify the signed checkout reference");
@@ -177,6 +224,7 @@ assert.match(arc1PrMerge, /merge_method:\s*["']squash["']/, "ARC1 does not squas
 assert.match(arc1EmailGate, /arc-preview-email-v1/, "ARC1 preview-email claim is not bound to immutable preview identity");
 assert.doesNotMatch(arc1EmailGate, /sha256Hex\(`\$\{emailStateToken\}/, "ARC1 preview-email claim still depends on a rotatable caller token");
 assert.match(arc2PrPublisher, /publish_mode|pull.request|delivery candidate/i, "ARC2 paid delivery is not represented as a PR candidate");
+assert.match(arc2PrPublisher, /repositoryMetadata\.private\s*!==\s*true/, "ARC2 can write paid delivery bytes to a public repository");
 assert.doesNotMatch(arc2PrPublisher, /method:\s*["']PATCH["']/, "ARC2 PR publisher can update an existing ref directly");
 assert.match(arc2PrPublisher, /current staging source manifest changed/, "ARC2 publisher does not reverify the current staging source manifest");
 assert.match(arc2PrPublisher, /immutable staging response or noindex headers changed/, "ARC2 publisher does not reverify immutable processed staging bytes and headers");
@@ -186,5 +234,12 @@ assert.match(arc2EmailGate, /email_claim_binding_secret/, "ARC2 delivery-email r
 assert.match(arc2EmailGate, /recipient_hmac_sha256/, "ARC2 delivery-email public claim does not use a recipient HMAC");
 assert.doesNotMatch(arc2EmailGate, /recipient_sha256:\s*recipientSha256/, "ARC2 delivery-email public claim exposes a raw recipient digest");
 assert.match(arc2EmailGate, /state_write_required_before_email:\s*true/, "ARC2 email can bypass the private durable state write");
+assert.match(arc2EmailGate, /arc-customer-control-evidence-signature-v1/, "ARC2 email lacks signed customer-control evidence");
+assert.match(arc2EmailGate, /payment_evidence_sha256/, "ARC2 email is not bound to payment evidence");
+assert.doesNotMatch(arc2EmailGate, /WAITING_FOR_PAGES|pages_base_url|github\.io/i, "ARC2 email still depends on public Pages delivery");
+assert.doesNotMatch(arc2CustomerControl, /method:\s*["'](?:POST|PUT|PATCH|DELETE)["']/, "Customer-control verifier is not read-only");
+assert.match(arc2CustomerControl, /permissions\?\.admin\s*!==\s*true/, "Customer-control verifier does not prove GitHub admin control");
+assert.match(arc2CustomerControl, /account\.owner_ids/, "Customer-control verifier does not prove Netlify account ownership");
+assert.match(arc2CustomerControl, /customer repository must contain only the exact four-file delivery bundle/, "Customer-control verifier does not bind the exact repository bundle");
 
-console.log(`Static audit passed: ${previewFiles.length}/${previewFiles.length} private previews, ${productionFiles.length} production deliveries, ${qaFiles.length} legacy QA sites, ${launchFixtures.length} launch fixtures, and ${v10Manifest.length} total v10 profile fixtures.`);
+console.log(`Static audit passed: ${previewFiles.length}/${previewFiles.length} private previews, ${showcaseManifest.length} inert public showcase aliases, ${productionFiles.length} production deliveries, ${qaFiles.length} legacy QA sites, ${launchFixtures.length} launch fixtures, and ${v10Manifest.length} total v10 profile fixtures.`);

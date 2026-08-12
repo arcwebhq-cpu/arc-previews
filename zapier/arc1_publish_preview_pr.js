@@ -200,6 +200,51 @@ for (const privateValue of [
   }
 }
 const contentSha256 = await sha256Hex(sourceHtml);
+const renderEvidenceRaw = clean(inputData.render_evidence_private);
+const renderEvidenceSignature = clean(inputData.render_evidence_hmac_sha256).toLowerCase();
+let renderEvidence;
+try {
+  renderEvidence = JSON.parse(renderEvidenceRaw);
+} catch (error) {
+  throw new Error("ARC_PREVIEW_PUBLISH_INVALID: render evidence JSON");
+}
+const renderEvidenceFields = [
+  "version", "scope", "preview_folder", "content_sha256", "intake_evidence_sha256",
+  "state_digest_sha256", "submission_data_sha256", "asset_manifest_sha256"
+];
+if (
+  !renderEvidence || typeof renderEvidence !== "object" || Array.isArray(renderEvidence) ||
+  JSON.stringify(Object.keys(renderEvidence)) !== JSON.stringify(renderEvidenceFields) ||
+  JSON.stringify(renderEvidence) !== renderEvidenceRaw ||
+  !/^[a-f0-9]{64}$/.test(renderEvidenceSignature)
+) {
+  throw new Error("ARC_PREVIEW_PUBLISH_INVALID: canonical render evidence fields");
+}
+const renderEvidenceSignatureBytes = Uint8Array.from(
+  renderEvidenceSignature.match(/../g),
+  byte => Number.parseInt(byte, 16)
+);
+if (!(await globalThis.crypto.subtle.verify(
+  "HMAC",
+  evidenceKey,
+  renderEvidenceSignatureBytes,
+  evidenceEncoder.encode(`arc1-render-evidence-signature-v1\n${renderEvidenceRaw}`)
+))) {
+  throw new Error("ARC_PREVIEW_PUBLISH_INVALID: render evidence HMAC mismatch");
+}
+if (
+  renderEvidence.version !== "arc1-render-evidence-v1" ||
+  renderEvidence.scope !== "signed-sanitized-preview-render" ||
+  renderEvidence.preview_folder !== previewFolder ||
+  renderEvidence.content_sha256 !== contentSha256 ||
+  clean(inputData.render_content_sha256).toLowerCase() !== contentSha256 ||
+  renderEvidence.intake_evidence_sha256 !== intakeEvidenceSha256 ||
+  renderEvidence.state_digest_sha256 !== clean(intakeEvidence.state_digest_sha256) ||
+  renderEvidence.submission_data_sha256 !== clean(intakeEvidence.submission_data_sha256) ||
+  renderEvidence.asset_manifest_sha256 !== assetManifestSha256
+) {
+  throw new Error("ARC_PREVIEW_PUBLISH_INVALID: render evidence is not bound to the exact sanitized preview");
+}
 const proofBlock = `<!-- ARC_PREVIEW_PROOF_START -->\n<meta name="arc-preview-folder" content="${previewFolder}">\n<meta name="arc-preview-source-sha256" content="${contentSha256}">\n<!-- ARC_PREVIEW_PROOF_END -->\n`;
 const publishedHtml = sourceHtml.replace(/<\/head>/i, `${proofBlock}</head>`);
 

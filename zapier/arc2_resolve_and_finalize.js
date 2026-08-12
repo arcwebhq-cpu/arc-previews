@@ -1,34 +1,40 @@
-// ARC2 Code step — resolve the exact preview, finalize it, and prepare a GitHub write.
+// ARC2 Code step — retrieve the authoritative Stripe test Checkout Session,
+// resolve the exact approved preview, finalize it, and prepare a delivery candidate.
 const clean = value => String(value == null ? "" : value).trim();
 const sessionId = clean(inputData.checkout_session_id || inputData.session_id);
-const rawClientReferenceId = clean(inputData.client_reference_id);
+const stripeTestApiKey = clean(inputData.stripe_test_api_key);
 const checkoutBindingSecret = clean(inputData.checkout_binding_secret);
-const livemode = clean(inputData.livemode).toLowerCase();
-const paymentStatus = clean(inputData.payment_status).toLowerCase();
-const currency = clean(inputData.currency).toLowerCase();
-const amountMinorUnits = clean(inputData.amount_total_minor_units);
-const paymentLinkId = clean(inputData.payment_link_id);
 const expectedPaymentLinkId = clean(inputData.expected_payment_link_id);
-const termsConsent = clean(inputData.terms_of_service_consent).toLowerCase();
-const termsVersion = clean(inputData.metadata_terms_version);
-const expectedTermsVersion = clean(inputData.expected_terms_version);
+const expectedTermsVersion = "2026-08-11";
+const owner = clean(inputData.preview_source_github_owner || inputData.github_owner);
+const repository = clean(inputData.preview_source_github_repo || inputData.github_repo);
+const branch = clean(inputData.preview_source_github_branch || inputData.github_branch || "main");
+const token = clean(inputData.github_token);
+const deliveryOwner = clean(inputData.delivery_github_owner);
+const deliveryRepository = clean(inputData.delivery_github_repo);
 if (!/^cs_test_[A-Za-z0-9_]+$/.test(sessionId)) throw new Error("ARC_PAYMENT_INVALID: test checkout session id");
-if (!rawClientReferenceId) throw new Error("ARC_FOLDER_NOT_FOUND: client_reference_id is empty");
-if (livemode !== "false") throw new Error("ARC_PAYMENT_INVALID: livemode must be false");
-if (paymentStatus !== "paid") throw new Error("ARC_PAYMENT_INVALID: session is not paid");
-if (currency !== "usd") throw new Error("ARC_PAYMENT_INVALID: currency must be usd");
-if (amountMinorUnits !== "500000") {
-  throw new Error("ARC_PAYMENT_INVALID: amount_total_minor_units must be exactly 500000 ($5,000.00)");
+if (!/^(?:sk|rk)_test_[A-Za-z0-9_]{12,}$/.test(stripeTestApiKey)) {
+  throw new Error("ARC_PAYMENT_INVALID: Stripe test API key is required");
 }
 if (!/^plink_[A-Za-z0-9]+$/.test(expectedPaymentLinkId)) throw new Error("ARC_PAYMENT_INVALID: expected Payment Link id");
-if (paymentLinkId !== expectedPaymentLinkId) throw new Error("ARC_PAYMENT_INVALID: Payment Link identity mismatch");
-if (termsConsent !== "accepted") throw new Error("ARC_PAYMENT_INVALID: terms_of_service consent must be accepted");
-if (!expectedTermsVersion) throw new Error("ARC_PAYMENT_INVALID: expected terms version");
-if (termsVersion !== expectedTermsVersion) throw new Error("ARC_PAYMENT_INVALID: terms version mismatch");
+if (clean(inputData.expected_terms_version) !== expectedTermsVersion) {
+  throw new Error("ARC_PAYMENT_INVALID: configured terms version must match the static ARC checkout contract");
+}
 if (checkoutBindingSecret.length < 32 || checkoutBindingSecret.length > 256) {
   throw new Error("ARC_PAYMENT_INVALID: checkout binding secret must be 32–256 characters");
 }
-if (!globalThis.crypto?.subtle || typeof TextEncoder !== "function") {
+if (!token) throw new Error("ARC_GITHUB_INVALID: preview-source github_token is required");
+if (branch !== "main") throw new Error("ARC_GITHUB_INVALID: ARC2 must resolve an approved preview from main");
+if (!/^[A-Za-z0-9_.-]+$/.test(owner) || !/^[A-Za-z0-9_.-]+$/.test(repository) ||
+    !/^[A-Za-z0-9._/-]+$/.test(branch)) {
+  throw new Error("ARC_GITHUB_INVALID: preview-source owner, repository, or branch");
+}
+if (!/^[A-Za-z0-9_.-]+$/.test(deliveryOwner) || !/^[A-Za-z0-9_.-]+$/.test(deliveryRepository) ||
+    deliveryOwner.toLowerCase() === "arcwebhq-cpu" && deliveryRepository.toLowerCase() === "arc-previews" ||
+    deliveryOwner.toLowerCase() === owner.toLowerCase() && deliveryRepository.toLowerCase() === repository.toLowerCase()) {
+  throw new Error("ARC_DELIVERY_REPOSITORY_INVALID: an explicit private delivery repository separate from the preview source is required");
+}
+if (!globalThis.crypto?.subtle || typeof TextEncoder !== "function" || typeof Buffer !== "function") {
   throw new Error("ARC_CRYPTO_UNAVAILABLE: HMAC-SHA-256 and SHA-256 are required");
 }
 const encoder = new TextEncoder();
@@ -36,6 +42,66 @@ const sha256Hex = async value => {
   const digest = await globalThis.crypto.subtle.digest("SHA-256", encoder.encode(value));
   return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("");
 };
+
+// The Stripe trigger payload and caller-mapped fields are notification hints only.
+// Every payment, consent, customer, and preview-binding fact below comes from this
+// authenticated read of the exact test-mode Checkout Session.
+const stripeSessionUrl = `https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(sessionId)}`;
+const stripeResponse = await fetch(stripeSessionUrl, {
+  method: "GET",
+  headers: {
+    Accept: "application/json",
+    Authorization: `Basic ${Buffer.from(`${stripeTestApiKey}:`, "utf8").toString("base64")}`
+  },
+  redirect: "error"
+});
+if (stripeResponse.url && stripeResponse.url !== stripeSessionUrl) {
+  throw new Error("ARC_PAYMENT_INVALID: Stripe API redirect rejected");
+}
+if (!stripeResponse.ok) {
+  throw new Error(`ARC_PAYMENT_INVALID: Stripe Checkout Session retrieval failed (${stripeResponse.status})`);
+}
+const session = await stripeResponse.json();
+if (!session || typeof session !== "object" || Array.isArray(session) || session.object !== "checkout.session" || clean(session.id) !== sessionId) {
+  throw new Error("ARC_PAYMENT_INVALID: Stripe Checkout Session identity mismatch");
+}
+const rawClientReferenceId = clean(session.client_reference_id);
+const paymentLinkId = clean(typeof session.payment_link === "object" ? session.payment_link?.id : session.payment_link);
+const termsConsent = clean(session.consent?.terms_of_service).toLowerCase();
+const termsVersion = clean(session.metadata?.terms_version);
+const sessionCustomerDetailsEmail = clean(session.customer_details?.email).toLowerCase();
+const sessionCustomerEmail = clean(session.customer_email).toLowerCase();
+if (sessionCustomerDetailsEmail && sessionCustomerEmail && sessionCustomerDetailsEmail !== sessionCustomerEmail) {
+  throw new Error("ARC_HANDOFF_INVALID: Stripe customer email fields disagree");
+}
+const customerEmail = sessionCustomerDetailsEmail || sessionCustomerEmail;
+const adultAcknowledgements = (Array.isArray(session.custom_fields) ? session.custom_fields : []).filter(field =>
+  field && typeof field === "object" && clean(field.key) === "adult_purchaser_ack"
+);
+const adultAcknowledgement = clean(
+  adultAcknowledgements[0]?.dropdown?.value ||
+  adultAcknowledgements[0]?.text?.value ||
+  adultAcknowledgements[0]?.numeric?.value
+).toLowerCase();
+if (!rawClientReferenceId) throw new Error("ARC_FOLDER_NOT_FOUND: client_reference_id is empty");
+if (session.livemode !== false) throw new Error("ARC_PAYMENT_INVALID: livemode must be false");
+if (clean(session.mode).toLowerCase() !== "payment" || clean(session.status).toLowerCase() !== "complete") {
+  throw new Error("ARC_PAYMENT_INVALID: Checkout Session must be a completed one-time payment");
+}
+if (clean(session.payment_status).toLowerCase() !== "paid") throw new Error("ARC_PAYMENT_INVALID: session is not paid");
+if (clean(session.currency).toLowerCase() !== "usd") throw new Error("ARC_PAYMENT_INVALID: currency must be usd");
+if (!Number.isSafeInteger(session.amount_total) || session.amount_total !== 500000) {
+  throw new Error("ARC_PAYMENT_INVALID: amount_total must be exactly 500000 minor units ($5,000.00)");
+}
+if (paymentLinkId !== expectedPaymentLinkId) throw new Error("ARC_PAYMENT_INVALID: Payment Link identity mismatch");
+if (termsConsent !== "accepted") throw new Error("ARC_PAYMENT_INVALID: terms_of_service consent must be accepted");
+if (termsVersion !== expectedTermsVersion) throw new Error("ARC_PAYMENT_INVALID: terms version mismatch");
+if (adultAcknowledgements.length !== 1 || adultAcknowledgement !== "accepted") {
+  throw new Error("ARC_PAYMENT_INVALID: adult purchaser acknowledgement must be accepted");
+}
+if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
+  throw new Error("ARC_HANDOFF_INVALID: Stripe customer email");
+}
 const signedReference = rawClientReferenceId.match(/^((?:[a-z0-9][a-z0-9-]*-[a-f0-9]{8})|(?:[a-f0-9]{8}))\.([a-f0-9]{64})$/i);
 if (!signedReference) throw new Error("ARC_PAYMENT_INVALID: signed checkout reference");
 const clientReferenceId = signedReference[1].toLowerCase();
@@ -45,21 +111,12 @@ const checkoutBindingKey = await globalThis.crypto.subtle.importKey(
   encoder.encode(checkoutBindingSecret),
   { name: "HMAC", hash: "SHA-256" },
   false,
-  ["verify"]
+  ["sign", "verify"]
 );
 if (!(await globalThis.crypto.subtle.verify("HMAC", checkoutBindingKey, checkoutSignature, encoder.encode(clientReferenceId)))) {
   throw new Error("ARC_PAYMENT_INVALID: checkout reference signature mismatch");
 }
 
-const owner = clean(inputData.github_owner || "arcwebhq-cpu");
-const repository = clean(inputData.github_repo || "arc-previews");
-const branch = clean(inputData.github_branch || "main");
-const token = clean(inputData.github_token);
-if (!token) throw new Error("ARC_GITHUB_INVALID: github_token is required");
-if (branch !== "main") throw new Error("ARC_GITHUB_INVALID: ARC2 must resolve an approved preview from main");
-if (!/^[A-Za-z0-9_.-]+$/.test(owner) || !/^[A-Za-z0-9_.-]+$/.test(repository) || !/^[A-Za-z0-9._/-]+$/.test(branch)) {
-  throw new Error("ARC_GITHUB_INVALID: owner, repository, or branch");
-}
 const headers = {
   Accept: "application/vnd.github+json",
   Authorization: `Bearer ${token}`,
@@ -123,27 +180,18 @@ if (/noindex/i.test(html.match(/<meta\s+name=["']robots["'][^>]*>/i)?.[0] || "")
 if (/\[\[[A-Z0-9_]+\]\]/.test(html)) throw new Error("ARC_FINALIZE_FAILED: unresolved placeholder");
 if (/<aside\b[^>]*arc-preview-toolbar|data-arc-checkout|buy\.stripe\.com/i.test(html)) throw new Error("ARC_FINALIZE_FAILED: preview payment controls remained in production");
 
-const customerEmail = clean(inputData.customer_email).toLowerCase();
-if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) throw new Error("ARC_HANDOFF_INVALID: customer email");
 const verifiedLeadNotificationEmail = clean(inputData.verified_lead_notification_email).toLowerCase();
 const leadRouteEvidenceSecret = clean(inputData.lead_route_evidence_secret);
 const productionFolder = `deliveries/${previewFolder}`;
 const productionPath = `${productionFolder}/index.html`;
-let pagesBaseUrl;
-try {
-  pagesBaseUrl = new URL(clean(inputData.pages_base_url || `https://${owner}.github.io/${repository}`));
-} catch (error) {
-  throw new Error("ARC_HANDOFF_INVALID: Pages base URL");
-}
-if (pagesBaseUrl.protocol !== "https:" || pagesBaseUrl.username || pagesBaseUrl.password || pagesBaseUrl.search || pagesBaseUrl.hash) {
-  throw new Error("ARC_HANDOFF_INVALID: Pages base URL must be a plain HTTPS URL");
-}
-pagesBaseUrl.pathname = `${pagesBaseUrl.pathname.replace(/\/+$/, "")}/${productionFolder}/`;
-const productionUrl = pagesBaseUrl.toString();
-replaceOrInsertHead(/<link\s+rel=["']canonical["'][^>]*>/i, `<link rel="canonical" href="${productionUrl}">`);
-replaceOrInsertHead(/<meta\s+property=["']og:url["'][^>]*>/i, `<meta property="og:url" content="${productionUrl}">`);
+// The final customer URL is unknowable until the customer-controlled Netlify
+// site exists. Remove any source-preview URL instead of publishing a false
+// canonical or coupling paid delivery to ARC Pages.
+html = html
+  .replace(/<link\s+rel=["']canonical["'][^>]*>\s*/gi, "")
+  .replace(/<meta\s+property=["']og:url["'][^>]*>\s*/gi, "");
 const netlifyConfig = `[build]\n  publish = "."\n\n[[headers]]\n  for = "/*"\n  [headers.values]\n    X-Content-Type-Options = "nosniff"\n    X-Frame-Options = "DENY"\n    X-Robots-Tag = "noindex, nofollow, noarchive"\n    Referrer-Policy = "strict-origin-when-cross-origin"\n    Permissions-Policy = "camera=(), microphone=(), geolocation=()"\n`;
-const usageGuide = `# Launch checklist\n\nThis production website is ready to deploy.\n\n1. In Netlify, enable **Forms > Form detection**, then redeploy once.\n2. In **Project configuration > Notifications > Form submission notifications**, add the separately verified lead-notification address.\n3. Submit one test lead and confirm it arrives before connecting the final domain.\n4. Connect the business domain and replace the temporary canonical URL with the final HTTPS domain.\n5. Only after the final domain and lead route are verified, remove the staging-only \`X-Robots-Tag\` noindex header from \`netlify.toml\` and redeploy.\n\nDo not publish unverified claims, reviews, licenses, prices, or results.\n`;
+const usageGuide = `# Launch checklist\n\nThis is a private pre-launch handoff bundle. It is not proof of repository ownership, Netlify ownership, transfer, or launch readiness.\n\nARC must place these exact four files into a customer-approved repository and Netlify site through a separate secure handoff. There is no one-click transfer promise. The delivery email remains blocked until ARC's read-only verifier proves that the authenticated customer controls both destinations and that their bytes match this paid bundle.\n\n1. Complete the separately approved secure repository and Netlify setup.\n2. Confirm the new GitHub repository and Netlify site are in accounts the customer controls.\n3. In Netlify, enable **Forms > Form detection**, then redeploy once.\n4. In **Project configuration > Notifications > Form submission notifications**, add the separately verified lead-notification address.\n5. Submit one test lead and confirm it arrives before connecting the final domain.\n6. Connect the business domain and add its final HTTPS URL as the canonical and Open Graph URL.\n7. Only after the final domain and lead route are verified, remove the staging-only \`X-Robots-Tag\` noindex header from \`netlify.toml\` and redeploy.\n\nDo not publish unverified claims, reviews, licenses, prices, or results.\n`;
 const supportedLeadControlNames = new Set(["form-name", "bot-field", "name", "email", "phone", "project_details"]);
 const canonicalAttributes = (tag, tagName) => {
   const match = tag.match(new RegExp(`^<${tagName}\\b([\\s\\S]*?)>$`, "i"));
@@ -243,7 +291,6 @@ for (const [label, publicContent] of [["production HTML", html], ["Netlify confi
     }
   }
 }
-const deployUrl = `https://app.netlify.com/start/deploy?repository=${encodeURIComponent(`https://github.com/${owner}/${repository}`)}&create_from_path=${encodeURIComponent(productionFolder)}`;
 const productionSha256 = await sha256Hex(html);
 const bundleArtifacts = [
   { path: productionPath, content: html },
@@ -251,10 +298,38 @@ const bundleArtifacts = [
   { path: `${productionFolder}/USAGE.md`, content: usageGuide }
 ];
 const bundleFingerprint = await sha256Hex(bundleArtifacts.map(artifact => `${artifact.path}\0${artifact.content}\0`).join(""));
+const paymentEvidence = JSON.stringify({
+  version: "arc2-payment-evidence-v1",
+  scope: "authoritative-stripe-test-checkout-session",
+  checkout_session_id: sessionId,
+  client_reference_id_sha256: await sha256Hex(rawClientReferenceId),
+  preview_folder: previewFolder,
+  production_content_sha256: productionSha256,
+  bundle_fingerprint: bundleFingerprint,
+  customer_email_sha256: await sha256Hex(customerEmail),
+  livemode: false,
+  mode: "payment",
+  status: "complete",
+  payment_status: "paid",
+  currency: "usd",
+  amount_total_minor_units: 500000,
+  payment_link_id: paymentLinkId,
+  terms_version: termsVersion,
+  adult_purchaser_acknowledgement: "accepted"
+});
+const paymentEvidenceSignatureBytes = await globalThis.crypto.subtle.sign(
+  "HMAC",
+  checkoutBindingKey,
+  encoder.encode(`arc2-payment-evidence-signature-v1\n${paymentEvidence}`)
+);
+const paymentEvidenceHmacSha256 = [...new Uint8Array(paymentEvidenceSignatureBytes)]
+  .map(byte => byte.toString(16).padStart(2, "0"))
+  .join("");
 return {
   status: hasLeadForm ? "PENDING_LIVE_STAGING_EVIDENCE" : "READY_FOR_DELIVERY_PR",
   delivery_pr_write_unlocked: !hasLeadForm,
-  payment_verification_status: "verified_test_payment",
+  payment_verification_status: "verified_test_payment_from_stripe_api",
+  stripe_session_retrieved: true,
   checkout_session_id: sessionId,
   client_reference_id: rawClientReferenceId,
   livemode: false,
@@ -264,6 +339,9 @@ return {
   payment_link_id: paymentLinkId,
   terms_of_service_consent: "accepted",
   terms_version: termsVersion,
+  adult_purchaser_acknowledgement: "accepted",
+  payment_evidence_private: paymentEvidence,
+  payment_evidence_hmac_sha256: paymentEvidenceHmacSha256,
   dedupe_key: `arc2:${sessionId}`,
   preview_folder: previewFolder,
   preview_file_path: previewPath,
@@ -278,8 +356,9 @@ return {
   production_html_character_count: html.length,
   production_content_sha256: productionSha256,
   bundle_fingerprint: bundleFingerprint,
-  production_url: productionUrl,
-  deploy_url: deployUrl,
+  secure_customer_setup_required: true,
+  preview_source_repository: `${owner}/${repository}`,
+  private_delivery_repository: `${deliveryOwner}/${deliveryRepository}`,
   customer_email: customerEmail,
   lead_route_status: hasLeadForm ? "pending_live_staging_evidence" : "not_required",
   lead_route_evidence_required: hasLeadForm,

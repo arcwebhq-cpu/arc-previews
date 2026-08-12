@@ -6,6 +6,7 @@ const publisherSource = await readFile(new URL("../zapier/arc2_publish_delivery_
 const mergeSource = await readFile(new URL("../zapier/arc2_merge_delivery_pr.js", import.meta.url), "utf8");
 const emailGateSource = await readFile(new URL("../zapier/arc2_delivery_email_gate.js", import.meta.url), "utf8");
 const resolverSource = await readFile(new URL("../zapier/arc2_resolve_and_finalize.js", import.meta.url), "utf8");
+const customerControlVerifierSource = await readFile(new URL("../zapier/arc2_verify_customer_control.js", import.meta.url), "utf8");
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 const runPublisher = new AsyncFunction("inputData", "fetch", "Buffer", publisherSource);
 const runMerge = new AsyncFunction("inputData", "fetch", "Buffer", mergeSource);
@@ -23,6 +24,8 @@ const makeResponse = (status, body = {}, url = "", headerValues = {}) => ({
 });
 
 const folder = "summit-roofing-a1b2c3d4";
+const deliveryOwner = "arc-delivery-owner";
+const deliveryRepository = "arc-delivery-private";
 const deliveryRoot = `deliveries/${folder}`;
 const paths = [
   `${deliveryRoot}/index.html`,
@@ -30,16 +33,11 @@ const paths = [
   `${deliveryRoot}/USAGE.md`,
   `${deliveryRoot}/.arc-handoff.json`
 ];
-const pagesBaseUrl = "https://arcwebhq-cpu.github.io/arc-previews";
-const productionUrl = `${pagesBaseUrl}/${deliveryRoot}/`;
-const deployUrl = `https://app.netlify.com/start/deploy?repository=${encodeURIComponent("https://github.com/arcwebhq-cpu/arc-previews")}&create_from_path=${encodeURIComponent(deliveryRoot)}`;
 const productionHtml = `<!doctype html><html><head>
 <meta name="robots" content="index,follow,max-image-preview:large">
 <meta name="arc-template-version" content="10.0">
 <meta name="arc-preview-folder" content="${folder}">
 <meta name="arc-preview-source-sha256" content="${"a".repeat(64)}">
-<link rel="canonical" href="${productionUrl}">
-<meta property="og:url" content="${productionUrl}">
 </head><body data-arc-site-mode="production"><main><h1>Summit Roofing</h1><form name="summit-lead" method="POST" data-netlify="true" netlify-honeypot="bot-field" action="/?submitted=1"><input type="hidden" name="form-name" value="summit-lead"><p hidden><label>Leave blank<input name="bot-field"></label></p><label>Name<input type="text" name="name" required></label><label>Email<input type="email" name="email" required></label><label>Phone<input type="tel" name="phone"></label><label>Project details<textarea name="project_details" required></textarea></label><button type="submit">Send</button></form></main></body></html>
 `;
 const processedStagingHtml = productionHtml
@@ -89,6 +87,9 @@ const stagingSiteUrl = "https://arc-lead-route-a1b2c3d4.netlify.app/";
 const stagingDeployUrl = `https://${stagingDeployId}--arc-lead-route-a1b2c3d4.netlify.app/`;
 const formName = "summit-lead";
 const netlifyToken = "mock-netlify-token-never-public";
+const customerControlEvidenceSecret = "arc2-static-customer-control-evidence-secret-v1";
+const customerSiteUrl = "https://buyer-site.netlify.app/";
+const customerDeployUrl = "https://623e4567-e89b-42d3-a456-426614174000--buyer-site.netlify.app/";
 const netlifyFiles = [
   { path: "/USAGE.md", sha: "1".repeat(40), size: Buffer.byteLength(usageGuide), mime_type: "text/markdown" },
   { path: "/index.html", sha: "2".repeat(40), size: Buffer.byteLength(productionHtml), mime_type: "text/html" },
@@ -110,6 +111,73 @@ const inboxReceiptEvidenceSha256 = sha256("canonical-authoritative-inbox-receipt
 const clientReferenceId = `${folder}.${createHmac("sha256", checkoutSecret).update(folder).digest("hex")}`;
 const folderSuffix = folder.slice(-8);
 const suffixClientReferenceId = `${folderSuffix}.${createHmac("sha256", checkoutSecret).update(folderSuffix).digest("hex")}`;
+const signPaymentEvidence = (reference = clientReferenceId, overrides = {}) => {
+  const evidence = {
+    version: "arc2-payment-evidence-v1",
+    scope: "authoritative-stripe-test-checkout-session",
+    checkout_session_id: checkoutSession,
+    client_reference_id_sha256: sha256(reference),
+    preview_folder: folder,
+    production_content_sha256: sha256(productionHtml),
+    bundle_fingerprint: fingerprint,
+    customer_email_sha256: sha256(customerEmail),
+    livemode: false,
+    mode: "payment",
+    status: "complete",
+    payment_status: "paid",
+    currency: "usd",
+    amount_total_minor_units: 500000,
+    payment_link_id: "plink_arc2test123",
+    terms_version: "2026-08-11",
+    adult_purchaser_acknowledgement: "accepted",
+    ...overrides
+  };
+  const canonical = JSON.stringify(evidence);
+  return {
+    evidence,
+    canonical,
+    signature: createHmac("sha256", checkoutSecret)
+      .update(`arc2-payment-evidence-signature-v1\n${canonical}`)
+      .digest("hex")
+  };
+};
+const signedPaymentEvidence = signPaymentEvidence();
+const paymentEvidenceSha256 = sha256(signedPaymentEvidence.canonical);
+const signCustomerControlEvidence = mergeCommitSha => {
+  const evidence = {
+    version: "arc-customer-control-evidence-v1",
+    scope: "customer-owned-github-and-netlify",
+    preview_folder: folder,
+    bundle_fingerprint: fingerprint,
+    payment_evidence_sha256: paymentEvidenceSha256,
+    merge_commit_sha: mergeCommitSha,
+    recipient_hmac_sha256: createHmac("sha256", customerControlEvidenceSecret).update(`arc-customer-control-recipient-v1\n${customerEmail}`).digest("hex"),
+    github_user_id_sha256: sha256("1001"),
+    github_repository: "buyer-owner/buyer-site",
+    github_repository_id: 12345,
+    github_default_branch: "main",
+    github_commit_sha: "9".repeat(40),
+    github_repository_tree_sha256: sha256("customer-tree"),
+    netlify_user_id_sha256: sha256("buyer-netlify-user"),
+    netlify_account_id: "buyer_account_123456",
+    netlify_site_id: "623e4567-e89b-42d3-a456-426614174000",
+    netlify_site_url: customerSiteUrl,
+    netlify_deploy_id: "723e4567-e89b-42d3-a456-426614174000",
+    netlify_deploy_url: customerDeployUrl,
+    netlify_deploy_file_manifest_sha256: sha256("customer-deploy-files"),
+    served_html_sha256: sha256(processedStagingHtml),
+    verified_at: new Date().toISOString()
+  };
+  const canonical = JSON.stringify(evidence);
+  return {
+    evidence,
+    canonical,
+    digest: sha256(canonical),
+    signature: createHmac("sha256", customerControlEvidenceSecret)
+      .update(`arc-customer-control-evidence-signature-v1\n${canonical}`)
+      .digest("hex")
+  };
+};
 const evidenceFields = overrides => {
   const inboxReceivedTimestamp = new Date().toISOString();
   return {
@@ -252,6 +320,10 @@ class MockGitHubAndPages {
       } : {});
     }
 
+    if (method === "GET" && url.pathname === `/repos/${deliveryOwner}/${deliveryRepository}`) {
+      return makeResponse(200, { private: true, full_name: `${deliveryOwner}/${deliveryRepository}` }, rawUrl);
+    }
+
     if (method === "POST" && url.pathname === "/graphql") {
       const body = JSON.parse(bodyText);
       const pr = this.prs.find(item => item.node_id === body.variables.pullRequestId);
@@ -347,7 +419,7 @@ class MockGitHubAndPages {
         : makeResponse(404, { message: "Not Found" });
     }
 
-    const contentsPrefix = "/repos/arcwebhq-cpu/arc-previews/contents/";
+    const contentsPrefix = `/repos/${deliveryOwner}/${deliveryRepository}/contents/`;
     if (method === "GET" && url.pathname.startsWith(contentsPrefix)) {
       const path = url.pathname.slice(contentsPrefix.length).split("/").map(decodeURIComponent).join("/");
       const ref = url.searchParams.get("ref") || "main";
@@ -403,20 +475,15 @@ class MockGitHubAndPages {
     return makeResponse(404, { message: `Unhandled ${method} ${rawUrl}` });
   }
 
-  publishPages() {
-    this.liveFiles.set(productionUrl, expectedFiles.get(paths[0]));
-    for (const path of paths.slice(1)) {
-      this.liveFiles.set(`${productionUrl}${path.split("/").pop()}`, expectedFiles.get(path));
-    }
-  }
 }
 
 const publisherInput = {
   github_token: "publisher-token-one",
-  github_owner: "arcwebhq-cpu",
-  github_repo: "arc-previews",
+  github_owner: deliveryOwner,
+  github_repo: deliveryRepository,
   github_base_branch: "main",
-  payment_verification_status: "verified_test_payment",
+  payment_verification_status: "verified_test_payment_from_stripe_api",
+  stripe_session_retrieved: true,
   checkout_session_id: checkoutSession,
   client_reference_id: clientReferenceId,
   checkout_binding_secret: checkoutSecret,
@@ -429,6 +496,9 @@ const publisherInput = {
   terms_of_service_consent: "accepted",
   terms_version: "2026-08-11",
   expected_terms_version: "2026-08-11",
+  adult_purchaser_acknowledgement: "accepted",
+  payment_evidence_private: signedPaymentEvidence.canonical,
+  payment_evidence_hmac_sha256: signedPaymentEvidence.signature,
   preview_folder: folder,
   production_file_path: paths[0],
   production_content_base64: Buffer.from(productionHtml).toString("base64"),
@@ -438,9 +508,6 @@ const publisherInput = {
   usage_guide_path: paths[2],
   usage_guide_base64: Buffer.from(usageGuide).toString("base64"),
   bundle_fingerprint: fingerprint,
-  pages_base_url: pagesBaseUrl,
-  production_url: productionUrl,
-  deploy_url: deployUrl,
   customer_email: customerEmail,
   lead_route_status: "verified",
   verified_lead_notification_email: leadEmail,
@@ -454,10 +521,21 @@ const publisherInput = {
 };
 const mergeInput = published => ({
   github_token: "merge-token-one",
+  github_owner: deliveryOwner,
+  github_repo: deliveryRepository,
   preview_folder: folder,
   delivery_branch: published.delivery_branch,
   head_sha: published.head_sha,
   bundle_fingerprint: fingerprint,
+  payment_evidence_sha256: published.payment_evidence_sha256,
+  payment_evidence_private: signedPaymentEvidence.canonical,
+  payment_evidence_hmac_sha256: signedPaymentEvidence.signature,
+  checkout_binding_secret: checkoutSecret,
+  checkout_session_id: checkoutSession,
+  client_reference_id: clientReferenceId,
+  customer_email: customerEmail,
+  expected_payment_link_id: "plink_arc2test123",
+  expected_terms_version: "2026-08-11",
   pr_number: published.pr_number,
   verified_lead_notification_email: leadEmail,
   lead_route_evidence_secret: leadRouteEvidenceSecret,
@@ -469,12 +547,22 @@ const mergeInput = published => ({
   lead_route_evidence_hmac_sha256: signedLeadRouteEvidence.signature,
   lead_route_evidence_sha256: published.lead_route_evidence_sha256
 });
+let signedCustomerControlEvidence;
 const gateInput = (published, merged, overrides = {}) => ({
   github_token: "gate-token-one",
+  github_owner: deliveryOwner,
+  github_repo: deliveryRepository,
   preview_folder: folder,
   delivery_branch: published.delivery_branch,
   head_sha: published.head_sha,
   bundle_fingerprint: fingerprint,
+  payment_evidence_sha256: published.payment_evidence_sha256,
+  payment_evidence_private: signedPaymentEvidence.canonical,
+  payment_evidence_hmac_sha256: signedPaymentEvidence.signature,
+  checkout_binding_secret: checkoutSecret,
+  client_reference_id: clientReferenceId,
+  expected_payment_link_id: "plink_arc2test123",
+  expected_terms_version: "2026-08-11",
   pr_number: published.pr_number,
   merge_proof: merged.merge_proof,
   production_file_path: paths[0],
@@ -483,9 +571,6 @@ const gateInput = (published, merged, overrides = {}) => ({
   netlify_config_base64: Buffer.from(netlifyConfig).toString("base64"),
   usage_guide_path: paths[2],
   usage_guide_base64: Buffer.from(usageGuide).toString("base64"),
-  pages_base_url: pagesBaseUrl,
-  production_url: productionUrl,
-  deploy_url: deployUrl,
   customer_email: customerEmail,
   email_claim_binding_secret: emailClaimBindingSecret,
   checkout_session_id: checkoutSession,
@@ -498,6 +583,9 @@ const gateInput = (published, merged, overrides = {}) => ({
   lead_route_evidence: JSON.stringify(signedLeadRouteEvidence.evidence),
   lead_route_evidence_hmac_sha256: signedLeadRouteEvidence.signature,
   lead_route_evidence_sha256: published.lead_route_evidence_sha256,
+  customer_control_evidence_secret: customerControlEvidenceSecret,
+  customer_control_evidence: signedCustomerControlEvidence?.canonical,
+  customer_control_evidence_hmac_sha256: signedCustomerControlEvidence?.signature,
   ...overrides
 });
 const successCheck = (id, status = "completed", conclusion = "success") => ({
@@ -510,12 +598,48 @@ const successCheck = (id, status = "completed", conclusion = "success") => ({
 });
 
 // Signed test-payment and exact artifact inputs are mandatory before any GitHub writes.
+const publicDeliveryRepositoryMock = new MockGitHubAndPages();
+await assert.rejects(
+  runPublisher({
+    ...publisherInput,
+    github_owner: "arcwebhq-cpu",
+    github_repo: "arc-previews"
+  }, publicDeliveryRepositoryMock.fetch.bind(publicDeliveryRepositoryMock), Buffer),
+  /public preview repository cannot store paid deliveries/
+);
+assert.equal(publicDeliveryRepositoryMock.requests.length, 0);
+
 const badSignatureMock = new MockGitHubAndPages();
 await assert.rejects(
   runPublisher({ ...publisherInput, client_reference_id: `${folder}.${"0".repeat(64)}` }, badSignatureMock.fetch.bind(badSignatureMock), Buffer),
   /checkout reference signature mismatch/
 );
 assert.equal(badSignatureMock.requests.length, 0);
+
+const forgedPaymentEvidenceMock = new MockGitHubAndPages();
+await assert.rejects(
+  runPublisher({
+    ...publisherInput,
+    payment_evidence_private: JSON.stringify({
+      ...signedPaymentEvidence.evidence,
+      customer_email_sha256: sha256("attacker@example.com")
+    })
+  }, forgedPaymentEvidenceMock.fetch.bind(forgedPaymentEvidenceMock), Buffer),
+  /payment evidence HMAC mismatch/
+);
+assert.equal(forgedPaymentEvidenceMock.requests.length, 0);
+
+const replayedPaymentEvidence = signPaymentEvidence(clientReferenceId, { bundle_fingerprint: "f".repeat(64) });
+const replayedPaymentEvidenceMock = new MockGitHubAndPages();
+await assert.rejects(
+  runPublisher({
+    ...publisherInput,
+    payment_evidence_private: replayedPaymentEvidence.canonical,
+    payment_evidence_hmac_sha256: replayedPaymentEvidence.signature
+  }, replayedPaymentEvidenceMock.fetch.bind(replayedPaymentEvidenceMock), Buffer),
+  /not bound to this exact paid delivery/
+);
+assert.equal(replayedPaymentEvidenceMock.requests.length, 0);
 
 // A caller-supplied "verified" word is inert; no signed, fresh live staging proof means no GitHub access.
 const statusOnlyMock = new MockGitHubAndPages();
@@ -612,8 +736,14 @@ await assert.rejects(
 assert.equal(removedHookBeforePublish.requests.some(request => request.rawUrl.includes("api.github.com")), false);
 
 const suffixPublisherMock = new MockGitHubAndPages();
+const suffixPaymentEvidence = signPaymentEvidence(suffixClientReferenceId);
 const suffixPublished = await runPublisher(
-  { ...publisherInput, client_reference_id: suffixClientReferenceId },
+  {
+    ...publisherInput,
+    client_reference_id: suffixClientReferenceId,
+    payment_evidence_private: suffixPaymentEvidence.canonical,
+    payment_evidence_hmac_sha256: suffixPaymentEvidence.signature
+  },
   suffixPublisherMock.fetch.bind(suffixPublisherMock),
   Buffer
 );
@@ -626,6 +756,7 @@ assert.equal(published.status, "PR_CREATED");
 assert.equal(published.send_delivery_email, false);
 assert.equal(published.delivery_branch, `arc-delivery/${folder}`);
 assert.equal(published.bundle_fingerprint, fingerprint);
+assert.equal(published.payment_evidence_sha256, paymentEvidenceSha256);
 assert.equal(published.lead_route_evidence_sha256, signedLeadRouteEvidence.digest);
 assert.equal(published.lead_route_form_name, formName);
 assert.equal(published.lead_route_recipient_hmac_sha256, leadRouteRecipientHmacSha256);
@@ -634,6 +765,23 @@ assert.equal(published.pr_number, 77);
 assert.deepEqual([...mock.commits.get(published.head_sha).files.keys()].sort(), paths.slice().sort());
 assert.equal(mock.requests.some(request => request.method === "PATCH" && request.rawUrl.includes("heads%2Fmain")), false);
 assert.equal(mock.createdPublicPayloads.some(value => value.includes(customerEmail) || value.includes(leadEmail) || value.includes(checkoutSession)), false);
+
+// A caller-mapped digest is not payment authorization. Merge independently
+// verifies the canonical evidence HMAC and derives the digest itself.
+const mergeWritesBeforeBadPayment = mock.requests.filter(request => request.method === "PUT" && /\/pulls\/\d+\/merge$/.test(new URL(request.rawUrl).pathname)).length;
+await assert.rejects(
+  runMerge({ ...mergeInput(published), payment_evidence_sha256: "f".repeat(64) }, mock.fetch.bind(mock), Buffer),
+  /payment evidence SHA-256 mismatch/
+);
+await assert.rejects(
+  runMerge({ ...mergeInput(published), payment_evidence_hmac_sha256: "0".repeat(64) }, mock.fetch.bind(mock), Buffer),
+  /payment evidence HMAC mismatch/
+);
+assert.equal(mock.currentPr().state, "open");
+assert.equal(
+  mock.requests.filter(request => request.method === "PUT" && /\/pulls\/\d+\/merge$/.test(new URL(request.rawUrl).pathname)).length,
+  mergeWritesBeforeBadPayment
+);
 
 // An extra PR file is a hard scope failure.
 mock.prFiles.push({ filename: "unexpected.txt", status: "added" });
@@ -696,12 +844,8 @@ assert.equal(merged.status, "MERGED");
 assert.equal(merged.send_delivery_email, false);
 assert.equal(merged.marked_ready, true);
 assert.match(merged.merge_proof, /arc-delivery-merge-proof-v1/);
-assert.equal(mock.claimRefs.size, 0);
-
-// Pages delay is safe: every durable proof exists, but no email claim is created yet.
-const delayed = await runEmailGate(gateInput(published, merged), mock.fetch.bind(mock), Buffer);
-assert.equal(delayed.status, "WAITING_FOR_PAGES");
-assert.equal(delayed.send_delivery_email, false);
+assert.equal(merged.payment_evidence_sha256, paymentEvidenceSha256);
+signedCustomerControlEvidence = signCustomerControlEvidence(merged.merge_commit_sha);
 assert.equal(mock.claimRefs.size, 0);
 
 // Current-main tampering is a hard mismatch, not a send/retry signal.
@@ -713,12 +857,28 @@ await assert.rejects(
 );
 mock.mainFiles.set(paths[2], originalMainUsage);
 
-mock.publishPages();
 await assert.rejects(
   runEmailGate(gateInput(published, merged, { email_claim_binding_secret: "too-short" }), mock.fetch.bind(mock), Buffer),
   /email claim binding secret must be 32–256 characters/
 );
 const claimsBeforeBadEvidence = mock.claimRefs.size;
+const fabricatedPaymentDigest = "f".repeat(64);
+const fabricatedMergeProof = JSON.stringify({
+  ...JSON.parse(merged.merge_proof),
+  payment_evidence_sha256: fabricatedPaymentDigest
+});
+await assert.rejects(
+  runEmailGate(gateInput(published, merged, {
+    payment_evidence_sha256: fabricatedPaymentDigest,
+    merge_proof: fabricatedMergeProof
+  }), mock.fetch.bind(mock), Buffer),
+  /payment evidence SHA-256 mismatch/
+);
+await assert.rejects(
+  runEmailGate(gateInput(published, merged, { payment_evidence_hmac_sha256: "0".repeat(64) }), mock.fetch.bind(mock), Buffer),
+  /payment evidence HMAC mismatch/
+);
+assert.equal(mock.claimRefs.size, claimsBeforeBadEvidence);
 await assert.rejects(
   runEmailGate(gateInput(published, merged, { lead_route_evidence_hmac_sha256: "0".repeat(64) }), mock.fetch.bind(mock), Buffer),
   /evidence HMAC mismatch/
@@ -747,6 +907,10 @@ assert.equal(ready.state_write_required_before_email, true);
 assert.equal(ready.customer_email, customerEmail);
 assert.equal(ready.recipient_hmac_sha256, recipientBindingHmacSha256);
 assert.equal(ready.lead_route_evidence_sha256, signedLeadRouteEvidence.digest);
+assert.equal(ready.payment_evidence_sha256, paymentEvidenceSha256);
+assert.equal(ready.customer_control_evidence_sha256, signedCustomerControlEvidence.digest);
+assert.equal(ready.customer_site_url, customerSiteUrl);
+assert.equal(ready.customer_repository_url, "https://github.com/buyer-owner/buyer-site");
 assert.equal(ready.lead_route_recipient_hmac_sha256, leadRouteRecipientHmacSha256);
 assert.equal(mock.claimRefs.size, 1);
 
@@ -755,8 +919,7 @@ const claimCommitPostsBeforeReplay = mock.requests.filter(request =>
   request.method === "POST" && request.rawUrl.endsWith("/git/commits") && request.body.includes("arc-delivery-email-claim-v1")
 ).length;
 const replay = await runEmailGate(gateInput(published, merged, {
-  github_token: "rotated-github-token",
-  checkout_session_id: "cs_test_rotated_caller_context"
+  github_token: "rotated-github-token"
 }), mock.fetch.bind(mock), Buffer);
 assert.equal(replay.status, "DELIVERY_EMAIL_ALREADY_CLAIMED");
 assert.equal(replay.send_delivery_email, false);
@@ -769,8 +932,7 @@ assert.equal(mock.requests.filter(request =>
 // If two callers race after the preflight GET, the losing POST 422 verifies the winning claim.
 mock.hideClaimRefReads = 1;
 const racedReplay = await runEmailGate(gateInput(published, merged, {
-  github_token: "race-github-token",
-  checkout_session_id: "cs_test_raced_context"
+  github_token: "race-github-token"
 }), mock.fetch.bind(mock), Buffer);
 assert.equal(racedReplay.status, "DELIVERY_EMAIL_ALREADY_CLAIMED");
 assert.equal(racedReplay.send_delivery_email, false);
@@ -787,7 +949,7 @@ await assert.rejects(
     customer_email: wrongRecipient,
     checkout_session_id: "cs_test_other_session"
   }), mock.fetch.bind(mock), Buffer),
-  /email claim is bound to another recipient/
+  /payment evidence is not bound to this exact paid delivery/
 );
 assert.equal(mock.claimRefs.size, 1);
 
@@ -820,9 +982,12 @@ assert.equal(publisherSource.includes("method: \"PATCH\""), false);
 assert.equal(publisherSource.includes("leadRouteStatus"), false);
 assert.equal(mergeSource.includes("lead_route_status"), false);
 assert.equal(emailGateSource.includes("lead_route_status"), false);
+assert.equal(emailGateSource.includes("WAITING_FOR_PAGES"), false);
+assert.match(customerControlVerifierSource, /method: "GET"/);
+assert.doesNotMatch(customerControlVerifierSource, /method: "(?:POST|PUT|PATCH|DELETE)"/);
 assert.doesNotMatch(resolverSource, /inputData\.lead_route_status/);
 assert.match(resolverSource, /pending_live_staging_evidence/);
 
 await import("./arc2_lead_route_staging_contract.mjs");
 
-console.log("PASS ARC2 PR/CI/merge/Pages/email gate contract");
+console.log("PASS ARC2 private-repo PR/CI/merge/customer-control/email gate contract");

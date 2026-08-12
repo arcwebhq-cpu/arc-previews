@@ -13,6 +13,9 @@ function clean(value) {
 
 export function validatePaidSession(session, { expectedPaymentLinkId, expectedTermsVersion } = {}) {
   const id = clean(session?.id);
+  const object = clean(session?.object);
+  const mode = clean(session?.mode).toLowerCase();
+  const status = clean(session?.status).toLowerCase();
   const paymentStatus = clean(session?.payment_status).toLowerCase();
   const currency = clean(session?.currency).toLowerCase();
   const amountTotal = session?.amount_total;
@@ -21,8 +24,22 @@ export function validatePaidSession(session, { expectedPaymentLinkId, expectedTe
   const termsConsent = clean(session?.consent?.terms_of_service).toLowerCase();
   const termsVersion = clean(session?.metadata?.terms_version);
   const requiredTermsVersion = clean(expectedTermsVersion);
+  const customerDetailsEmail = clean(session?.customer_details?.email).toLowerCase();
+  const customerEmail = clean(session?.customer_email).toLowerCase();
+  const adultAcknowledgements = (Array.isArray(session?.custom_fields) ? session.custom_fields : []).filter(field =>
+    field && typeof field === "object" && clean(field.key) === "adult_purchaser_ack"
+  );
+  const adultAcknowledgement = clean(
+    adultAcknowledgements[0]?.dropdown?.value ||
+    adultAcknowledgements[0]?.text?.value ||
+    adultAcknowledgements[0]?.numeric?.value
+  ).toLowerCase();
   if (!/^cs_test_[A-Za-z0-9_]+$/.test(id)) throw new Error("ARC_PAYMENT_INVALID: test checkout session id");
+  if (object !== "checkout.session") throw new Error("ARC_PAYMENT_INVALID: Checkout Session object identity");
   if (session?.livemode !== false) throw new Error("ARC_PAYMENT_INVALID: livemode must be false");
+  if (mode !== "payment" || status !== "complete") {
+    throw new Error("ARC_PAYMENT_INVALID: Checkout Session must be a completed one-time payment");
+  }
   if (paymentStatus !== "paid") throw new Error("ARC_PAYMENT_INVALID: session is not paid");
   if (currency !== "usd") throw new Error("ARC_PAYMENT_INVALID: currency must be usd");
   if (!Number.isSafeInteger(amountTotal) || amountTotal !== 500000) {
@@ -33,6 +50,15 @@ export function validatePaidSession(session, { expectedPaymentLinkId, expectedTe
   if (termsConsent !== "accepted") throw new Error("ARC_PAYMENT_INVALID: terms_of_service consent must be accepted");
   if (!requiredTermsVersion) throw new Error("ARC_PAYMENT_INVALID: expected terms version");
   if (termsVersion !== requiredTermsVersion) throw new Error("ARC_PAYMENT_INVALID: terms version mismatch");
+  if (adultAcknowledgements.length !== 1 || adultAcknowledgement !== "accepted") {
+    throw new Error("ARC_PAYMENT_INVALID: adult purchaser acknowledgement must be accepted");
+  }
+  if (customerDetailsEmail && customerEmail && customerDetailsEmail !== customerEmail) {
+    throw new Error("ARC_HANDOFF_INVALID: Stripe customer email fields disagree");
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerDetailsEmail || customerEmail)) {
+    throw new Error("ARC_HANDOFF_INVALID: Stripe customer email");
+  }
   return true;
 }
 
@@ -134,14 +160,13 @@ export function buildNetlifyConfig() {
 }
 
 export function buildUsageGuide() {
-  return `# Launch checklist\n\nThis production website is ready to deploy.\n\n1. In Netlify, enable **Forms > Form detection**, then redeploy once.\n2. In **Project configuration > Notifications > Form submission notifications**, add the separately verified lead-notification address.\n3. Submit one test lead and confirm it arrives before connecting the final domain.\n4. Connect the business domain and replace the temporary canonical URL with the final HTTPS domain.\n5. Only after the final domain and lead route are verified, remove the staging-only \`X-Robots-Tag\` noindex header from \`netlify.toml\` and redeploy.\n\nDo not publish unverified claims, reviews, licenses, prices, or results.\n`;
+  return `# Launch checklist\n\nThis is a private pre-launch handoff bundle. It is not proof of repository ownership, Netlify ownership, transfer, or launch readiness.\n\nARC must place these exact four files into a customer-approved repository and Netlify site through a separate secure handoff. There is no one-click transfer promise. The delivery email remains blocked until ARC's read-only verifier proves that the authenticated customer controls both destinations and that their bytes match this paid bundle.\n\n1. Complete the separately approved secure repository and Netlify setup.\n2. Confirm the new GitHub repository and Netlify site are in accounts the customer controls.\n3. In Netlify, enable **Forms > Form detection**, then redeploy once.\n4. In **Project configuration > Notifications > Form submission notifications**, add the separately verified lead-notification address.\n5. Submit one test lead and confirm it arrives before connecting the final domain.\n6. Connect the business domain and add its final HTTPS URL as the canonical and Open Graph URL.\n7. Only after the final domain and lead route are verified, remove the staging-only \`X-Robots-Tag\` noindex header from \`netlify.toml\` and redeploy.\n\nDo not publish unverified claims, reviews, licenses, prices, or results.\n`;
 }
 
 export function buildProductionHandoff({
   session,
   treePaths,
   previewHtml,
-  pagesBaseUrl,
   canonicalUrl,
   expectedPaymentLinkId,
   expectedTermsVersion,
@@ -154,10 +179,7 @@ export function buildProductionHandoff({
     treePaths
   });
   const productionFolder = `deliveries/${previewFolder}`;
-  const base = clean(pagesBaseUrl || "https://arcwebhq-cpu.github.io/arc-previews").replace(/\/+$/, "");
-  const productionUrl = `${base}/${productionFolder}/`;
-  const productionHtml = finalizePreviewHtml(previewHtml, { canonicalUrl: canonicalUrl || productionUrl });
-  const deployUrl = `https://app.netlify.com/start/deploy?repository=${encodeURIComponent("https://github.com/arcwebhq-cpu/arc-previews")}&create_from_path=${encodeURIComponent(productionFolder)}`;
+  const productionHtml = finalizePreviewHtml(previewHtml, { canonicalUrl });
   const customerEmail = clean(session.customer_details?.email || session.customer_email).toLowerCase();
   const formTags = productionHtml.match(/<form\b[^>]*>/gi) || [];
   const formBlocks = productionHtml.match(/<form\b[^>]*>[\s\S]*?<\/form>/gi) || [];
@@ -212,8 +234,7 @@ export function buildProductionHandoff({
     netlifyConfig,
     usageGuidePath: `${productionFolder}/USAGE.md`,
     usageGuide,
-    productionUrl,
-    deployUrl,
+    secureCustomerSetupRequired: true,
     customerEmail,
     productionContentSha256,
     bundleFingerprint,

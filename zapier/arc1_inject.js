@@ -376,7 +376,7 @@ if(
 }
 const evidenceSignature=clean(inputData.intake_evidence_hmac_sha256).toLowerCase();
 if(!/^[a-f0-9]{64}$/.test(evidenceSignature))throw new Error("ARC1_INTAKE_INVALID: intake evidence HMAC");
-const evidenceKey=await globalThis.crypto.subtle.importKey("raw",evidenceEncoder.encode(intakeEvidenceSecret),{name:"HMAC",hash:"SHA-256"},false,["verify"]);
+const evidenceKey=await globalThis.crypto.subtle.importKey("raw",evidenceEncoder.encode(intakeEvidenceSecret),{name:"HMAC",hash:"SHA-256"},false,["sign","verify"]);
 const evidenceSignatureBytes=Uint8Array.from(evidenceSignature.match(/../g),byte=>Number.parseInt(byte,16));
 if(!(await globalThis.crypto.subtle.verify("HMAC",evidenceKey,evidenceSignatureBytes,evidenceEncoder.encode(`arc1-intake-evidence-signature-v1\n${evidenceRaw}`)))){
   throw new Error("ARC1_INTAKE_INVALID: intake evidence HMAC mismatch");
@@ -511,6 +511,23 @@ const customerEmail = clean(inputData.customer_email).toLowerCase();
 if (customerEmail && html.toLowerCase().includes(customerEmail)) {
   throw new Error("ARC_PRIVACY_FAILED: requester email appeared in public HTML");
 }
+const renderContentSha256=await sha256Text(html);
+const renderEvidence=JSON.stringify({
+  version:"arc1-render-evidence-v1",
+  scope:"signed-sanitized-preview-render",
+  preview_folder:previewFolder,
+  content_sha256:renderContentSha256,
+  intake_evidence_sha256:intakeEvidenceSha256,
+  state_digest_sha256:clean(intakeEvidence.state_digest_sha256),
+  submission_data_sha256:clean(intakeEvidence.submission_data_sha256),
+  asset_manifest_sha256:assetManifestSha256
+});
+const renderEvidenceSignatureBytes=await globalThis.crypto.subtle.sign(
+  "HMAC",
+  evidenceKey,
+  evidenceEncoder.encode(`arc1-render-evidence-signature-v1\n${renderEvidence}`)
+);
+const renderEvidenceHmacSha256=bytesToHex(renderEvidenceSignatureBytes);
 const pagesBaseUrl = clean(inputData.pages_base_url || "https://arcwebhq-cpu.github.io/arc-previews").replace(/\/+$/, "");
 return {
   html_content: html,
@@ -529,6 +546,9 @@ return {
   submission_data_sha256: clean(intakeEvidence.submission_data_sha256),
   asset_manifest_sha256: assetManifestSha256,
   validated_asset_manifest: canonicalJson(evidenceManifest),
+  render_content_sha256:renderContentSha256,
+  render_evidence_private:renderEvidence,
+  render_evidence_hmac_sha256:renderEvidenceHmacSha256,
   expected_media_profile: expectedMediaProfile,
   template_placeholder_count: templateKeys.length,
   final_placeholder_count: 0,

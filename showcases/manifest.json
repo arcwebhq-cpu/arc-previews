@@ -1,0 +1,20 @@
+[
+  {
+    "profile": "roofing",
+    "name": "Ironwood Roofing Concept",
+    "sourceFile": "qa-v10/ironwood-roofing-concept-a1000001/index.html",
+    "file": "showcases/roofing/index.html"
+  },
+  {
+    "profile": "dental",
+    "name": "Cedar Dental Concept",
+    "sourceFile": "qa-v10/cedar-dental-concept-b2000001/index.html",
+    "file": "showcases/dental/index.html"
+  },
+  {
+    "profile": "finance",
+    "name": "Clearwater Finance Concept",
+    "sourceFile": "qa-v10/clearwater-finance-concept-b2000010/index.html",
+    "file": "showcases/finance/index.html"
+  }
+]

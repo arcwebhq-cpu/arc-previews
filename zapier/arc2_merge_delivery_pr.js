@@ -1,14 +1,23 @@
 // ARC2 merge step — require one exact Actions check and squash-merge the bound delivery PR.
 // This step never authorizes or sends customer email.
 const clean = value => String(value == null ? "" : value).trim();
-const owner = clean(inputData.github_owner || "arcwebhq-cpu");
-const repository = clean(inputData.github_repo || "arc-previews");
+const owner = clean(inputData.github_owner);
+const repository = clean(inputData.github_repo);
 const baseBranch = clean(inputData.github_base_branch || "main");
 const token = clean(inputData.github_token);
 const previewFolder = clean(inputData.preview_folder).replace(/^\/+|\/+$/g, "").toLowerCase();
 const deliveryBranch = clean(inputData.delivery_branch);
 const expectedHeadSha = clean(inputData.head_sha).toLowerCase();
 const bundleFingerprint = clean(inputData.bundle_fingerprint).toLowerCase();
+const expectedPaymentEvidenceSha256 = clean(inputData.payment_evidence_sha256).toLowerCase();
+const paymentEvidenceRaw = clean(inputData.payment_evidence_private);
+const paymentEvidenceSignature = clean(inputData.payment_evidence_hmac_sha256).toLowerCase();
+const checkoutBindingSecret = clean(inputData.checkout_binding_secret);
+const checkoutSessionId = clean(inputData.checkout_session_id);
+const rawClientReferenceId = clean(inputData.client_reference_id);
+const customerEmail = clean(inputData.customer_email).toLowerCase();
+const expectedPaymentLinkId = clean(inputData.expected_payment_link_id);
+const expectedTermsVersion = clean(inputData.expected_terms_version);
 const prNumber = Number(inputData.pr_number);
 const verifiedLeadNotificationEmail = clean(inputData.verified_lead_notification_email).toLowerCase();
 const leadRouteEvidenceSecret = clean(inputData.lead_route_evidence_secret);
@@ -24,12 +33,23 @@ if (!token) throw new Error("ARC_GITHUB_INVALID: github_token is required");
 if (!/^[A-Za-z0-9_.-]+$/.test(owner) || !/^[A-Za-z0-9_.-]+$/.test(repository)) {
   throw new Error("ARC_GITHUB_INVALID: owner or repository");
 }
+if (owner.toLowerCase() === "arcwebhq-cpu" && repository.toLowerCase() === "arc-previews") {
+  throw new Error("ARC_DELIVERY_REPOSITORY_INVALID: the public preview repository cannot store paid deliveries");
+}
 if (baseBranch !== "main") throw new Error("ARC_DELIVERY_MERGE_INVALID: base branch must be main");
 if (!/^[a-z0-9][a-z0-9-]*-[a-f0-9]{8}$/.test(previewFolder) || deliveryBranch !== `arc-delivery/${previewFolder}`) {
   throw new Error("ARC_DELIVERY_MERGE_INVALID: deterministic delivery branch mismatch");
 }
 if (!/^[a-f0-9]{40}$/.test(expectedHeadSha)) throw new Error("ARC_DELIVERY_MERGE_INVALID: head SHA");
 if (!/^[a-f0-9]{64}$/.test(bundleFingerprint)) throw new Error("ARC_DELIVERY_MERGE_INVALID: bundle SHA-256");
+if (!/^[a-f0-9]{64}$/.test(expectedPaymentEvidenceSha256)) throw new Error("ARC_DELIVERY_MERGE_INVALID: payment evidence SHA-256");
+if (!/^cs_test_[A-Za-z0-9_]+$/.test(checkoutSessionId)) throw new Error("ARC_PAYMENT_INVALID: test checkout session id");
+if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) throw new Error("ARC_PAYMENT_INVALID: customer email");
+if (checkoutBindingSecret.length < 32 || checkoutBindingSecret.length > 256) {
+  throw new Error("ARC_PAYMENT_INVALID: checkout binding secret must be 32–256 characters");
+}
+if (!/^plink_[A-Za-z0-9]+$/.test(expectedPaymentLinkId)) throw new Error("ARC_PAYMENT_INVALID: expected Payment Link id");
+if (expectedTermsVersion !== "2026-08-11") throw new Error("ARC_PAYMENT_INVALID: expected terms version");
 if (!Number.isInteger(prNumber) || prNumber < 1) throw new Error("ARC_DELIVERY_MERGE_INVALID: PR number");
 if (!globalThis.crypto?.subtle || typeof TextEncoder !== "function") {
   throw new Error("ARC_CRYPTO_UNAVAILABLE: SHA-256 is required");
@@ -49,6 +69,74 @@ const hmacHex = async (key, value) => {
   const signatureBytes = await globalThis.crypto.subtle.sign("HMAC", key, new TextEncoder().encode(value));
   return [...new Uint8Array(signatureBytes)].map(byte => byte.toString(16).padStart(2, "0")).join("");
 };
+
+let paymentEvidence;
+try {
+  paymentEvidence = JSON.parse(paymentEvidenceRaw);
+} catch (error) {
+  throw new Error("ARC_PAYMENT_INVALID: payment evidence JSON");
+}
+const paymentEvidenceFields = [
+  "version", "scope", "checkout_session_id", "client_reference_id_sha256", "preview_folder",
+  "production_content_sha256", "bundle_fingerprint", "customer_email_sha256", "livemode", "mode",
+  "status", "payment_status", "currency", "amount_total_minor_units", "payment_link_id", "terms_version",
+  "adult_purchaser_acknowledgement"
+];
+if (!paymentEvidence || typeof paymentEvidence !== "object" || Array.isArray(paymentEvidence) ||
+    JSON.stringify(Object.keys(paymentEvidence)) !== JSON.stringify(paymentEvidenceFields) ||
+    JSON.stringify(paymentEvidence) !== paymentEvidenceRaw) {
+  throw new Error("ARC_PAYMENT_INVALID: canonical payment evidence fields");
+}
+if (!/^[a-f0-9]{64}$/.test(paymentEvidenceSignature)) throw new Error("ARC_PAYMENT_INVALID: payment evidence HMAC");
+const checkoutBindingKey = await hmacKey(checkoutBindingSecret, ["verify"]);
+const paymentEvidenceSignatureBytes = Uint8Array.from(
+  paymentEvidenceSignature.match(/../g),
+  byte => Number.parseInt(byte, 16)
+);
+if (!(await globalThis.crypto.subtle.verify(
+  "HMAC",
+  checkoutBindingKey,
+  paymentEvidenceSignatureBytes,
+  new TextEncoder().encode(`arc2-payment-evidence-signature-v1\n${paymentEvidenceRaw}`)
+))) {
+  throw new Error("ARC_PAYMENT_INVALID: payment evidence HMAC mismatch");
+}
+const signedReference = rawClientReferenceId.match(/^((?:[a-z0-9][a-z0-9-]*-[a-f0-9]{8})|(?:[a-f0-9]{8}))\.([a-f0-9]{64})$/i);
+const checkoutLookupReference = signedReference?.[1].toLowerCase() || "";
+const checkoutLookupMatchesPreview = checkoutLookupReference === previewFolder ||
+  (/^[a-f0-9]{8}$/.test(checkoutLookupReference) && previewFolder.endsWith(`-${checkoutLookupReference}`));
+if (!signedReference || !checkoutLookupMatchesPreview) {
+  throw new Error("ARC_PAYMENT_INVALID: signed checkout reference does not match preview folder");
+}
+const checkoutReferenceSignature = Uint8Array.from(
+  signedReference[2].match(/../g),
+  byte => Number.parseInt(byte, 16)
+);
+if (!(await globalThis.crypto.subtle.verify(
+  "HMAC", checkoutBindingKey, checkoutReferenceSignature, new TextEncoder().encode(checkoutLookupReference)
+))) {
+  throw new Error("ARC_PAYMENT_INVALID: checkout reference signature mismatch");
+}
+const paymentEvidenceSha256 = await sha256Hex(paymentEvidenceRaw);
+if (paymentEvidenceSha256 !== expectedPaymentEvidenceSha256) {
+  throw new Error("ARC_PAYMENT_INVALID: payment evidence SHA-256 mismatch");
+}
+if (
+  paymentEvidence.version !== "arc2-payment-evidence-v1" ||
+  paymentEvidence.scope !== "authoritative-stripe-test-checkout-session" ||
+  paymentEvidence.checkout_session_id !== checkoutSessionId ||
+  paymentEvidence.client_reference_id_sha256 !== await sha256Hex(rawClientReferenceId) ||
+  paymentEvidence.preview_folder !== previewFolder ||
+  paymentEvidence.bundle_fingerprint !== bundleFingerprint ||
+  paymentEvidence.customer_email_sha256 !== await sha256Hex(customerEmail) ||
+  paymentEvidence.livemode !== false || paymentEvidence.mode !== "payment" || paymentEvidence.status !== "complete" ||
+  paymentEvidence.payment_status !== "paid" || paymentEvidence.currency !== "usd" ||
+  paymentEvidence.amount_total_minor_units !== 500000 || paymentEvidence.payment_link_id !== expectedPaymentLinkId ||
+  paymentEvidence.terms_version !== expectedTermsVersion || paymentEvidence.adult_purchaser_acknowledgement !== "accepted" ||
+  !/^[a-f0-9]{64}$/.test(paymentEvidence.production_content_sha256)
+) {
+  throw new Error("ARC_PAYMENT_INVALID: payment evidence is not bound to this exact paid delivery");
+}
 
 const deliveryRoot = `deliveries/${previewFolder}`;
 const expectedPaths = [
@@ -72,6 +160,10 @@ const request = async (url, options = {}, allowed = []) => {
   if (allowed.includes(response.status)) return { _status: response.status, _body: body };
   throw new Error(`ARC_GITHUB_FAILED: ${response.status} ${JSON.stringify(body).slice(0, 240)}`);
 };
+const repositoryMetadata = await request(api);
+if (repositoryMetadata.private !== true || clean(repositoryMetadata.full_name).toLowerCase() !== `${owner.toLowerCase()}/${repository.toLowerCase()}`) {
+  throw new Error("ARC_DELIVERY_REPOSITORY_INVALID: paid deliveries require the exact configured private GitHub repository");
+}
 const contentUrl = (path, ref) => `${api}/contents/${path.split("/").map(encodeURIComponent).join("/")}?ref=${encodeURIComponent(ref)}`;
 const readContent = async (path, ref) => {
   const content = await request(contentUrl(path, ref));
@@ -363,6 +455,7 @@ const mergeProof = pull => {
     check_name: requiredCheckName,
     check_app_slug: requiredCheckAppSlug,
     check_app_id: requiredCheckAppId,
+    payment_evidence_sha256: paymentEvidenceSha256,
     lead_route_evidence_sha256: leadRouteProof.sha256,
     merge_commit_sha: mergeCommitSha,
     merged_at: clean(pull.merged_at)
@@ -374,6 +467,9 @@ validatePull(pull);
 const files = await request(`${api}/pulls/${prNumber}/files?per_page=100`);
 validateFiles(files);
 const headContents = await verifyBundleIdentity(expectedHeadSha);
+if (paymentEvidence.production_content_sha256 !== await sha256Hex(headContents[0])) {
+  throw new Error("ARC_PAYMENT_INVALID: payment evidence production bytes mismatch");
+}
 leadRouteProof = await validateLeadRouteEvidence(headContents[0]);
 
 const checks = await request(
@@ -407,6 +503,7 @@ if (pull.merged_at) {
     delivery_branch: deliveryBranch,
     head_sha: expectedHeadSha,
     bundle_fingerprint: bundleFingerprint,
+    payment_evidence_sha256: paymentEvidenceSha256,
     lead_route_evidence_sha256: leadRouteProof.sha256,
     lead_route_form_name: leadRouteProof.formName,
     lead_route_recipient_hmac_sha256: leadRouteProof.recipientHmacSha256,
@@ -471,6 +568,7 @@ return {
   delivery_branch: deliveryBranch,
   head_sha: expectedHeadSha,
   bundle_fingerprint: bundleFingerprint,
+  payment_evidence_sha256: paymentEvidenceSha256,
   lead_route_evidence_sha256: leadRouteProof.sha256,
   lead_route_form_name: leadRouteProof.formName,
   lead_route_recipient_hmac_sha256: leadRouteProof.recipientHmacSha256,

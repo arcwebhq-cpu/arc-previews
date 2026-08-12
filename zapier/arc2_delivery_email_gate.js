@@ -1,14 +1,23 @@
-// ARC2 polling/email gate — fail closed until CI, merge, main, and live Pages all prove exact.
+// ARC2 polling/email gate — fail closed until CI, private-repo merge, and
+// customer-owned GitHub + Netlify evidence all prove the exact paid bundle.
 // The durable email claim is keyed only by immutable delivery identity and binds a secret HMAC of the normalized recipient.
 const clean = value => String(value == null ? "" : value).trim();
-const owner = clean(inputData.github_owner || "arcwebhq-cpu");
-const repository = clean(inputData.github_repo || "arc-previews");
+const owner = clean(inputData.github_owner);
+const repository = clean(inputData.github_repo);
 const baseBranch = clean(inputData.github_base_branch || "main");
 const token = clean(inputData.github_token);
 const previewFolder = clean(inputData.preview_folder).replace(/^\/+|\/+$/g, "").toLowerCase();
 const deliveryBranch = clean(inputData.delivery_branch);
 const expectedHeadSha = clean(inputData.head_sha).toLowerCase();
 const bundleFingerprint = clean(inputData.bundle_fingerprint).toLowerCase();
+const expectedPaymentEvidenceSha256 = clean(inputData.payment_evidence_sha256).toLowerCase();
+const paymentEvidenceRaw = clean(inputData.payment_evidence_private);
+const paymentEvidenceSignature = clean(inputData.payment_evidence_hmac_sha256).toLowerCase();
+const checkoutBindingSecret = clean(inputData.checkout_binding_secret);
+const checkoutSessionId = clean(inputData.checkout_session_id);
+const rawClientReferenceId = clean(inputData.client_reference_id);
+const expectedPaymentLinkId = clean(inputData.expected_payment_link_id);
+const expectedTermsVersion = clean(inputData.expected_terms_version);
 const prNumber = Number(inputData.pr_number);
 const customerEmail = clean(inputData.customer_email).toLowerCase();
 const emailClaimBindingSecret = clean(inputData.email_claim_binding_secret);
@@ -18,6 +27,9 @@ const leadRouteEvidenceSignature = clean(inputData.lead_route_evidence_hmac_sha2
 const expectedNetlifyAccountId = clean(inputData.expected_netlify_account_id);
 const expectedLeadRouteEvidenceSha256 = clean(inputData.lead_route_evidence_sha256).toLowerCase();
 const netlifyToken = clean(inputData.netlify_access_token);
+const customerControlEvidenceRaw = clean(inputData.customer_control_evidence);
+const customerControlEvidenceSignature = clean(inputData.customer_control_evidence_hmac_sha256).toLowerCase();
+const customerControlEvidenceSecret = clean(inputData.customer_control_evidence_secret);
 const requiredCheckName = "ARC preview quality/preview-quality";
 const requiredCheckAppSlug = "github-actions";
 const requiredCheckAppId = 15368;
@@ -26,16 +38,29 @@ if (!token) throw new Error("ARC_GITHUB_INVALID: github_token is required");
 if (!/^[A-Za-z0-9_.-]+$/.test(owner) || !/^[A-Za-z0-9_.-]+$/.test(repository)) {
   throw new Error("ARC_GITHUB_INVALID: owner or repository");
 }
+if (owner.toLowerCase() === "arcwebhq-cpu" && repository.toLowerCase() === "arc-previews") {
+  throw new Error("ARC_DELIVERY_REPOSITORY_INVALID: the public preview repository cannot store paid deliveries");
+}
 if (baseBranch !== "main") throw new Error("ARC_DELIVERY_GATE_INVALID: base branch must be main");
 if (!/^[a-z0-9][a-z0-9-]*-[a-f0-9]{8}$/.test(previewFolder) || deliveryBranch !== `arc-delivery/${previewFolder}`) {
   throw new Error("ARC_DELIVERY_GATE_INVALID: deterministic delivery branch mismatch");
 }
 if (!/^[a-f0-9]{40}$/.test(expectedHeadSha)) throw new Error("ARC_DELIVERY_GATE_INVALID: head SHA");
 if (!/^[a-f0-9]{64}$/.test(bundleFingerprint)) throw new Error("ARC_DELIVERY_GATE_INVALID: bundle SHA-256");
+if (!/^[a-f0-9]{64}$/.test(expectedPaymentEvidenceSha256)) throw new Error("ARC_DELIVERY_GATE_INVALID: payment evidence SHA-256");
+if (!/^cs_test_[A-Za-z0-9_]+$/.test(checkoutSessionId)) throw new Error("ARC_PAYMENT_INVALID: test checkout session id");
+if (checkoutBindingSecret.length < 32 || checkoutBindingSecret.length > 256) {
+  throw new Error("ARC_PAYMENT_INVALID: checkout binding secret must be 32–256 characters");
+}
+if (!/^plink_[A-Za-z0-9]+$/.test(expectedPaymentLinkId)) throw new Error("ARC_PAYMENT_INVALID: expected Payment Link id");
+if (expectedTermsVersion !== "2026-08-11") throw new Error("ARC_PAYMENT_INVALID: expected terms version");
 if (!Number.isInteger(prNumber) || prNumber < 1) throw new Error("ARC_DELIVERY_GATE_INVALID: PR number");
 if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) throw new Error("ARC_DELIVERY_GATE_INVALID: customer email");
 if (emailClaimBindingSecret.length < 32 || emailClaimBindingSecret.length > 256) {
   throw new Error("ARC_DELIVERY_GATE_INVALID: email claim binding secret must be 32–256 characters");
+}
+if (customerControlEvidenceSecret.length < 32 || customerControlEvidenceSecret.length > 256) {
+  throw new Error("ARC_CUSTOMER_CONTROL_INVALID: evidence secret must be 32–256 characters");
 }
 if (!globalThis.crypto?.subtle || typeof TextEncoder !== "function") {
   throw new Error("ARC_CRYPTO_UNAVAILABLE: SHA-256 is required");
@@ -95,6 +120,73 @@ const artifacts = [
 ];
 const calculatedFingerprint = await sha256Hex(artifacts.map(artifact => `${artifact.path}\0${artifact.content}\0`).join(""));
 if (calculatedFingerprint !== bundleFingerprint) throw new Error("ARC_DELIVERY_GATE_INVALID: expected bundle bytes changed");
+let paymentEvidence;
+try {
+  paymentEvidence = JSON.parse(paymentEvidenceRaw);
+} catch (error) {
+  throw new Error("ARC_PAYMENT_INVALID: payment evidence JSON");
+}
+const paymentEvidenceFields = [
+  "version", "scope", "checkout_session_id", "client_reference_id_sha256", "preview_folder",
+  "production_content_sha256", "bundle_fingerprint", "customer_email_sha256", "livemode", "mode",
+  "status", "payment_status", "currency", "amount_total_minor_units", "payment_link_id", "terms_version",
+  "adult_purchaser_acknowledgement"
+];
+if (!paymentEvidence || typeof paymentEvidence !== "object" || Array.isArray(paymentEvidence) ||
+    JSON.stringify(Object.keys(paymentEvidence)) !== JSON.stringify(paymentEvidenceFields) ||
+    JSON.stringify(paymentEvidence) !== paymentEvidenceRaw) {
+  throw new Error("ARC_PAYMENT_INVALID: canonical payment evidence fields");
+}
+if (!/^[a-f0-9]{64}$/.test(paymentEvidenceSignature)) throw new Error("ARC_PAYMENT_INVALID: payment evidence HMAC");
+const checkoutBindingKey = await hmacKey(checkoutBindingSecret, ["verify"]);
+const paymentEvidenceSignatureBytes = Uint8Array.from(
+  paymentEvidenceSignature.match(/../g),
+  byte => Number.parseInt(byte, 16)
+);
+if (!(await globalThis.crypto.subtle.verify(
+  "HMAC",
+  checkoutBindingKey,
+  paymentEvidenceSignatureBytes,
+  new TextEncoder().encode(`arc2-payment-evidence-signature-v1\n${paymentEvidenceRaw}`)
+))) {
+  throw new Error("ARC_PAYMENT_INVALID: payment evidence HMAC mismatch");
+}
+const signedReference = rawClientReferenceId.match(/^((?:[a-z0-9][a-z0-9-]*-[a-f0-9]{8})|(?:[a-f0-9]{8}))\.([a-f0-9]{64})$/i);
+const checkoutLookupReference = signedReference?.[1].toLowerCase() || "";
+const checkoutLookupMatchesPreview = checkoutLookupReference === previewFolder ||
+  (/^[a-f0-9]{8}$/.test(checkoutLookupReference) && previewFolder.endsWith(`-${checkoutLookupReference}`));
+if (!signedReference || !checkoutLookupMatchesPreview) {
+  throw new Error("ARC_PAYMENT_INVALID: signed checkout reference does not match preview folder");
+}
+const checkoutReferenceSignature = Uint8Array.from(
+  signedReference[2].match(/../g),
+  byte => Number.parseInt(byte, 16)
+);
+if (!(await globalThis.crypto.subtle.verify(
+  "HMAC", checkoutBindingKey, checkoutReferenceSignature, new TextEncoder().encode(checkoutLookupReference)
+))) {
+  throw new Error("ARC_PAYMENT_INVALID: checkout reference signature mismatch");
+}
+const paymentEvidenceSha256 = await sha256Hex(paymentEvidenceRaw);
+if (paymentEvidenceSha256 !== expectedPaymentEvidenceSha256) {
+  throw new Error("ARC_PAYMENT_INVALID: payment evidence SHA-256 mismatch");
+}
+if (
+  paymentEvidence.version !== "arc2-payment-evidence-v1" ||
+  paymentEvidence.scope !== "authoritative-stripe-test-checkout-session" ||
+  paymentEvidence.checkout_session_id !== checkoutSessionId ||
+  paymentEvidence.client_reference_id_sha256 !== await sha256Hex(rawClientReferenceId) ||
+  paymentEvidence.preview_folder !== previewFolder ||
+  paymentEvidence.production_content_sha256 !== await sha256Hex(productionHtml) ||
+  paymentEvidence.bundle_fingerprint !== bundleFingerprint ||
+  paymentEvidence.customer_email_sha256 !== await sha256Hex(customerEmail) ||
+  paymentEvidence.livemode !== false || paymentEvidence.mode !== "payment" || paymentEvidence.status !== "complete" ||
+  paymentEvidence.payment_status !== "paid" || paymentEvidence.currency !== "usd" ||
+  paymentEvidence.amount_total_minor_units !== 500000 || paymentEvidence.payment_link_id !== expectedPaymentLinkId ||
+  paymentEvidence.terms_version !== expectedTermsVersion || paymentEvidence.adult_purchaser_acknowledgement !== "accepted"
+) {
+  throw new Error("ARC_PAYMENT_INVALID: payment evidence is not bound to this exact paid delivery");
+}
 for (const artifact of artifacts) {
   for (const privateValue of [
     clean(inputData.checkout_session_id),
@@ -102,7 +194,11 @@ for (const artifact of artifacts) {
     verifiedLeadNotificationEmail,
     emailClaimBindingSecret,
     leadRouteEvidenceSecret,
-    leadRouteEvidenceSignature
+    leadRouteEvidenceSignature,
+    customerControlEvidenceSecret,
+    customerControlEvidenceSignature,
+    checkoutBindingSecret,
+    paymentEvidenceSignature
   ].filter(Boolean)) {
     if (artifact.content.toLowerCase().includes(privateValue.toLowerCase())) {
       throw new Error(`ARC_PRIVACY_FAILED: ${artifact.path} contains private handoff data`);
@@ -325,32 +421,6 @@ const marker = `${JSON.stringify({
 }, null, 2)}\n`;
 const bundle = [...artifacts, { path: expectedPaths[3], content: marker }];
 
-let pagesBaseUrl;
-let productionUrl;
-try {
-  pagesBaseUrl = new URL(clean(inputData.pages_base_url || `https://${owner}.github.io/${repository}`));
-  productionUrl = new URL(clean(inputData.production_url));
-} catch (error) {
-  throw new Error("ARC_DELIVERY_GATE_INVALID: Pages URL");
-}
-if (
-  pagesBaseUrl.protocol !== "https:" || pagesBaseUrl.username || pagesBaseUrl.password || pagesBaseUrl.search || pagesBaseUrl.hash ||
-  pagesBaseUrl.origin.toLowerCase() !== `https://${owner.toLowerCase()}.github.io` ||
-  decodeURIComponent(pagesBaseUrl.pathname).replace(/\/+$/, "").toLowerCase() !== `/${repository.toLowerCase()}` ||
-  productionUrl.protocol !== "https:" || productionUrl.username || productionUrl.password || productionUrl.search || productionUrl.hash ||
-  productionUrl.origin !== pagesBaseUrl.origin
-) {
-  throw new Error("ARC_DELIVERY_GATE_INVALID: Pages URL must match the GitHub repository");
-}
-const expectedProductionPath = `${decodeURIComponent(pagesBaseUrl.pathname).replace(/\/+$/, "")}/${deliveryRoot}/`;
-if (decodeURIComponent(productionUrl.pathname) !== expectedProductionPath) {
-  throw new Error("ARC_DELIVERY_GATE_INVALID: production URL path mismatch");
-}
-productionUrl.search = "";
-productionUrl.hash = "";
-const deployUrl = `https://app.netlify.com/start/deploy?repository=${encodeURIComponent(`https://github.com/${owner}/${repository}`)}&create_from_path=${encodeURIComponent(deliveryRoot)}`;
-if (clean(inputData.deploy_url) !== deployUrl) throw new Error("ARC_DELIVERY_GATE_INVALID: deploy URL mismatch");
-
 let mergeProof;
 try {
   mergeProof = typeof inputData.merge_proof === "string" ? JSON.parse(inputData.merge_proof) : inputData.merge_proof;
@@ -371,6 +441,7 @@ if (
   clean(mergeProof.check_name) !== requiredCheckName ||
   clean(mergeProof.check_app_slug) !== requiredCheckAppSlug ||
   Number(mergeProof.check_app_id) !== requiredCheckAppId ||
+  clean(mergeProof.payment_evidence_sha256).toLowerCase() !== paymentEvidenceSha256 ||
   clean(mergeProof.lead_route_evidence_sha256).toLowerCase() !== leadRouteProof.sha256
 ) {
   throw new Error("ARC_DELIVERY_GATE_INVALID: merge proof is not bound to this exact delivery");
@@ -379,6 +450,78 @@ const mergeCommitSha = clean(mergeProof.merge_commit_sha).toLowerCase();
 if (!/^[a-f0-9]{40}$/.test(mergeCommitSha) || !clean(mergeProof.merged_at)) {
   throw new Error("ARC_DELIVERY_GATE_INVALID: merge proof completion fields");
 }
+
+let customerControlEvidence;
+try {
+  customerControlEvidence = JSON.parse(customerControlEvidenceRaw);
+} catch (error) {
+  throw new Error("ARC_CUSTOMER_CONTROL_INVALID: evidence JSON");
+}
+const customerControlFields = [
+  "version", "scope", "preview_folder", "bundle_fingerprint", "payment_evidence_sha256", "merge_commit_sha",
+  "recipient_hmac_sha256", "github_user_id_sha256", "github_repository", "github_repository_id",
+  "github_default_branch", "github_commit_sha", "github_repository_tree_sha256", "netlify_user_id_sha256",
+  "netlify_account_id", "netlify_site_id", "netlify_site_url", "netlify_deploy_id", "netlify_deploy_url",
+  "netlify_deploy_file_manifest_sha256", "served_html_sha256", "verified_at"
+];
+if (!customerControlEvidence || typeof customerControlEvidence !== "object" || Array.isArray(customerControlEvidence) ||
+    JSON.stringify(Object.keys(customerControlEvidence)) !== JSON.stringify(customerControlFields) ||
+    JSON.stringify(customerControlEvidence) !== customerControlEvidenceRaw || !/^[a-f0-9]{64}$/.test(customerControlEvidenceSignature)) {
+  throw new Error("ARC_CUSTOMER_CONTROL_INVALID: canonical signed evidence");
+}
+const customerControlKey = await hmacKey(customerControlEvidenceSecret, ["sign", "verify"]);
+const customerControlSignatureBytes = Uint8Array.from(customerControlEvidenceSignature.match(/../g), byte => Number.parseInt(byte, 16));
+if (!(await globalThis.crypto.subtle.verify(
+  "HMAC", customerControlKey, customerControlSignatureBytes,
+  new TextEncoder().encode(`arc-customer-control-evidence-signature-v1\n${customerControlEvidenceRaw}`)
+))) {
+  throw new Error("ARC_CUSTOMER_CONTROL_INVALID: evidence HMAC mismatch");
+}
+const customerControlRecipientHmacSha256 = await hmacHex(
+  customerControlKey,
+  `arc-customer-control-recipient-v1\n${customerEmail}`
+);
+const verifiedAt = clean(customerControlEvidence.verified_at);
+const verifiedAtMs = Date.parse(verifiedAt);
+if (!Number.isFinite(verifiedAtMs) || new Date(verifiedAtMs).toISOString() !== verifiedAt ||
+    verifiedAtMs > Date.now() + 5 * 60 * 1000 || verifiedAtMs < Date.now() - 30 * 60 * 1000) {
+  throw new Error("ARC_CUSTOMER_CONTROL_INVALID: evidence is stale or invalid");
+}
+if (
+  customerControlEvidence.version !== "arc-customer-control-evidence-v1" ||
+  customerControlEvidence.scope !== "customer-owned-github-and-netlify" ||
+  clean(customerControlEvidence.preview_folder).toLowerCase() !== previewFolder ||
+  clean(customerControlEvidence.bundle_fingerprint).toLowerCase() !== bundleFingerprint ||
+  clean(customerControlEvidence.payment_evidence_sha256).toLowerCase() !== paymentEvidenceSha256 ||
+  clean(customerControlEvidence.merge_commit_sha).toLowerCase() !== mergeCommitSha ||
+  clean(customerControlEvidence.recipient_hmac_sha256).toLowerCase() !== customerControlRecipientHmacSha256 ||
+  !/^[a-f0-9]{64}$/.test(clean(customerControlEvidence.github_user_id_sha256).toLowerCase()) ||
+  !/^[a-z0-9_.-]+\/[a-z0-9_.-]+$/.test(clean(customerControlEvidence.github_repository).toLowerCase()) ||
+  clean(customerControlEvidence.github_repository).toLowerCase().startsWith("arcwebhq-cpu/") ||
+  !Number.isInteger(Number(customerControlEvidence.github_repository_id)) || Number(customerControlEvidence.github_repository_id) < 1 ||
+  !/^[a-f0-9]{40}$/.test(clean(customerControlEvidence.github_commit_sha).toLowerCase()) ||
+  !/^[a-f0-9]{64}$/.test(clean(customerControlEvidence.github_repository_tree_sha256).toLowerCase()) ||
+  !/^[a-f0-9]{64}$/.test(clean(customerControlEvidence.netlify_user_id_sha256).toLowerCase()) ||
+  !/^[a-f0-9]{64}$/.test(clean(customerControlEvidence.netlify_deploy_file_manifest_sha256).toLowerCase()) ||
+  !/^[a-f0-9]{64}$/.test(clean(customerControlEvidence.served_html_sha256).toLowerCase())
+) {
+  throw new Error("ARC_CUSTOMER_CONTROL_INVALID: evidence is not bound to this exact paid delivery and recipient");
+}
+let customerSiteUrl;
+let customerDeployUrl;
+try {
+  customerSiteUrl = new URL(clean(customerControlEvidence.netlify_site_url));
+  customerDeployUrl = new URL(clean(customerControlEvidence.netlify_deploy_url));
+} catch (error) {
+  throw new Error("ARC_CUSTOMER_CONTROL_INVALID: customer Netlify URL");
+}
+for (const url of [customerSiteUrl, customerDeployUrl]) {
+  if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash || url.pathname !== "/") {
+    throw new Error("ARC_CUSTOMER_CONTROL_INVALID: customer Netlify URL must be a plain HTTPS root");
+  }
+}
+const customerRepositoryUrl = `https://github.com/${clean(customerControlEvidence.github_repository).toLowerCase()}`;
+const customerControlEvidenceSha256 = await sha256Hex(customerControlEvidenceRaw);
 
 const api = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}`;
 const headers = {
@@ -395,6 +538,10 @@ const request = async (url, options = {}, allowed = []) => {
   if (allowed.includes(response.status)) return { _status: response.status, _body: body };
   throw new Error(`ARC_GITHUB_FAILED: ${response.status} ${JSON.stringify(body).slice(0, 240)}`);
 };
+const repositoryMetadata = await request(api);
+if (repositoryMetadata.private !== true || clean(repositoryMetadata.full_name).toLowerCase() !== `${owner.toLowerCase()}/${repository.toLowerCase()}`) {
+  throw new Error("ARC_DELIVERY_REPOSITORY_INVALID: paid deliveries require the exact configured private GitHub repository");
+}
 const wait = (status, proof = {}) => ({
   status,
   send_delivery_email: false,
@@ -402,6 +549,8 @@ const wait = (status, proof = {}) => ({
   delivery_branch: deliveryBranch,
   head_sha: expectedHeadSha,
   bundle_fingerprint: bundleFingerprint,
+  payment_evidence_sha256: paymentEvidenceSha256,
+  customer_control_evidence_sha256: customerControlEvidenceSha256,
   lead_route_evidence_sha256: leadRouteProof.sha256,
   pr_number: prNumber,
   proof
@@ -466,22 +615,6 @@ if (!latestCheck || clean(latestCheck.status) !== "completed" || clean(latestChe
 await verifyExactBundle(mergeCommitSha, "merge commit");
 await verifyExactBundle(baseBranch, "current main");
 
-for (const [index, artifact] of bundle.entries()) {
-  const liveUrl = index === 0 ? new URL(productionUrl.toString()) : new URL(artifact.path.split("/").pop(), productionUrl);
-  const response = await fetch(liveUrl.toString(), { method: "GET", headers: { Accept: index === 0 ? "text/html" : "*/*" }, redirect: "follow" });
-  if (response.status !== 200) {
-    return wait("WAITING_FOR_PAGES", { live_path: artifact.path, live_status: response.status });
-  }
-  const finalUrl = new URL(response.url || liveUrl.toString());
-  if (finalUrl.origin !== liveUrl.origin || decodeURIComponent(finalUrl.pathname) !== decodeURIComponent(liveUrl.pathname)) {
-    throw new Error(`ARC_DELIVERY_GATE_MISMATCH: Pages redirected ${artifact.path} away from the exact delivery path`);
-  }
-  const liveBytes = await response.text();
-  if (liveBytes !== artifact.content) {
-    return wait("WAITING_FOR_PAGES", { live_path: artifact.path, live_status: 200, live_proof: "bytes" });
-  }
-}
-
 if (leadRouteProof.stagingDeployUrl) {
   const stagingResponse = await fetch(leadRouteProof.stagingDeployUrl, {
     method: "GET",
@@ -513,6 +646,8 @@ const identitySha256 = await sha256Hex([
   expectedHeadSha,
   String(prNumber),
   mergeCommitSha,
+  paymentEvidenceSha256,
+  customerControlEvidenceSha256,
   leadRouteProof.sha256
 ].join("\n"));
 const claimRef = `refs/tags/arc-delivery-email/${identitySha256}`;
@@ -525,6 +660,8 @@ const claimMessage = `${JSON.stringify({
   head_sha: expectedHeadSha,
   pr_number: prNumber,
   merge_commit_sha: mergeCommitSha,
+  payment_evidence_sha256: paymentEvidenceSha256,
+  customer_control_evidence_sha256: customerControlEvidenceSha256,
   lead_route_evidence_sha256: leadRouteProof.sha256
 }, null, 2)}\n`;
 const verifyClaim = async claimSha => {
@@ -557,6 +694,8 @@ if (!existingClaim._status) {
     delivery_branch: deliveryBranch,
     head_sha: expectedHeadSha,
     bundle_fingerprint: bundleFingerprint,
+    payment_evidence_sha256: paymentEvidenceSha256,
+    customer_control_evidence_sha256: customerControlEvidenceSha256,
     lead_route_evidence_sha256: leadRouteProof.sha256,
     pr_number: prNumber,
     email_claim_identity_sha256: identitySha256,
@@ -588,6 +727,8 @@ if (claim._status) {
     delivery_branch: deliveryBranch,
     head_sha: expectedHeadSha,
     bundle_fingerprint: bundleFingerprint,
+    payment_evidence_sha256: paymentEvidenceSha256,
+    customer_control_evidence_sha256: customerControlEvidenceSha256,
     lead_route_evidence_sha256: leadRouteProof.sha256,
     pr_number: prNumber,
     email_claim_identity_sha256: identitySha256,
@@ -606,12 +747,15 @@ return {
   delivery_branch: deliveryBranch,
   head_sha: expectedHeadSha,
   bundle_fingerprint: bundleFingerprint,
+  payment_evidence_sha256: paymentEvidenceSha256,
+  customer_control_evidence_sha256: customerControlEvidenceSha256,
   lead_route_evidence_sha256: leadRouteProof.sha256,
   lead_route_form_name: leadRouteProof.formName,
   lead_route_recipient_hmac_sha256: leadRouteProof.recipientHmacSha256,
   pr_number: prNumber,
-  production_url: productionUrl.toString(),
-  deploy_url: deployUrl,
+  customer_site_url: customerSiteUrl.toString(),
+  customer_repository_url: customerRepositoryUrl,
+  customer_deploy_url: customerDeployUrl.toString(),
   email_claim_identity_sha256: identitySha256,
   recipient_hmac_sha256: recipientBindingHmacSha256,
   required_check: requiredCheckName

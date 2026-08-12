@@ -23,13 +23,23 @@
     "required_runtime_names": [
       "STRIPE_TEST_API_KEY",
       "ARC_CHECKOUT_BINDING_SECRET",
+      "GITHUB_PREVIEW_SOURCE_READ_TOKEN",
       "GITHUB_DELIVERY_TOKEN",
       "ARC_EMAIL_CLAIM_SECRET",
       "NETLIFY_ACCESS_TOKEN",
       "ARC1_INTAKE_EVIDENCE_SECRET",
       "ARC_LEAD_ROUTE_EVIDENCE_SECRET",
-      "ARC_INBOX_RECEIPT_EVIDENCE_SECRET"
-    ]
+      "ARC_INBOX_RECEIPT_EVIDENCE_SECRET",
+      "ARC_CUSTOMER_CONTROL_EVIDENCE_SECRET"
+    ],
+    "customer_authorization": {
+      "source": "external-secure-handoff",
+      "repository_storage_allowed": false,
+      "long_lived_shared_token_allowed": false,
+      "per_customer_short_lived_read_only_authorization_required": true,
+      "zapier_field_log_redaction_verified": false,
+      "revocation_after_verification_required": true
+    }
   },
   "arc1": {
     "purpose": "validated-unlisted-preview",
@@ -101,6 +111,15 @@
       ],
       "maximum_pending_ttl_hours": 24
     },
+    "abuse_controls": {
+      "per_submission_replay_claim_required": true,
+      "unique_submission_rate_limit_required_before_build": true,
+      "authoritative_rate_limit_provider": null,
+      "maximum_builds_per_rolling_window": null,
+      "maximum_builds_per_day": null,
+      "live_configuration_verified": false,
+      "fail_closed_when_limit_state_is_unavailable": true
+    },
     "preview_email": {
       "allowed_before_gate": false,
       "gate_must_bind_exact_pr_head_sha": true,
@@ -154,6 +173,15 @@
       "scope_summary_required_before_payment": true,
       "live_configuration_verified": false
     },
+    "payment_evidence_gate": {
+      "evidence_version": "arc2-payment-evidence-v1",
+      "signature_algorithm": "HMAC-SHA-256",
+      "signature_secret_source": "ARC_CHECKOUT_BINDING_SECRET",
+      "publisher_must_verify_signature_and_exact_bindings": true,
+      "merge_must_verify_signature_and_exact_bindings": true,
+      "email_gate_must_verify_signature_and_exact_bindings": true,
+      "caller_digest_is_authoritative": false
+    },
     "ordered_steps": [
       "zapier/arc2_resolve_and_finalize.js",
       "netlify/claim-arc-controlled-temporary-site",
@@ -164,6 +192,8 @@
       "zapier/arc2_verify_lead_route_staging.js",
       "zapier/arc2_publish_delivery_pr.js",
       "zapier/arc2_merge_delivery_pr.js",
+      "external-secure-handoff/customer-creates-owned-github-repo-and-netlify-site",
+      "zapier/arc2_verify_customer_control.js",
       "zapier/arc2_delivery_email_gate.js",
       "email-provider/send-with-durable-idempotency",
       "inbox-provider/issue-customer-delivery-receipt-attestation",
@@ -171,6 +201,31 @@
     ],
     "publish_mode": "pull-request-only",
     "direct_main_publish_allowed": false,
+    "repositories": {
+      "preview_source": {
+        "access": "read-only",
+        "owner": "arcwebhq-cpu",
+        "repository": "arc-previews",
+        "contains_paid_delivery_artifacts": false
+      },
+      "delivery_target": {
+        "access": "write",
+        "visibility_required": "private",
+        "owner": null,
+        "repository": null,
+        "must_not_equal_preview_source": true,
+        "required_ci_workflow_must_already_be_installed": true,
+        "required_ci_workflow_verified": false,
+        "github_pages_delivery_allowed": false
+      }
+    },
+    "handoff": {
+      "mode": "external-secure-manual",
+      "one_click_repository_transfer_claim_allowed": false,
+      "one_click_deploy_url_allowed": false,
+      "customer_accounts_must_exist_before_verification": true,
+      "customer_control_evidence_required_before_email": true
+    },
     "forbidden_steps": [
       "zapier/arc2_publish_delivery.js"
     ],
@@ -196,6 +251,11 @@
       "gate_must_reverify_fresh_lead_route_evidence": true,
       "gate_must_reverify_immutable_processed_staging_bytes": true,
       "gate_must_requery_current_netlify_state": true,
+      "gate_must_bind_payment_evidence_sha256": true,
+      "gate_must_verify_signed_payment_evidence": true,
+      "gate_must_require_signed_customer_control_evidence": true,
+      "gate_must_bind_customer_repository_and_netlify_exact_bytes": true,
+      "gate_must_not_require_arc_pages_delivery": true,
       "gate_must_claim_private_outbox_first": true
     },
     "lead_route_gate": {
@@ -205,6 +265,35 @@
       "immutable_processed_staging_html_required_at_each_gate": true,
       "current_site_deploy_manifest_form_hook_and_submission_requeried_at_each_gate": true,
       "authoritative_inbox_receipt_required": true,
+      "caller_status_string_is_authoritative": false
+    },
+    "customer_control_gate": {
+      "source": "zapier/arc2_verify_customer_control.js",
+      "read_only": true,
+      "write_methods_allowed": false,
+      "evidence_version": "arc-customer-control-evidence-v1",
+      "evidence_scope": "customer-owned-github-and-netlify",
+      "signature_algorithm": "HMAC-SHA-256",
+      "signature_secret_source": "runtime-secret-store",
+      "maximum_evidence_age_seconds": 1800,
+      "required_bindings": [
+        "payment_evidence_sha256",
+        "merge_commit_sha",
+        "recipient_hmac_sha256",
+        "customer_github_repository",
+        "customer_github_commit_sha",
+        "customer_github_repository_tree_sha256",
+        "customer_netlify_account_id",
+        "customer_netlify_site_id",
+        "customer_netlify_deploy_id",
+        "customer_netlify_deploy_file_manifest_sha256",
+        "served_html_sha256"
+      ],
+      "exact_customer_repository_bytes_required": true,
+      "exact_customer_netlify_source_bytes_required": true,
+      "immutable_customer_netlify_served_bytes_required": true,
+      "customer_github_admin_control_required": true,
+      "customer_netlify_account_owner_control_required": true,
       "caller_status_string_is_authoritative": false
     }
   },
@@ -376,11 +465,17 @@
     "arc1_authoritative_netlify_intake_verified": false,
     "arc1_asset_bytes_verified": false,
     "arc1_atomic_intake_claim_verified": false,
+    "arc1_unique_submission_rate_limit_verified": false,
     "zapier_arc2_wired": false,
     "stripe_test_trigger_verified": false,
     "stripe_authenticated_session_retrieval_verified": false,
     "github_preview_pr_merge_verified": false,
     "github_delivery_pr_merge_verified": false,
+    "private_delivery_repository_verified": false,
+    "private_delivery_ci_workflow_verified": false,
+    "secure_customer_handoff_verified": false,
+    "customer_authorization_redaction_verified": false,
+    "customer_control_evidence_verified": false,
     "pages_preview_live_bytes_verified": false,
     "preview_email_delivery_verified": false,
     "delivery_email_delivery_verified": false,
@@ -399,6 +494,13 @@
   },
   "unresolved": {
     "expected_payment_link_id": null,
+    "private_delivery_repository_owner": null,
+    "private_delivery_repository_name": null,
+    "private_delivery_required_ci_workflow": null,
+    "secure_customer_handoff_authority": null,
+    "customer_authorization_broker": null,
+    "customer_control_evidence_secret_configured": null,
+    "customer_control_verifier_configuration": null,
     "analytics_receiver": null,
     "analytics_dashboard": null,
     "verified_lead_routing_recipient": null,
@@ -411,6 +513,9 @@
     "arc1_netlify_form_id": null,
     "arc1_netlify_form_name": null,
     "arc1_asset_upload_origin_allowlist": null,
+    "arc1_rate_limit_authority": null,
+    "arc1_rolling_build_limit": null,
+    "arc1_daily_build_limit": null,
     "arc_netlify_account_id": null,
     "adult_contracting_representative": null,
     "legal_operator": null,

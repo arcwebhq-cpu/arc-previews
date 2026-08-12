@@ -25,18 +25,26 @@ const legacyQaFiles = [
   "prism-auto-detail-qa-6a77713f/index.html"
 ];
 const v10Manifest = JSON.parse(await readFile(path.join(root, "qa-v10/manifest.json"), "utf8"));
+const showcaseManifest = JSON.parse(await readFile(path.join(root, "showcases/manifest.json"), "utf8"));
 const mediaManifest = JSON.parse(await readFile(path.join(root, "config/media-manifest.json"), "utf8"));
 const v10ByFile = new Map(v10Manifest.map(item => [item.file, item]));
+const showcaseByFile = new Map(showcaseManifest.map(item => [item.file, item]));
 const launchV10Manifest = v10Manifest.filter(item => item.isLaunch);
 
-async function discoverV10PreviewFiles(directory = root) {
-  const entries = await readdir(directory, { withFileTypes: true });
+async function discoverV10Files(directory, ignoredDirectories = []) {
+  let entries;
+  try {
+    entries = await readdir(directory, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  }
   const files = [];
   for (const entry of entries) {
-    if ([".git", "node_modules", "deliveries", "test-results"].includes(entry.name)) continue;
+    if ([".git", ".pages-dist", "node_modules", "test-results", ...ignoredDirectories].includes(entry.name)) continue;
     const absolute = path.join(directory, entry.name);
     if (entry.isDirectory()) {
-      files.push(...await discoverV10PreviewFiles(absolute));
+      files.push(...await discoverV10Files(absolute, ignoredDirectories));
     } else if (entry.isFile() && entry.name === "index.html") {
       const html = await readFile(absolute, "utf8");
       if (/<meta\s+name=["']arc-template-version["']\s+content=["']10\.0["']/i.test(html)) {
@@ -47,13 +55,15 @@ async function discoverV10PreviewFiles(directory = root) {
   return files;
 }
 
-const discoveredV10Files = (await discoverV10PreviewFiles()).sort();
+const discoveredV10Files = (await discoverV10Files(root, ["deliveries", "showcases"])).sort();
+const discoveredV10DeliveryFiles = (await discoverV10Files(path.join(root, "deliveries"))).sort();
+const showcaseFiles = showcaseManifest.map(item => item.file);
 for (const fixture of v10Manifest) {
   assert.ok(discoveredV10Files.includes(fixture.file), `v10 fixture is missing from browser discovery: ${fixture.file}`);
 }
 const qaFiles = process.env.ARC_QA_V10_ONLY === "1"
-  ? discoveredV10Files
-  : [...legacyQaFiles, ...discoveredV10Files];
+  ? [...discoveredV10Files, ...discoveredV10DeliveryFiles]
+  : [...legacyQaFiles, ...discoveredV10Files, ...showcaseFiles, ...discoveredV10DeliveryFiles];
 const qaLimit = Math.max(1, Math.min(qaFiles.length, Number(process.env.ARC_QA_LIMIT || qaFiles.length)));
 const filesToTest = qaFiles.slice(0, qaLimit);
 const viewports = [
@@ -221,6 +231,7 @@ try {
           return {
             robots: document.querySelector('meta[name="robots"]')?.content || "",
             arcTemplateVersion: document.querySelector('meta[name="arc-template-version"]')?.content || "",
+            arcShowcaseProfile: document.querySelector('meta[name="arc-showcase-profile"]')?.content || "",
             arcSiteMode: document.body.dataset.arcSiteMode || "",
             arcMediaProfile: document.body.dataset.arcMediaProfile || "",
             arcMediaProvider: document.body.dataset.arcMediaProvider || "",
@@ -243,6 +254,8 @@ try {
             darkSections,
             images,
             links,
+            formCount: document.querySelectorAll("form").length,
+            showcaseDisclosure: document.body.innerText.includes("Fictional ARC design concept — not a real business. Checkout and lead collection are disabled."),
             curatedImages: [...document.images].filter(visible).map(image => ({
               profile: image.dataset.arcMediaProfile || "",
               provider: image.dataset.arcMediaProvider || "",
@@ -253,8 +266,15 @@ try {
           };
         });
 
-        assert.match(report.robots, /noindex/i, "noindex missing");
-        assert.match(report.robots, /nofollow/i, "nofollow missing");
+        const isDelivery = file.startsWith("deliveries/");
+        const showcase = showcaseByFile.get(file);
+        if (isDelivery) {
+          assert.match(report.robots, /(?:^|,)\s*index\s*,\s*follow(?:,|$)/i, "production index/follow metadata missing");
+          assert.doesNotMatch(report.robots, /noindex/i, "production delivery remained noindex");
+        } else {
+          assert.match(report.robots, /noindex/i, "noindex missing");
+          assert.match(report.robots, /nofollow/i, "nofollow missing");
+        }
         assert.ok(report.overflow <= 1, `horizontal overflow is ${report.overflow}px`);
         assert.equal(report.unresolved.length, 0, "unresolved placeholders remain");
         assert.equal(report.privateEmail, false, "private requester email is visible");
@@ -276,10 +296,10 @@ try {
         }
         const v10Fixture = v10ByFile.get(file);
         if (report.arcTemplateVersion === "10.0") {
-          const expectedProfile = v10Fixture?.expectedProfile || report.arcExpectedMediaProfile;
+          const expectedProfile = v10Fixture?.expectedProfile || showcase?.profile || report.arcExpectedMediaProfile;
           const profile = mediaManifest.profiles.find(item => item.key === expectedProfile);
           assert.ok(profile, `media manifest profile ${expectedProfile} is missing`);
-          assert.equal(report.arcSiteMode, "preview", "v10 fixture is not in preview mode");
+          assert.equal(report.arcSiteMode, isDelivery ? "production" : showcase ? "showcase" : "preview", "v10 site mode does not match its audit class");
           assert.equal(report.arcMediaProfile, expectedProfile, "semantic media profile mismatch");
           assert.equal(report.arcExpectedMediaProfile, expectedProfile, "server-selected media profile mismatch");
           assert.equal(report.arcMediaProvider, profile.provider, "media provider mismatch");
@@ -298,10 +318,18 @@ try {
               : new Set(profile.urls.map(value => new URL(value).pathname));
           assert.ok(report.curatedImages.every(item => allowed.has(new URL(item.source).pathname)), "an image URL is outside the selected profile pool");
           const checkout = report.links.find(href => href?.includes("buy.stripe.com"));
-          assert.ok(checkout, "bound Stripe checkout link is missing");
-          const expectedFolder = v10Fixture?.folder || path.basename(path.dirname(file));
-          const checkoutReference = new URL(checkout).searchParams.get("client_reference_id") || "";
-          assert.match(checkoutReference, new RegExp(`^${expectedFolder}\\.[a-f0-9]{64}$`), "checkout folder binding mismatch");
+          if (v10Fixture) {
+            assert.ok(checkout, "bound Stripe checkout link is missing");
+            const checkoutReference = new URL(checkout).searchParams.get("client_reference_id") || "";
+            assert.match(checkoutReference, new RegExp(`^${v10Fixture.folder}\\.[a-f0-9]{64}$`), "checkout folder binding mismatch");
+          } else {
+            assert.equal(checkout, undefined, "a non-preview page exposed a Stripe checkout link");
+          }
+          if (showcase) {
+            assert.equal(report.arcShowcaseProfile, showcase.profile, "showcase profile metadata mismatch");
+            assert.equal(report.formCount, 0, "showcase retained a customer lead submission form");
+            assert.equal(report.showcaseDisclosure, true, "visible fictional-concept disclosure missing");
+          }
         }
         if (saveScreenshots) {
           const slug = file.replace(/\/index\.html$/i, "").replace(/[^a-z0-9_-]+/gi, "-");

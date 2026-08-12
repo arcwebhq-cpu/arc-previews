@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { createTestIntakeEvidence } from "./fixtures/intake_evidence.mjs";
 
@@ -221,6 +221,27 @@ const sourceHtml = "<!doctype html><html><head>\n<meta name=\"robots\" content=\
 const pagesBaseUrl = "https://arcwebhq-cpu.github.io/arc-previews";
 const previewUrl = `${pagesBaseUrl}/${folder}/`;
 const customerEmail = "must-not-leak@example.com";
+const renderEvidenceFor = (html, previewFolder = folder) => {
+  const evidence = {
+    version: "arc1-render-evidence-v1",
+    scope: "signed-sanitized-preview-render",
+    preview_folder: previewFolder,
+    content_sha256: sha256(html),
+    intake_evidence_sha256: intakeContext.intakeEvidenceSha256,
+    state_digest_sha256: intakeContext.evidence.state_digest_sha256,
+    submission_data_sha256: intakeContext.evidence.submission_data_sha256,
+    asset_manifest_sha256: intakeContext.assetManifestSha256
+  };
+  const canonical = JSON.stringify(evidence);
+  return {
+    canonical,
+    signature: createHmac("sha256", intakeContext.privateInputs.intake_evidence_secret)
+      .update(`arc1-render-evidence-signature-v1\n${canonical}`)
+      .digest("hex"),
+    contentSha256: evidence.content_sha256
+  };
+};
+const signedRenderEvidence = renderEvidenceFor(sourceHtml);
 const mock = new MockGitHubAndPages();
 const publisherInput = {
   github_token: "mock-github-token",
@@ -231,6 +252,9 @@ const publisherInput = {
   validation_pass: true,
   pages_base_url: pagesBaseUrl,
   customer_email: customerEmail,
+  render_content_sha256: signedRenderEvidence.contentSha256,
+  render_evidence_private: signedRenderEvidence.canonical,
+  render_evidence_hmac_sha256: signedRenderEvidence.signature,
   ...intakeContext.privateInputs,
   ...intakeContext.injectorOutputs
 };
@@ -268,6 +292,15 @@ await assert.rejects(
   /matching atomic private-state claim is required/
 );
 assert.equal(publisherReplayClaimMock.requests.length, 0);
+const publisherTamperedRenderMock = new MockGitHubAndPages();
+await assert.rejects(
+  runPublisher({
+    ...publisherInput,
+    html_content: sourceHtml.replace("Summit Roofing</h1>", "Tampered Render</h1>")
+  }, publisherTamperedRenderMock.fetch.bind(publisherTamperedRenderMock), Buffer),
+  /render evidence is not bound to the exact sanitized preview/
+);
+assert.equal(publisherTamperedRenderMock.requests.length, 0);
 
 const published = await runPublisher(publisherInput, mock.fetch.bind(mock), Buffer);
 assert.equal(published.status, "PR_CREATED");
@@ -315,7 +348,14 @@ assert.equal(mock.requests.filter(request => request.method !== "GET").length, w
 const updateMock = new MockGitHubAndPages();
 const updateFirst = await runPublisher(publisherInput, updateMock.fetch.bind(updateMock), Buffer);
 const changedSourceHtml = sourceHtml.replace("<h1>Summit Roofing</h1>", "<h1>Summit Roofing & Exteriors</h1>");
-const updateSecond = await runPublisher({ ...publisherInput, html_content: changedSourceHtml }, updateMock.fetch.bind(updateMock), Buffer);
+const changedRenderEvidence = renderEvidenceFor(changedSourceHtml);
+const updateSecond = await runPublisher({
+  ...publisherInput,
+  html_content: changedSourceHtml,
+  render_content_sha256: changedRenderEvidence.contentSha256,
+  render_evidence_private: changedRenderEvidence.canonical,
+  render_evidence_hmac_sha256: changedRenderEvidence.signature
+}, updateMock.fetch.bind(updateMock), Buffer);
 assert.equal(updateSecond.status, "PR_UPDATED");
 assert.equal(updateSecond.pr_number, updateFirst.pr_number);
 assert.notEqual(updateSecond.head_sha, updateFirst.head_sha);
@@ -343,7 +383,15 @@ await assert.rejects(
   runPublisher({
     ...publisherInput,
     preview_folder: `different-business-${trustedEventPrefix}`,
-    file_path: `different-business-${trustedEventPrefix}/index.html`
+    file_path: `different-business-${trustedEventPrefix}/index.html`,
+    ...(() => {
+      const evidence = renderEvidenceFor(sourceHtml, `different-business-${trustedEventPrefix}`);
+      return {
+        render_content_sha256: evidence.contentSha256,
+        render_evidence_private: evidence.canonical,
+        render_evidence_hmac_sha256: evidence.signature
+      };
+    })()
   }, folderCollisionMock.fetch.bind(folderCollisionMock), Buffer),
   /deterministic preview branch already belongs to another folder/
 );
@@ -455,7 +503,15 @@ await assert.rejects(
   runPublisher({
     ...publisherInput,
     preview_folder: `different-business-${trustedEventPrefix}`,
-    file_path: `different-business-${trustedEventPrefix}/index.html`
+    file_path: `different-business-${trustedEventPrefix}/index.html`,
+    ...(() => {
+      const evidence = renderEvidenceFor(sourceHtml, `different-business-${trustedEventPrefix}`);
+      return {
+        render_content_sha256: evidence.contentSha256,
+        render_evidence_private: evidence.canonical,
+        render_evidence_hmac_sha256: evidence.signature
+      };
+    })()
   }, mock.fetch.bind(mock), Buffer),
   /merged preview content differs from this replay/
 );

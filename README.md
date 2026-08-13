@@ -28,8 +28,11 @@ ARC1 accepts an intake only after an authenticated Netlify API lookup binds the 
 submission ID and time, the exact disclosures, a create-only private claim, and hashes of
 server-validated PNG/JPEG/WEBP uploads. It also requires fresh signed evidence from a read-only
 Stripe Payment Link preflight. The preflight pins Stripe API `2026-06-24.dahlia` and verifies the
-exact active test link, one $5,000 one-time Price, required terms and adult acknowledgement,
-business/individual name collection, disabled automatic tax, dynamic payment methods, and exact
+authenticated Stripe account against a private account-ID hash, active mode-matched Stripe Tax settings, the exact active mode-matched link,
+one $5,000 one-time subtotal Price, required terms and adult acknowledgement,
+business/individual name collection, enabled automatic tax, exclusive Price tax behavior, the
+advisor-confirmed Product tax code, active expected tax registrations (including Washington),
+dynamic payment methods, and exact
 Checkout Session redirect to
 `https://arcweb.onl/payment-success/?session_id={CHECKOUT_SESSION_ID}`. The preview binding uses Stripe-compatible
 `<8-hex-folder-suffix>_<64-hex-approval-SHA-256>_<64-hex-HMAC>` syntax. The HMAC is
@@ -37,32 +40,46 @@ domain-separated over the suffix and the exact pre-toolbar approval bytes, makin
 reference Stripe-safe while preventing a later same-folder replacement from fulfilling different bytes.
 
 ARC2 treats both `checkout.session.completed` and `checkout.session.async_payment_succeeded` as
-notifications only. It retrieves the authenticated test Checkout Session with expanded line
+notifications only. It retrieves the authenticated configured-mode Checkout Session with expanded line
 items and proceeds only after paid status, exact Payment Link and Price IDs, one quantity-one
-$5,000 line item, accepted static terms, required name collection, the exact adult acknowledgement,
-and the signed preview-folder HMAC all verify. An unpaid `completed` event must not consume the
+$5,000 subtotal line item plus Stripe-calculated destination tax, complete automatic-tax and
+customer-address evidence, an exact ARC Stripe-account hash, active tax-registration readback,
+accepted static terms, required name collection, the exact adult acknowledgement, and the signed
+preview-folder HMAC all verify. An unpaid `completed` event must not consume the
 durable fulfillment claim; a later asynchronous success must still be eligible.
+
+`ARC_STRIPE_LIVE_MODE_ENABLED` is fail-closed: missing or `false` means test mode; only exact `true`
+selects live-mode key, Payment Link, Price, Product, account, registration, and Checkout Session
+contracts. The repository leaves live events and real charges disabled. Activating live mode is a
+manual launch action only after the ARC-owned Stripe account, Stripe Tax registrations, legal/tax
+review, exact Product tax code, and full test-mode evidence are verified.
 
 The resolver ends at `READY_FOR_CLAIMABLE_DEPLOY`. Its current signed Netlify distribution contains
 exactly root `index.html` and `_headers`. Additional assets or success pages require a new signed
 evidence version and matching validators. `USAGE.md`, `.arc-handoff.json`, `netlify.toml`, recipient data,
 Stripe IDs, and secrets are forbidden deploy artifacts. The resolver does not create a site,
-send a claim invitation, or send customer email.
+reserve a claim invitation, send it, or send customer email.
 
 The live architecture is Netlify’s official deploy-and-claim flow, not a customer GitHub/token
 handoff or an authorization-code exchange. A claim invitation is allowed only after the exact
 preclaim deploy, form route, notification hook, rendered-form probe, and authoritative inbox
 receipt are verified. The high-entropy opaque ARC claim token remains a bearer secret and is
-stored only as a hash. It is forbidden in URL paths and queries. A future browser bridge may carry
+stored only as an HMAC. It is forbidden in URL paths and queries. The claim service can reserve a
+durable invitation-ready outbox and recover the same bearer after a lost response, but READY is not
+evidence that email was sent. A future email-provider integration needs a separate durable delivery
+receipt. A browser bridge may carry
 it only in the fragment, clear browser history immediately, and submit it by same-origin POST
-`Authorization: Bearer`; that invitation UX and durable issuance outbox are not implemented or
-enabled. The claim webhook is an unsigned hint; Netlify
+`Authorization: Bearer`; that invitation email UX remains unimplemented and disabled. The claim
+webhook is an unsigned hint; Netlify
 state must be re-read before advancing. The final handoff email requires fresh signed payment,
 artifact, and `FINAL_DEPLOY_READY` state evidence plus an already-claimed durable outbox record.
 Legacy delivery-PR, merge, and customer-control scripts fail closed and are not in the live flow.
 
 This repository does **not** establish launch readiness. All wiring-contract external flags stay
 false until live evidence exists. Current blockers include exact Payment Link/Price configuration,
+the ARC-owned Stripe account hash (the available connected account must not be assumed to be ARC),
+tax-advisor confirmation of the Product tax code, active Stripe Tax registrations and destination
+tax testing, authenticated refund/dispute event handling and an atomic fulfillment state provider,
 Netlify claim-JWT and post-claim customer-authorized readback capability, private state and email
 providers, the real lead inbox and delivery receipt, final domain, a client-supplied privacy-policy
 URL, immutable terms retention, adult operator/entity/address/venue decisions, staging cleanup,

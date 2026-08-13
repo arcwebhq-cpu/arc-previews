@@ -354,7 +354,7 @@ const expectedSiteId=clean(inputData.expected_netlify_site_id).toLowerCase();
 const expectedFormId=clean(inputData.expected_netlify_form_id).toLowerCase();
 const expectedFormName=clean(inputData.expected_netlify_form_name);
 const requiredBudgetConfirmation="Yes, understands the finished ARC website is $5,000 only after preview approval";
-const requiredTermsAcceptance="Accepted ARC preview terms, privacy policy, refund policy, and service scope dated 2026-08-11; separate adult checkout acceptance required";
+const requiredTermsAcceptance="Accepted ARC preview terms, privacy policy, refund policy, and service scope dated 2026-08-12; separate adult checkout acceptance required";
 const receivedAt=clean(intakeEvidence.received_at),issuedAt=clean(intakeEvidence.issued_at);
 const receivedMs=Date.parse(receivedAt),issuedMs=Date.parse(issuedAt),nowMs=Date.now();
 const derivedPublicFolderPrefix=(await sha256Text([
@@ -465,8 +465,11 @@ const paymentLinkEvidenceRaw=clean(inputData.payment_link_evidence_private);
 let paymentLinkEvidence;
 try{paymentLinkEvidence=JSON.parse(paymentLinkEvidenceRaw);}catch(error){throw new Error("ARC_PAYMENT_LINK_INVALID: payment-link evidence JSON");}
 const paymentLinkEvidenceFields=[
-  "version","scope","payment_link_id","payment_link_url","price_id","amount_total_minor_units",
-  "currency","quantity","terms_version","configuration_sha256","issued_at"
+  "version","scope","payment_link_id","payment_link_url","price_id","amount_subtotal_minor_units",
+  "stripe_account_id_sha256","livemode",
+  "currency","quantity","terms_version","automatic_tax_enabled","customer_address_source",
+  "price_tax_behavior","product_tax_code","tax_contract_version","tax_settings_status","tax_registrations_sha256",
+  "configuration_sha256","issued_at"
 ];
 if(!paymentLinkEvidence||typeof paymentLinkEvidence!=="object"||Array.isArray(paymentLinkEvidence)||
   canonicalJson(paymentLinkEvidence)!==paymentLinkEvidenceRaw||
@@ -476,15 +479,31 @@ if(!paymentLinkEvidence||typeof paymentLinkEvidence!=="object"||Array.isArray(pa
 const expectedPaymentLinkId=clean(inputData.expected_payment_link_id);
 const expectedPriceId=clean(inputData.expected_price_id);
 const expectedTermsVersion=clean(inputData.expected_terms_version);
+const expectedProductTaxCode=clean(inputData.expected_product_tax_code);
+const expectedStripeAccountIdSha256=clean(inputData.expected_stripe_account_id_sha256).toLowerCase();
+const stripeLiveModeFlag=clean(inputData.stripe_live_mode_enabled).toLowerCase();
+if(!["","false","true"].includes(stripeLiveModeFlag))throw new Error("ARC_STRIPE_MODE_INVALID: stripe_live_mode_enabled must be true or false");
+const stripeLiveModeEnabled=stripeLiveModeFlag==="true";
 const paymentLinkEvidenceIssuedAt=clean(paymentLinkEvidence.issued_at);
 const paymentLinkEvidenceIssuedMs=Date.parse(paymentLinkEvidenceIssuedAt);
-if(paymentLinkEvidence.version!=="arc1-payment-link-evidence-v1"||
-  paymentLinkEvidence.scope!=="authoritative-stripe-test-payment-link-preflight"||
+if(paymentLinkEvidence.version!=="arc1-payment-link-evidence-v2"||
+  paymentLinkEvidence.scope!=="authoritative-stripe-payment-link-preflight"||
   !/^plink_[A-Za-z0-9]+$/.test(expectedPaymentLinkId)||!/^price_[A-Za-z0-9]+$/.test(expectedPriceId)||
-  expectedTermsVersion!=="2026-08-11"||paymentLinkEvidence.payment_link_id!==expectedPaymentLinkId||
+  !/^txcd_[0-9]{8}$/.test(expectedProductTaxCode)||
+  !/^[a-f0-9]{64}$/.test(expectedStripeAccountIdSha256)||
+  expectedTermsVersion!=="2026-08-12"||paymentLinkEvidence.payment_link_id!==expectedPaymentLinkId||
   paymentLinkEvidence.price_id!==expectedPriceId||paymentLinkEvidence.payment_link_url!==paymentLinkUrl||
-  paymentLinkEvidence.amount_total_minor_units!==500000||paymentLinkEvidence.currency!=="usd"||
+  paymentLinkEvidence.stripe_account_id_sha256!==expectedStripeAccountIdSha256||
+  paymentLinkEvidence.livemode!==stripeLiveModeEnabled||
+  paymentLinkEvidence.amount_subtotal_minor_units!==500000||paymentLinkEvidence.currency!=="usd"||
   paymentLinkEvidence.quantity!==1||paymentLinkEvidence.terms_version!==expectedTermsVersion||
+  paymentLinkEvidence.automatic_tax_enabled!==true||
+  paymentLinkEvidence.customer_address_source!=="stripe_checkout_customer_details.address"||
+  paymentLinkEvidence.price_tax_behavior!=="exclusive"||
+  paymentLinkEvidence.product_tax_code!==expectedProductTaxCode||
+  paymentLinkEvidence.tax_contract_version!=="arc-tax-v1"||
+  paymentLinkEvidence.tax_settings_status!=="active"||
+  !/^[a-f0-9]{64}$/.test(clean(paymentLinkEvidence.tax_registrations_sha256))||
   !/^[a-f0-9]{64}$/.test(clean(paymentLinkEvidence.configuration_sha256))||
   !Number.isFinite(paymentLinkEvidenceIssuedMs)||new Date(paymentLinkEvidenceIssuedMs).toISOString()!==paymentLinkEvidenceIssuedAt||
   paymentLinkEvidenceIssuedMs<Date.now()-5*60*1000||paymentLinkEvidenceIssuedMs>Date.now()+5*60*1000){
@@ -498,7 +517,7 @@ const paymentLinkEvidenceKey=await globalThis.crypto.subtle.importKey(
 if(!(await globalThis.crypto.subtle.verify(
   "HMAC",paymentLinkEvidenceKey,
   Uint8Array.from(paymentLinkEvidenceHmac.match(/../g),byte=>Number.parseInt(byte,16)),
-  evidenceEncoder.encode(`arc1-payment-link-evidence-signature-v1\n${paymentLinkEvidenceRaw}`)
+  evidenceEncoder.encode(`arc1-payment-link-evidence-signature-v2\n${paymentLinkEvidenceRaw}`)
 ))){
   throw new Error("ARC_PAYMENT_LINK_INVALID: payment-link evidence HMAC mismatch");
 }
@@ -509,8 +528,11 @@ try {
 } catch (error) {
   throw new Error("ARC_PAYMENT_LINK_INVALID: checkout URL is malformed");
 }
-if (checkout.origin !== "https://buy.stripe.com" || !/^\/test_[A-Za-z0-9]+$/.test(checkout.pathname)) {
-  throw new Error("ARC_PAYMENT_LINK_INVALID: checkout must use a Stripe test-mode Payment Link");
+const checkoutPathMatchesMode=stripeLiveModeEnabled
+  ?/^\/[A-Za-z0-9]+$/.test(checkout.pathname)&&!checkout.pathname.startsWith("/test_")
+  :/^\/test_[A-Za-z0-9]+$/.test(checkout.pathname);
+if (checkout.origin !== "https://buy.stripe.com" || !checkoutPathMatchesMode) {
+  throw new Error("ARC_PAYMENT_LINK_INVALID: checkout mode does not match the signed Stripe configuration");
 }
 const checkoutBindingSecret = clean(inputData.checkout_binding_secret);
 if (checkoutBindingSecret.length < 32 || checkoutBindingSecret.length > 256) {

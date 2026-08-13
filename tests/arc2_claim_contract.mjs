@@ -24,7 +24,9 @@ const emailClaimBindingSecret = "arc2-test-email-claim-binding-secret-32-bytes";
 const recipientEmail = "stripe-customer@example.test";
 const expectedPaymentLinkId = "plink_1ArcV10Test5000";
 const expectedPriceId = "price_1ArcV10Test5000";
-const expectedTermsVersion = "2026-08-11";
+const expectedProductTaxCode = "txcd_12345678";
+const expectedStripeAccountIdSha256 = "7".repeat(64);
+const expectedTermsVersion = "2026-08-12";
 const previewFolder = "summit-roofing-a1b2c3d4";
 const productionUrl = "https://summit-roofing.netlify.app/";
 const productionHtml = "<!doctype html><title>Summit Roofing</title>\n";
@@ -49,9 +51,10 @@ const artifactEvidenceObject = {
 const artifactEvidencePrivate = canonicalJson(artifactEvidenceObject);
 const artifactEvidenceSha256 = sha256(artifactEvidencePrivate);
 const paymentEvidenceObject = {
-  version: "arc2-payment-evidence-v1",
-  scope: "authoritative-stripe-test-checkout-session",
+  version: "arc2-payment-evidence-v2",
+  scope: "authoritative-stripe-checkout-session",
   checkout_session_id: "cs_test_arc_claim_contract",
+  stripe_account_id_sha256: expectedStripeAccountIdSha256,
   client_reference_id_sha256: sha256(`${previewFolder}_${"a".repeat(64)}`),
   preview_folder: previewFolder,
   production_content_sha256: sha256(productionHtml),
@@ -64,10 +67,22 @@ const paymentEvidenceObject = {
   status: "complete",
   payment_status: "paid",
   currency: "usd",
-  amount_total_minor_units: 500000,
-  amount_subtotal_minor_units: 500000,
+  subtotal_amount_minor_units: 500000,
+  tax_amount_minor_units: 50000,
+  amount_total_minor_units: 550000,
   payment_link_id: expectedPaymentLinkId,
   price_id: expectedPriceId,
+  product_tax_code: expectedProductTaxCode,
+  price_tax_behavior: "exclusive",
+  automatic_tax_enabled: true,
+  automatic_tax_status: "complete",
+  customer_address_status: "verified",
+  tax_registration_status: "verified",
+  tax_contract_version: "arc-tax-v1",
+  tax_registrations_sha256: "8".repeat(64),
+  customer_address_sha256: "9".repeat(64),
+  customer_address_country: "US",
+  customer_address_state: "WA",
   quantity: 1,
   terms_of_service_consent: "accepted",
   terms_version: expectedTermsVersion,
@@ -85,7 +100,7 @@ const emailClaimKey = canonicalJson({
   production_url: productionUrl
 });
 const claimStateEvidenceObject = {
-  version: "arc2-claim-state-evidence-v1",
+  version: "arc2-claim-state-evidence-v2",
   scope: "netlify-deploy-and-claim-final-deploy",
   status: "FINAL_DEPLOY_READY",
   netlify_session_id: netlifySessionId,
@@ -98,7 +113,7 @@ const claimStateEvidenceObject = {
   netlify_deploy_id_sha256: sha256("deploy-id"),
   netlify_destination_account_id_sha256: sha256("destination-account-id"),
   production_url: productionUrl,
-  claim_invitation_sent_at: new Date(Date.now() - 25_000).toISOString(),
+  claim_invitation_ready_at: new Date(Date.now() - 25_000).toISOString(),
   claim_callback_received_at: new Date(Date.now() - 20_000).toISOString(),
   claimed_verified_at: new Date(Date.now() - 15_000).toISOString(),
   final_deploy_ready_at: new Date(Date.now() - 12_000).toISOString(),
@@ -118,18 +133,21 @@ const signedInput = ({
   const claimPrivate = canonicalJson(claim);
   return {
     payment_evidence_private: paymentPrivate,
-    payment_evidence_hmac_sha256: sign("arc2-payment-evidence-signature-v1", paymentPrivate, checkoutBindingSecret),
+    payment_evidence_hmac_sha256: sign("arc2-payment-evidence-signature-v2", paymentPrivate, checkoutBindingSecret),
     checkout_binding_secret: checkoutBindingSecret,
     handoff_artifact_evidence_private: artifactPrivate,
     handoff_artifact_evidence_hmac_sha256: sign("arc2-handoff-artifact-evidence-signature-v1", artifactPrivate, artifactEvidenceSecret),
     handoff_artifact_evidence_secret: artifactEvidenceSecret,
     claim_state_evidence_private: claimPrivate,
-    claim_state_evidence_hmac_sha256: sign("arc2-claim-state-evidence-signature-v1", claimPrivate, claimStateEvidenceSecret),
+    claim_state_evidence_hmac_sha256: sign("arc2-claim-state-evidence-signature-v2", claimPrivate, claimStateEvidenceSecret),
     claim_state_evidence_secret: claimStateEvidenceSecret,
     email_claim_binding_secret: emailClaimBindingSecret,
     recipient_email: recipientEmail,
     expected_payment_link_id: expectedPaymentLinkId,
     expected_price_id: expectedPriceId,
+    expected_product_tax_code: expectedProductTaxCode,
+    expected_stripe_account_id_sha256: expectedStripeAccountIdSha256,
+    stripe_live_mode_enabled: "false",
     expected_terms_version: expectedTermsVersion,
     ...overrides
   };

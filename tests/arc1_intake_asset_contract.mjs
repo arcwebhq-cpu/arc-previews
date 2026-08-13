@@ -35,7 +35,7 @@ const clientSpoofReceivedAt = "2099-01-01T00:00:00.000Z";
 const clientSpoofStartedAt = "1999-01-01T00:00:00.000Z";
 const privateEmail = "private-owner@example.test";
 const requiredBudgetConfirmation = "Yes, understands the finished ARC website is $5,000 only after preview approval";
-const requiredTermsAcceptance = "Accepted ARC preview terms, privacy policy, refund policy, and service scope dated 2026-08-11; separate adult checkout acceptance required";
+const requiredTermsAcceptance = "Accepted ARC preview terms, privacy policy, refund policy, and service scope dated 2026-08-12; separate adult checkout acceptance required";
 const typeByRole = {
   logo_file: "image/png",
   hero_image_file: "image/jpeg",

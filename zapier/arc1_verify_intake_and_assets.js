@@ -9,7 +9,7 @@ const expectedFormId = clean(inputData.expected_netlify_form_id).toLowerCase();
 const expectedFormName = clean(inputData.expected_netlify_form_name);
 const triggerSubmissionId = clean(inputData.trigger_submission_id).toLowerCase();
 const requiredBudgetConfirmation = "Yes, understands the finished ARC website is $5,000 only after preview approval";
-const requiredTermsAcceptance = "Accepted ARC preview terms, privacy policy, refund policy, and service scope dated 2026-08-11; separate adult checkout acceptance required";
+const requiredTermsAcceptance = "Accepted ARC preview terms, privacy policy, refund policy, and service scope dated 2026-08-12; separate adult checkout acceptance required";
 
 if (!netlifyToken) throw new Error("ARC1_INTAKE_INVALID: Netlify access token is required");
 if (!globalThis.crypto?.subtle || typeof TextEncoder !== "function" || typeof Buffer !== "function") {

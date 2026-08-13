@@ -32,7 +32,8 @@ const runLegacyPublisher = new AsyncFunction("inputData", "fetch", "Buffer", leg
 const paymentLinkUrl = "https://buy.stripe.com/test_00000000000000";
 const expectedPaymentLinkId = "plink_1ArcV10Test5000";
 const expectedPriceId = "price_1ArcV10Test5000";
-const expectedTermsVersion = "2026-08-11";
+const expectedProductTaxCode = "txcd_12345678";
+const expectedTermsVersion = "2026-08-12";
 const checkoutBindingSecret = "arc-test-checkout-binding-secret-32-bytes-minimum";
 const leadRouteEvidenceSecret = "arc-test-lead-route-evidence-secret-32-bytes-minimum";
 const handoffArtifactEvidenceSecret = "arc-test-handoff-artifact-evidence-secret-32-bytes-minimum";
@@ -40,6 +41,10 @@ const stripeTestApiKey = "sk_test_arc_contract_key_000000000000";
 const previewSourceOwner = "arcwebhq-cpu";
 const previewSourceRepository = "arc-previews";
 const sha256 = value => createHash("sha256").update(value, "utf8").digest("hex");
+const stripeAccountId = "acct_ArcBusinessTest";
+const expectedStripeAccountIdSha256 = sha256(stripeAccountId);
+const taxRegistrationId = "taxreg_ArcWashingtonTest";
+const expectedTaxRegistrations = [{ country: "US", id: taxRegistrationId, state: "WA", type: "state_sales_tax" }];
 const paymentLinkContext = createTestPaymentLinkEvidence({
   paymentLinkId: expectedPaymentLinkId,
   priceId: expectedPriceId,
@@ -53,7 +58,7 @@ const signedCheckoutReference = (folder, approvalContentSha256) => {
     .digest("hex");
   return `${suffix}_${approvalContentSha256}_${signature}`;
 };
-const stripeSessionUrl = id => `https://api.stripe.com/v1/checkout/sessions/${id}?expand%5B%5D=line_items`;
+const stripeSessionUrl = id => `https://api.stripe.com/v1/checkout/sessions/${id}?expand%5B%5D=line_items.data.price.product`;
 const exactLineItems = {
   object: "list",
   has_more: false,
@@ -63,8 +68,8 @@ const exactLineItems = {
     currency: "usd",
     amount_subtotal: 500000,
     amount_discount: 0,
-    amount_tax: 0,
-    amount_total: 500000,
+    amount_tax: 50000,
+    amount_total: 550000,
     price: {
       object: "price",
       id: expectedPriceId,
@@ -73,7 +78,9 @@ const exactLineItems = {
       currency: "usd",
       unit_amount: 500000,
       custom_unit_amount: null,
-      recurring: null
+      recurring: null,
+      tax_behavior: "exclusive",
+      product: { object: "product", id: "prod_ArcWebsiteService", tax_code: expectedProductTaxCode }
     }
   }]
 };
@@ -130,14 +137,20 @@ for (const [index, item] of rendered.entries()) {
     payment_status: "paid",
     currency: "usd",
     amount_subtotal: 500000,
-    amount_total: 500000,
+    amount_total: 550000,
+    total_details: { amount_discount: 0, amount_shipping: 0, amount_tax: 50000 },
+    automatic_tax: { enabled: true, status: "complete" },
     payment_link: expectedPaymentLinkId,
     line_items: exactLineItems,
     consent: { terms_of_service: "accepted" },
-    metadata: { terms_version: expectedTermsVersion },
+    metadata: { terms_version: expectedTermsVersion, tax_contract_version: "arc-tax-v1" },
     custom_fields: [adultPurchaserField],
     collected_information: { business_name: fixture.content.BUSINESS_NAME, individual_name: "Authorized Buyer" },
-    customer_details: { email: fixture.customerEmail }
+    customer_details: {
+      email: fixture.customerEmail,
+      tax_exempt: "none",
+      address: { city: "Everett", country: "US", line1: "100 Test Way", line2: "", postal_code: "98201", state: "WA" }
+    }
   };
   const verifiedLeadNotificationEmail = `verified-${fixture.expectedProfile}@example.test`;
   const expectedRecipientHmac = leadRouteRecipientHmac(verifiedLeadNotificationEmail);
@@ -146,7 +159,7 @@ for (const [index, item] of rendered.entries()) {
 
   const folderLookupReference = index % 2 ? intake.publicFolderPrefix : preview.folder;
   assert.equal(resolvePreviewFolder({ clientReferenceId: folderLookupReference, treePaths }), preview.folder);
-  validatePaidSession(session, { expectedPaymentLinkId, expectedPriceId, expectedTermsVersion });
+  validatePaidSession(session, { expectedPaymentLinkId, expectedPriceId, expectedTermsVersion, expectedProductTaxCode });
 
   const handoff = buildProductionHandoff({
     session,
@@ -155,6 +168,7 @@ for (const [index, item] of rendered.entries()) {
     expectedPaymentLinkId,
     expectedPriceId,
     expectedTermsVersion,
+    expectedProductTaxCode,
     checkoutBindingSecret,
     verifiedLeadNotificationEmail,
     leadRouteEvidenceSecret,
@@ -242,6 +256,26 @@ for (const [index, item] of rendered.entries()) {
     `<!-- ARC_PREVIEW_PROOF_START -->\n<meta name="arc-preview-folder" content="${preview.folder}">\n<meta name="arc-preview-source-sha256" content="${approvedSourceSha256}">\n<!-- ARC_PREVIEW_PROOF_END -->\n</head>`
   );
   const mockFetch = async (url, options = {}) => {
+    if (url === "https://api.stripe.com/v1/account") {
+      return { ok: true, status: 200, url, json: async () => ({ object: "account", id: stripeAccountId }) };
+    }
+    if (url === `https://api.stripe.com/v1/tax/registrations/${taxRegistrationId}`) {
+      return {
+        ok: true,
+        status: 200,
+        url,
+        json: async () => ({
+          object: "tax.registration",
+          id: taxRegistrationId,
+          livemode: false,
+          status: "active",
+          active_from: Math.floor(Date.now() / 1000) - 3600,
+          expires_at: null,
+          country: "US",
+          country_options: { us: { state: "WA", type: "state_sales_tax" } }
+        })
+      };
+    }
     if (url === stripeSessionUrl(session.id)) {
       assert.equal(options.method, "GET");
       assert.equal(options.redirect, "error");
@@ -284,6 +318,10 @@ for (const [index, item] of rendered.entries()) {
     handoff_artifact_evidence_secret: handoffArtifactEvidenceSecret,
     expected_payment_link_id: expectedPaymentLinkId,
     expected_price_id: expectedPriceId,
+    expected_product_tax_code: expectedProductTaxCode,
+    expected_stripe_account_id_sha256: expectedStripeAccountIdSha256,
+    expected_tax_registrations_json: JSON.stringify(expectedTaxRegistrations),
+    stripe_live_mode_enabled: "false",
     expected_terms_version: expectedTermsVersion,
     // Caller-mapped Stripe fields are deliberately false. The resolver must ignore them.
     client_reference_id: "attacker-deadbeef_" + "0".repeat(64),
@@ -320,19 +358,28 @@ for (const [index, item] of rendered.entries()) {
   assert.equal(arc2.stripe_session_retrieved, true);
   assert.equal(arc2.client_reference_id, checkoutReference);
   assert.equal(arc2.livemode, false);
-  assert.equal(arc2.amount_total_minor_units, 500000);
-  assert.equal(arc2.amount_subtotal_minor_units, 500000);
+  assert.equal(arc2.amount_total_minor_units, 550000);
+  assert.equal(arc2.subtotal_amount_minor_units, 500000);
+  assert.equal(arc2.tax_amount_minor_units, 50000);
   assert.equal(arc2.payment_link_id, expectedPaymentLinkId);
   assert.equal(arc2.price_id, expectedPriceId);
+  assert.equal(arc2.product_tax_code, expectedProductTaxCode);
+  assert.equal(arc2.stripe_account_id_sha256, expectedStripeAccountIdSha256);
+  assert.equal(arc2.automatic_tax_status, "complete");
+  assert.equal(arc2.customer_address_status, "verified");
+  assert.equal(arc2.tax_registration_status, "verified");
   assert.equal(arc2.quantity, 1);
   assert.equal(arc2.terms_of_service_consent, "accepted");
   assert.equal(arc2.terms_version, expectedTermsVersion);
   assert.equal(arc2.adult_purchaser_acknowledgement, "accepted");
   assert.deepEqual(Object.keys(JSON.parse(arc2.payment_evidence_private)).sort(), [
-    "adult_purchaser_acknowledgement", "amount_subtotal_minor_units", "amount_total_minor_units",
+    "adult_purchaser_acknowledgement", "subtotal_amount_minor_units", "tax_amount_minor_units", "amount_total_minor_units",
     "artifact_manifest_sha256", "bundle_fingerprint", "checkout_session_id", "client_reference_id_sha256",
-    "currency", "customer_email_sha256", "handoff_artifact_evidence_sha256", "livemode", "mode",
-    "payment_link_id", "payment_status", "preview_folder", "price_id", "production_content_sha256",
+    "currency", "customer_email_sha256", "customer_address_sha256", "customer_address_country", "customer_address_state",
+    "customer_address_status", "handoff_artifact_evidence_sha256", "livemode", "mode", "stripe_account_id_sha256",
+    "payment_link_id", "payment_status", "preview_folder", "price_id", "product_tax_code", "price_tax_behavior",
+    "automatic_tax_enabled", "automatic_tax_status", "tax_contract_version", "tax_registrations_sha256",
+    "tax_registration_status", "production_content_sha256",
     "quantity", "scope", "status", "terms_of_service_consent", "terms_version", "version"
   ].sort());
   assert.equal(arc2.customer_email, fixture.customerEmail);
@@ -523,21 +570,40 @@ const validPaidSession = {
   payment_status: "paid",
   currency: "usd",
   amount_subtotal: 500000,
-  amount_total: 500000,
+  amount_total: 550000,
+  total_details: { amount_discount: 0, amount_shipping: 0, amount_tax: 50000 },
+  automatic_tax: { enabled: true, status: "complete" },
   payment_link: expectedPaymentLinkId,
   line_items: exactLineItems,
   consent: { terms_of_service: "accepted" },
-  metadata: { terms_version: expectedTermsVersion },
+  metadata: { terms_version: expectedTermsVersion, tax_contract_version: "arc-tax-v1" },
   custom_fields: [adultPurchaserField],
   collected_information: { business_name: rendered[0].fixture.content.BUSINESS_NAME, individual_name: "Authorized Buyer" },
-  customer_details: { email: rendered[0].fixture.customerEmail }
+  customer_details: {
+    email: rendered[0].fixture.customerEmail,
+    tax_exempt: "none",
+    address: { city: "Everett", country: "US", line1: "100 Test Way", line2: "", postal_code: "98201", state: "WA" }
+  }
 };
-const paymentExpectations = { expectedPaymentLinkId, expectedPriceId, expectedTermsVersion };
-assert.throws(() => validatePaidSession({ ...validPaidSession, amount_total: 499999 }, paymentExpectations), /500000 minor units/);
-assert.throws(() => validatePaidSession({ ...validPaidSession, amount_total: "500000" }, paymentExpectations), /500000 minor units/);
+const paymentExpectations = { expectedPaymentLinkId, expectedPriceId, expectedTermsVersion, expectedProductTaxCode };
+assert.throws(() => validatePaidSession({ ...validPaidSession, amount_total: 499999 }, paymentExpectations), /subtotal plus Stripe-calculated tax/);
+assert.throws(() => validatePaidSession({ ...validPaidSession, amount_total: "550000" }, paymentExpectations), /subtotal plus Stripe-calculated tax/);
 assert.throws(() => validatePaidSession({ ...validPaidSession, object: "payment_intent" }, paymentExpectations), /object identity/);
 assert.throws(() => validatePaidSession({ ...validPaidSession, id: "cs_live_forbidden", livemode: true }, paymentExpectations), /test checkout session id/);
-assert.throws(() => validatePaidSession({ ...validPaidSession, livemode: true }, paymentExpectations), /livemode must be false/);
+assert.throws(() => validatePaidSession({ ...validPaidSession, livemode: true }, paymentExpectations), /livemode does not match configured Stripe mode/);
+const livePaidSession = {
+  ...validPaidSession,
+  id: "cs_live_contract_positive",
+  livemode: true,
+  line_items: {
+    ...exactLineItems,
+    data: [{
+      ...exactLineItems.data[0],
+      price: { ...exactLineItems.data[0].price, livemode: true }
+    }]
+  }
+};
+assert.equal(validatePaidSession(livePaidSession, { ...paymentExpectations, stripeLiveModeEnabled: true }), true);
 assert.throws(() => validatePaidSession({ ...validPaidSession, mode: "subscription" }, paymentExpectations), /completed one-time payment/);
 assert.throws(() => validatePaidSession({ ...validPaidSession, status: "open" }, paymentExpectations), /completed one-time payment/);
 assert.throws(() => validatePaidSession(validPaidSession, { ...paymentExpectations, expectedPaymentLinkId: "" }), /expected Payment Link id/);
@@ -546,8 +612,8 @@ assert.equal(validatePaidSession({ ...validPaidSession, payment_link: { id: expe
 assert.throws(() => validatePaidSession(validPaidSession, { ...paymentExpectations, expectedPriceId: "" }), /expected Price id/);
 assert.throws(() => validatePaidSession({ ...validPaidSession, line_items: { ...exactLineItems, has_more: true } }, paymentExpectations), /exactly one fully expanded line item/);
 assert.throws(() => validatePaidSession({ ...validPaidSession, line_items: { ...exactLineItems, data: [] } }, paymentExpectations), /exactly one fully expanded line item/);
-assert.throws(() => validatePaidSession({ ...validPaidSession, line_items: { ...exactLineItems, data: [{ ...exactLineItems.data[0], quantity: 2 }] } }, paymentExpectations), /exact one-time ARC Price/);
-assert.throws(() => validatePaidSession({ ...validPaidSession, line_items: { ...exactLineItems, data: [{ ...exactLineItems.data[0], price: { ...exactLineItems.data[0].price, id: "price_1Wrong" } }] } }, paymentExpectations), /exact one-time ARC Price/);
+assert.throws(() => validatePaidSession({ ...validPaidSession, line_items: { ...exactLineItems, data: [{ ...exactLineItems.data[0], quantity: 2 }] } }, paymentExpectations), /exclusive-tax ARC Price/);
+assert.throws(() => validatePaidSession({ ...validPaidSession, line_items: { ...exactLineItems, data: [{ ...exactLineItems.data[0], price: { ...exactLineItems.data[0].price, id: "price_1Wrong" } }] } }, paymentExpectations), /exclusive-tax ARC Price/);
 assert.throws(() => validatePaidSession({ ...validPaidSession, consent: {} }, paymentExpectations), /consent must be accepted/);
 assert.throws(() => validatePaidSession(validPaidSession, { ...paymentExpectations, expectedTermsVersion: "" }), /expected terms version/);
 assert.throws(() => validatePaidSession({ ...validPaidSession, metadata: { terms_version: "stale-terms" } }, paymentExpectations), /terms version mismatch/);
@@ -672,6 +738,10 @@ const arc2PaymentNegativeInput = {
   handoff_artifact_evidence_secret: handoffArtifactEvidenceSecret,
   expected_payment_link_id: expectedPaymentLinkId,
   expected_price_id: expectedPriceId,
+  expected_product_tax_code: expectedProductTaxCode,
+  expected_stripe_account_id_sha256: expectedStripeAccountIdSha256,
+  expected_tax_registrations_json: JSON.stringify(expectedTaxRegistrations),
+  stripe_live_mode_enabled: "false",
   expected_terms_version: expectedTermsVersion,
   github_token: "test-token",
   preview_source_github_owner: previewSourceOwner,
@@ -687,20 +757,35 @@ await assert.rejects(
   /handoff artifact evidence secret/
 );
 const paymentFetch = override => async (url, options = {}) => {
+  if (url === "https://api.stripe.com/v1/account") {
+    return { ok: true, status: 200, url, json: async () => ({ object: "account", id: stripeAccountId }) };
+  }
+  if (url === `https://api.stripe.com/v1/tax/registrations/${taxRegistrationId}`) {
+    return {
+      ok: true,
+      status: 200,
+      url,
+      json: async () => ({
+        object: "tax.registration", id: taxRegistrationId, livemode: false, status: "active",
+        active_from: Math.floor(Date.now() / 1000) - 3600, expires_at: null, country: "US",
+        country_options: { us: { state: "WA", type: "state_sales_tax" } }
+      })
+    };
+  }
   if (url === stripeSessionUrl(validPaidSession.id)) {
     return { ok: true, status: 200, url, json: async () => ({ ...authoritativeNegativeSession, ...override }) };
   }
   throw new Error("payment gate unexpectedly reached GitHub");
 };
 await assert.rejects(
-  runArc2(arc2PaymentNegativeInput, paymentFetch({ amount_total: "500000" }), Buffer),
-  /amount_total must be exactly 500000/
+  runArc2(arc2PaymentNegativeInput, paymentFetch({ amount_total: "550000" }), Buffer),
+  /subtotal plus Stripe-calculated tax/
 );
-await assert.rejects(runArc2(arc2PaymentNegativeInput, paymentFetch({ amount_total: 499999 }), Buffer), /amount_total must be exactly 500000/);
+await assert.rejects(runArc2(arc2PaymentNegativeInput, paymentFetch({ amount_total: 499999 }), Buffer), /subtotal plus Stripe-calculated tax/);
 await assert.rejects(runArc2(arc2PaymentNegativeInput, paymentFetch({ amount_subtotal: 499999 }), Buffer), /amount_subtotal must be exactly 500000/);
 await assert.rejects(runArc2(arc2PaymentNegativeInput, paymentFetch({ line_items: { ...exactLineItems, has_more: true } }), Buffer), /exactly one fully expanded line item/);
-await assert.rejects(runArc2(arc2PaymentNegativeInput, paymentFetch({ line_items: { ...exactLineItems, data: [{ ...exactLineItems.data[0], price: { ...exactLineItems.data[0].price, id: "price_1Wrong" } }] } }), Buffer), /exact one-time ARC Price/);
-await assert.rejects(runArc2(arc2PaymentNegativeInput, paymentFetch({ livemode: true }), Buffer), /livemode must be false/);
+await assert.rejects(runArc2(arc2PaymentNegativeInput, paymentFetch({ line_items: { ...exactLineItems, data: [{ ...exactLineItems.data[0], price: { ...exactLineItems.data[0].price, id: "price_1Wrong" } }] } }), Buffer), /exclusive-tax ARC Price/);
+await assert.rejects(runArc2(arc2PaymentNegativeInput, paymentFetch({ livemode: true }), Buffer), /livemode does not match/);
 await assert.rejects(runArc2(arc2PaymentNegativeInput, paymentFetch({ mode: "subscription" }), Buffer), /completed one-time payment/);
 await assert.rejects(runArc2(arc2PaymentNegativeInput, paymentFetch({ status: "open" }), Buffer), /completed one-time payment/);
 await assert.rejects(runArc2(arc2PaymentNegativeInput, paymentFetch({ payment_link: "plink_1WrongIdentity" }), Buffer), /identity mismatch/);
@@ -747,6 +832,19 @@ const callerTamperingResult = await runArc2({
   lead_route_evidence_secret: leadRouteEvidenceSecret,
   handoff_artifact_evidence_secret: handoffArtifactEvidenceSecret
 }, async (url, options = {}) => {
+  if (url === "https://api.stripe.com/v1/account") {
+    return { ok: true, status: 200, url, json: async () => ({ object: "account", id: stripeAccountId }) };
+  }
+  if (url === `https://api.stripe.com/v1/tax/registrations/${taxRegistrationId}`) {
+    return {
+      ok: true, status: 200, url,
+      json: async () => ({
+        object: "tax.registration", id: taxRegistrationId, livemode: false, status: "active",
+        active_from: Math.floor(Date.now() / 1000) - 3600, expires_at: null, country: "US",
+        country_options: { us: { state: "WA", type: "state_sales_tax" } }
+      })
+    };
+  }
   if (url === stripeSessionUrl(validPaidSession.id)) {
     return { ok: true, status: 200, url, json: async () => authoritativeNegativeSession };
   }
@@ -768,7 +866,7 @@ const callerTamperingResult = await runArc2({
 assert.equal(callerTamperingResult.customer_email, validPaidSession.customer_details.email);
 assert.equal(callerTamperingResult.payment_link_id, expectedPaymentLinkId);
 assert.equal(callerTamperingResult.price_id, expectedPriceId);
-assert.equal(callerTamperingResult.amount_total_minor_units, 500000);
+assert.equal(callerTamperingResult.amount_total_minor_units, 550000);
 
 console.log(
   `Pipeline contract passed: ${rendered.length}/${rendered.length} signed ARC1 intake payloads, ` +

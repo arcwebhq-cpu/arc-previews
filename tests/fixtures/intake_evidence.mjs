@@ -6,7 +6,7 @@ export const TEST_NETLIFY_FORM_ID = "a".repeat(40);
 export const TEST_NETLIFY_FORM_NAME = "arc-preview";
 export const TEST_NETLIFY_SUBMISSION_ID = "5231110b5803540aeb000019";
 export const TEST_BUDGET_CONFIRMATION = "Yes, understands the finished ARC website is $5,000 only after preview approval";
-export const TEST_TERMS_ACCEPTANCE = "Accepted ARC preview terms, privacy policy, refund policy, and service scope dated 2026-08-11; separate adult checkout acceptance required";
+export const TEST_TERMS_ACCEPTANCE = "Accepted ARC preview terms, privacy policy, refund policy, and service scope dated 2026-08-12; separate adult checkout acceptance required";
 
 export function canonicalJson(value) {
   if (value === null || typeof value === "string" || typeof value === "boolean") return JSON.stringify(value);

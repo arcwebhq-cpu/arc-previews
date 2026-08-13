@@ -1,5 +1,7 @@
 // ARC2 final-delivery email gate for the Netlify deploy-and-claim flow.
-// The one-time ownership claim invitation is sent earlier by the claim service.
+// The claim service only reserves a READY invitation outbox and bearer. It does
+// not prove email delivery. This final gate relies on verified claim/deploy state,
+// not on a fabricated invitation-sent assertion.
 // This gate authorizes only the final delivery email, after signed evidence proves
 // Netlify deploy-and-claim completion, destination-account control, a verified final
 // deploy, and an already-claimed durable outbox record.
@@ -18,6 +20,12 @@ const recipientEmail = clean(inputData.recipient_email).toLowerCase();
 const expectedPaymentLinkId = clean(inputData.expected_payment_link_id);
 const expectedPriceId = clean(inputData.expected_price_id);
 const expectedTermsVersion = clean(inputData.expected_terms_version);
+const expectedProductTaxCode = clean(inputData.expected_product_tax_code);
+const expectedStripeAccountIdSha256 = clean(inputData.expected_stripe_account_id_sha256).toLowerCase();
+const stripeLiveModeFlag = clean(inputData.stripe_live_mode_enabled).toLowerCase();
+if (!["", "false", "true"].includes(stripeLiveModeFlag)) throw new Error("ARC_STRIPE_MODE_INVALID: stripe_live_mode_enabled must be true or false");
+const stripeLiveModeEnabled = stripeLiveModeFlag === "true";
+const stripeMode = stripeLiveModeEnabled ? "live" : "test";
 
 for (const [label, secret] of [
   ["checkout binding", checkoutBindingSecret],
@@ -36,8 +44,9 @@ if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail)) {
   throw new Error("ARC_DELIVERY_EMAIL_INVALID: recipient email");
 }
 if (!/^plink_[A-Za-z0-9]+$/.test(expectedPaymentLinkId) || !/^price_[A-Za-z0-9]+$/.test(expectedPriceId) ||
-    expectedTermsVersion !== "2026-08-11") {
-  throw new Error("ARC_DELIVERY_EMAIL_INVALID: exact Payment Link, Price, and static terms version are required");
+    !/^txcd_[0-9]{8}$/.test(expectedProductTaxCode) || !/^[a-f0-9]{64}$/.test(expectedStripeAccountIdSha256) ||
+    expectedTermsVersion !== "2026-08-12") {
+  throw new Error("ARC_DELIVERY_EMAIL_INVALID: exact Payment Link, Price, Product tax code, and static terms version are required");
 }
 if ([inputData.claim_url, inputData.ownership_handoff_url, inputData.netlify_oauth_token, inputData.netlify_access_token]
   .some(value => clean(value))) {
@@ -95,27 +104,47 @@ const paymentEvidence = await verifyEvidence({
   text: paymentEvidencePrivate,
   signature: paymentEvidenceHmacSha256,
   secret: checkoutBindingSecret,
-  prefix: "arc2-payment-evidence-signature-v1",
+  prefix: "arc2-payment-evidence-signature-v2",
   label: "payment evidence"
 });
 const paymentFields = [
-  "version", "scope", "checkout_session_id", "client_reference_id_sha256", "preview_folder",
+  "version", "scope", "checkout_session_id", "stripe_account_id_sha256", "client_reference_id_sha256", "preview_folder",
   "production_content_sha256", "artifact_manifest_sha256", "handoff_artifact_evidence_sha256",
   "bundle_fingerprint", "customer_email_sha256", "livemode", "mode", "status", "payment_status",
-  "currency", "amount_total_minor_units", "amount_subtotal_minor_units", "payment_link_id", "price_id",
+  "currency", "amount_total_minor_units", "subtotal_amount_minor_units", "tax_amount_minor_units",
+  "payment_link_id", "price_id", "product_tax_code", "price_tax_behavior", "automatic_tax_enabled",
+  "automatic_tax_status", "customer_address_status", "tax_registration_status", "tax_contract_version",
+  "tax_registrations_sha256", "customer_address_sha256",
+  "customer_address_country", "customer_address_state",
   "quantity", "terms_of_service_consent", "terms_version",
   "adult_purchaser_acknowledgement"
 ];
 if (JSON.stringify(Object.keys(paymentEvidence).sort()) !== JSON.stringify(paymentFields.slice().sort()) ||
-    clean(paymentEvidence.version) !== "arc2-payment-evidence-v1" ||
-    clean(paymentEvidence.scope) !== "authoritative-stripe-test-checkout-session" ||
-    !/^cs_test_[A-Za-z0-9_]+$/.test(clean(paymentEvidence.checkout_session_id)) ||
-    paymentEvidence.livemode !== false || clean(paymentEvidence.mode) !== "payment" ||
+    clean(paymentEvidence.version) !== "arc2-payment-evidence-v2" ||
+    clean(paymentEvidence.scope) !== "authoritative-stripe-checkout-session" ||
+    !new RegExp(`^cs_${stripeMode}_[A-Za-z0-9_]+$`).test(clean(paymentEvidence.checkout_session_id)) ||
+    clean(paymentEvidence.stripe_account_id_sha256).toLowerCase() !== expectedStripeAccountIdSha256 ||
+    paymentEvidence.livemode !== stripeLiveModeEnabled || clean(paymentEvidence.mode) !== "payment" ||
     clean(paymentEvidence.status) !== "complete" || clean(paymentEvidence.payment_status) !== "paid" ||
-    clean(paymentEvidence.currency) !== "usd" || paymentEvidence.amount_total_minor_units !== 500000 ||
-    paymentEvidence.amount_subtotal_minor_units !== 500000 || paymentEvidence.quantity !== 1 ||
+    clean(paymentEvidence.currency) !== "usd" || paymentEvidence.subtotal_amount_minor_units !== 500000 ||
+    !Number.isSafeInteger(paymentEvidence.tax_amount_minor_units) || paymentEvidence.tax_amount_minor_units < 0 ||
+    !Number.isSafeInteger(paymentEvidence.amount_total_minor_units) ||
+    paymentEvidence.amount_total_minor_units !== paymentEvidence.subtotal_amount_minor_units + paymentEvidence.tax_amount_minor_units ||
+    paymentEvidence.quantity !== 1 ||
     clean(paymentEvidence.payment_link_id) !== expectedPaymentLinkId ||
     clean(paymentEvidence.price_id) !== expectedPriceId ||
+    clean(paymentEvidence.product_tax_code) !== expectedProductTaxCode ||
+    clean(paymentEvidence.price_tax_behavior) !== "exclusive" || paymentEvidence.automatic_tax_enabled !== true ||
+    clean(paymentEvidence.automatic_tax_status) !== "complete" ||
+    clean(paymentEvidence.customer_address_status) !== "verified" ||
+    clean(paymentEvidence.tax_registration_status) !== "verified" || clean(paymentEvidence.tax_contract_version) !== "arc-tax-v1" ||
+    !/^[a-f0-9]{64}$/.test(clean(paymentEvidence.tax_registrations_sha256).toLowerCase()) ||
+    !/^[a-f0-9]{64}$/.test(clean(paymentEvidence.customer_address_sha256).toLowerCase()) ||
+    !/^[A-Z]{2}$/.test(clean(paymentEvidence.customer_address_country)) ||
+    !/^[A-Z0-9-]{0,10}$/.test(clean(paymentEvidence.customer_address_state)) ||
+    (clean(paymentEvidence.customer_address_country) === "US" && !/^[A-Z]{2}$/.test(clean(paymentEvidence.customer_address_state))) ||
+    (clean(paymentEvidence.customer_address_country) === "US" && clean(paymentEvidence.customer_address_state) === "WA" &&
+      paymentEvidence.tax_amount_minor_units <= 0) ||
     clean(paymentEvidence.terms_of_service_consent) !== "accepted" ||
     clean(paymentEvidence.terms_version) !== expectedTermsVersion ||
     clean(paymentEvidence.adult_purchaser_acknowledgement) !== "accepted") {
@@ -186,18 +215,18 @@ const claimStateEvidence = await verifyEvidence({
   text: claimStateEvidencePrivate,
   signature: claimStateEvidenceHmacSha256,
   secret: claimStateEvidenceSecret,
-  prefix: "arc2-claim-state-evidence-signature-v1",
+  prefix: "arc2-claim-state-evidence-signature-v2",
   label: "claim-state evidence"
 });
 const claimFields = [
   "version", "scope", "status", "netlify_session_id", "preview_folder", "payment_evidence_sha256",
   "handoff_artifact_evidence_sha256", "bundle_fingerprint", "customer_email_sha256",
   "netlify_site_id_sha256", "netlify_deploy_id_sha256", "netlify_destination_account_id_sha256",
-  "production_url", "claim_invitation_sent_at", "claim_callback_received_at", "claimed_verified_at",
+  "production_url", "claim_invitation_ready_at", "claim_callback_received_at", "claimed_verified_at",
   "final_deploy_ready_at", "outbox_claim_status", "outbox_claim_key_hmac_sha256", "issued_at"
 ];
 if (JSON.stringify(Object.keys(claimStateEvidence).sort()) !== JSON.stringify(claimFields.slice().sort()) ||
-    clean(claimStateEvidence.version) !== "arc2-claim-state-evidence-v1" ||
+    clean(claimStateEvidence.version) !== "arc2-claim-state-evidence-v2" ||
     clean(claimStateEvidence.scope) !== "netlify-deploy-and-claim-final-deploy" ||
     clean(claimStateEvidence.status) !== "FINAL_DEPLOY_READY" ||
     clean(claimStateEvidence.outbox_claim_status) !== "CLAIMED" ||
@@ -225,7 +254,7 @@ if (productionUrl.protocol !== "https:" || productionUrl.username || productionU
   throw new Error("ARC_DELIVERY_EMAIL_INVALID: production URL must be a plain HTTPS root");
 }
 const timestamps = [
-  "claim_invitation_sent_at", "claim_callback_received_at", "claimed_verified_at", "final_deploy_ready_at", "issued_at"
+  "claim_invitation_ready_at", "claim_callback_received_at", "claimed_verified_at", "final_deploy_ready_at", "issued_at"
 ].map(field => {
   const value = clean(claimStateEvidence[field]);
   const milliseconds = Date.parse(value);

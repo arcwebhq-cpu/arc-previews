@@ -1,25 +1,50 @@
-// ARC2 Code step — retrieve the authoritative Stripe test Checkout Session,
+// ARC2 Code step — retrieve the authoritative configured-mode Stripe Checkout Session,
 // resolve the exact approved preview, finalize it, and prepare one signed
 // root-only Netlify claimable-deploy bundle. This step never creates a site,
 // repository, claim invitation, or email.
 const clean = value => String(value == null ? "" : value).trim();
 const sessionId = clean(inputData.checkout_session_id || inputData.session_id);
-const stripeTestApiKey = clean(inputData.stripe_test_api_key);
+const stripeApiKey = clean(inputData.stripe_api_key || inputData.stripe_test_api_key);
 const checkoutBindingSecret = clean(inputData.checkout_binding_secret);
 const handoffArtifactEvidenceSecret = clean(inputData.handoff_artifact_evidence_secret);
 const expectedPaymentLinkId = clean(inputData.expected_payment_link_id);
 const expectedPriceId = clean(inputData.expected_price_id);
-const expectedTermsVersion = "2026-08-11";
+const expectedProductTaxCode = clean(inputData.expected_product_tax_code);
+const expectedTaxRegistrationsJson = clean(inputData.expected_tax_registrations_json);
+const expectedStripeAccountIdSha256 = clean(inputData.expected_stripe_account_id_sha256).toLowerCase();
+const stripeLiveModeFlag = clean(inputData.stripe_live_mode_enabled).toLowerCase();
+if (!["", "false", "true"].includes(stripeLiveModeFlag)) throw new Error("ARC_STRIPE_MODE_INVALID: stripe_live_mode_enabled must be true or false");
+const stripeLiveModeEnabled = stripeLiveModeFlag === "true";
+const stripeMode = stripeLiveModeEnabled ? "live" : "test";
+const expectedTermsVersion = "2026-08-12";
 const owner = clean(inputData.preview_source_github_owner || inputData.github_owner);
 const repository = clean(inputData.preview_source_github_repo || inputData.github_repo);
 const branch = clean(inputData.preview_source_github_branch || inputData.github_branch || "main");
 const token = clean(inputData.github_token);
-if (!/^cs_test_[A-Za-z0-9_]+$/.test(sessionId)) throw new Error("ARC_PAYMENT_INVALID: test checkout session id");
-if (!/^(?:sk|rk)_test_[A-Za-z0-9_]{12,}$/.test(stripeTestApiKey)) {
-  throw new Error("ARC_PAYMENT_INVALID: Stripe test API key is required");
+if (!new RegExp(`^cs_${stripeMode}_[A-Za-z0-9_]+$`).test(sessionId)) throw new Error(`ARC_PAYMENT_INVALID: ${stripeMode} checkout session id`);
+if (!new RegExp(`^(?:sk|rk)_${stripeMode}_[A-Za-z0-9_]{12,}$`).test(stripeApiKey)) {
+  throw new Error(`ARC_PAYMENT_INVALID: Stripe ${stripeMode} API key is required`);
 }
 if (!/^plink_[A-Za-z0-9]+$/.test(expectedPaymentLinkId)) throw new Error("ARC_PAYMENT_INVALID: expected Payment Link id");
 if (!/^price_[A-Za-z0-9]+$/.test(expectedPriceId)) throw new Error("ARC_PAYMENT_INVALID: expected Price id");
+if (!/^txcd_[0-9]{8}$/.test(expectedProductTaxCode)) throw new Error("ARC_TAX_INVALID: expected product tax code");
+if (!/^[a-f0-9]{64}$/.test(expectedStripeAccountIdSha256)) throw new Error("ARC_STRIPE_ACCOUNT_INVALID: exact ARC Stripe account id SHA-256 is required");
+let expectedTaxRegistrations;
+try {
+  expectedTaxRegistrations = JSON.parse(expectedTaxRegistrationsJson);
+} catch (error) {
+  throw new Error("ARC_TAX_INVALID: expected tax registrations JSON");
+}
+const taxRegistrationFields = ["country", "id", "state", "type"];
+if (!Array.isArray(expectedTaxRegistrations) || expectedTaxRegistrations.length < 1 || expectedTaxRegistrations.length > 100 ||
+    expectedTaxRegistrations.some(registration => !registration || typeof registration !== "object" || Array.isArray(registration) ||
+      JSON.stringify(Object.keys(registration).sort()) !== JSON.stringify(taxRegistrationFields) ||
+      !/^taxreg_[A-Za-z0-9]+$/.test(clean(registration.id)) || !/^[A-Z]{2}$/.test(clean(registration.country)) ||
+      !/^[A-Z0-9-]{1,10}$/.test(clean(registration.state)) || !/^[a-z][a-z0-9_]{2,63}$/.test(clean(registration.type))) ||
+    new Set(expectedTaxRegistrations.map(registration => clean(registration.id))).size !== expectedTaxRegistrations.length ||
+    !expectedTaxRegistrations.some(registration => clean(registration.country) === "US" && clean(registration.state) === "WA" && clean(registration.type) === "state_sales_tax")) {
+  throw new Error("ARC_TAX_INVALID: exact active Washington tax registration configuration is required");
+}
 if (clean(inputData.expected_terms_version) !== expectedTermsVersion) {
   throw new Error("ARC_PAYMENT_INVALID: configured terms version must match the static ARC checkout contract");
 }
@@ -50,27 +75,36 @@ const sha256Hex = async value => {
   const digest = await globalThis.crypto.subtle.digest("SHA-256", encoder.encode(value));
   return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("");
 };
+const equalHex = (first, second) => {
+  if (!/^[a-f0-9]{64}$/.test(first) || !/^[a-f0-9]{64}$/.test(second)) return false;
+  let difference = 0;
+  for (let index = 0; index < 64; index += 1) difference |= first.charCodeAt(index) ^ second.charCodeAt(index);
+  return difference === 0;
+};
 
 // The Stripe trigger payload and caller-mapped fields are notification hints only.
 // Every payment, consent, customer, and preview-binding fact below comes from this
-// authenticated read of the exact test-mode Checkout Session.
-const stripeSessionUrl = `https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(sessionId)}?expand%5B%5D=line_items`;
-const stripeResponse = await fetch(stripeSessionUrl, {
-  method: "GET",
-  headers: {
-    Accept: "application/json",
-    Authorization: `Basic ${Buffer.from(`${stripeTestApiKey}:`, "utf8").toString("base64")}`,
-    "Stripe-Version": "2026-06-24.dahlia"
-  },
-  redirect: "error"
-});
-if (stripeResponse.url && stripeResponse.url !== stripeSessionUrl) {
-  throw new Error("ARC_PAYMENT_INVALID: Stripe API redirect rejected");
+// authenticated read of the exact configured-mode Checkout Session.
+const stripeHeaders = {
+  Accept: "application/json",
+  Authorization: `Basic ${Buffer.from(`${stripeApiKey}:`, "utf8").toString("base64")}`,
+  "Stripe-Version": "2026-06-24.dahlia"
+};
+const stripeGet = async resourceUrl => {
+  const response = await fetch(resourceUrl, { method: "GET", headers: stripeHeaders, redirect: "error" });
+  if (response.url && response.url !== resourceUrl) throw new Error("ARC_PAYMENT_INVALID: Stripe API redirect rejected");
+  if (!response.ok) throw new Error(`ARC_PAYMENT_INVALID: Stripe API retrieval failed (${response.status})`);
+  return response.json();
+};
+const stripeAccount = await stripeGet("https://api.stripe.com/v1/account");
+const authenticatedStripeAccountId = clean(stripeAccount?.id);
+const stripeAccountIdSha256 = await sha256Hex(authenticatedStripeAccountId);
+if (!stripeAccount || typeof stripeAccount !== "object" || Array.isArray(stripeAccount) || stripeAccount.object !== "account" ||
+    !/^acct_[A-Za-z0-9]+$/.test(authenticatedStripeAccountId) || !equalHex(stripeAccountIdSha256, expectedStripeAccountIdSha256)) {
+  throw new Error("ARC_STRIPE_ACCOUNT_INVALID: authenticated Stripe account is not the configured ARC account");
 }
-if (!stripeResponse.ok) {
-  throw new Error(`ARC_PAYMENT_INVALID: Stripe Checkout Session retrieval failed (${stripeResponse.status})`);
-}
-const session = await stripeResponse.json();
+const stripeSessionUrl = `https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(sessionId)}?expand%5B%5D=line_items.data.price.product`;
+const session = await stripeGet(stripeSessionUrl);
 if (!session || typeof session !== "object" || Array.isArray(session) || session.object !== "checkout.session" || clean(session.id) !== sessionId) {
   throw new Error("ARC_PAYMENT_INVALID: Stripe Checkout Session identity mismatch");
 }
@@ -95,17 +129,23 @@ const adultAcknowledgement = clean(
   adultAcknowledgements[0]?.numeric?.value
 ).toLowerCase();
 if (!rawClientReferenceId) throw new Error("ARC_FOLDER_NOT_FOUND: client_reference_id is empty");
-if (session.livemode !== false) throw new Error("ARC_PAYMENT_INVALID: livemode must be false");
+if (session.livemode !== stripeLiveModeEnabled) throw new Error("ARC_PAYMENT_INVALID: Checkout Session livemode does not match configured Stripe mode");
 if (clean(session.mode).toLowerCase() !== "payment" || clean(session.status).toLowerCase() !== "complete") {
   throw new Error("ARC_PAYMENT_INVALID: Checkout Session must be a completed one-time payment");
 }
 if (clean(session.payment_status).toLowerCase() !== "paid") throw new Error("ARC_PAYMENT_INVALID: session is not paid");
 if (clean(session.currency).toLowerCase() !== "usd") throw new Error("ARC_PAYMENT_INVALID: currency must be usd");
-if (!Number.isSafeInteger(session.amount_total) || session.amount_total !== 500000) {
-  throw new Error("ARC_PAYMENT_INVALID: amount_total must be exactly 500000 minor units ($5,000.00)");
-}
 if (!Number.isSafeInteger(session.amount_subtotal) || session.amount_subtotal !== 500000) {
   throw new Error("ARC_PAYMENT_INVALID: amount_subtotal must be exactly 500000 minor units ($5,000.00)");
+}
+const amountTax = session.total_details?.amount_tax;
+if (!Number.isSafeInteger(amountTax) || amountTax < 0 || !Number.isSafeInteger(session.amount_total) ||
+    session.amount_total !== session.amount_subtotal + amountTax || session.total_details?.amount_discount !== 0 ||
+    session.total_details?.amount_shipping !== 0) {
+  throw new Error("ARC_TAX_INVALID: total must equal the $5,000 subtotal plus Stripe-calculated tax");
+}
+if (session.automatic_tax?.enabled !== true || clean(session.automatic_tax?.status) !== "complete") {
+  throw new Error("ARC_TAX_INVALID: Stripe automatic tax must be enabled and complete");
 }
 if (paymentLinkId !== expectedPaymentLinkId) throw new Error("ARC_PAYMENT_INVALID: Payment Link identity mismatch");
 const lineItems = session.line_items;
@@ -115,16 +155,20 @@ if (!lineItems || typeof lineItems !== "object" || Array.isArray(lineItems) || l
 }
 const lineItem = lineItems.data[0];
 const price = lineItem?.price;
+const product = price?.product;
 if (!lineItem || lineItem.object !== "item" || lineItem.quantity !== 1 || lineItem.currency !== "usd" ||
-    lineItem.amount_subtotal !== 500000 || lineItem.amount_discount !== 0 || lineItem.amount_tax !== 0 ||
-    lineItem.amount_total !== 500000 || !price || typeof price !== "object" || Array.isArray(price) ||
-    price.object !== "price" || clean(price.id) !== expectedPriceId || price.livemode !== false ||
+    lineItem.amount_subtotal !== 500000 || lineItem.amount_discount !== 0 || lineItem.amount_tax !== amountTax ||
+    lineItem.amount_total !== session.amount_total || !price || typeof price !== "object" || Array.isArray(price) ||
+    price.object !== "price" || clean(price.id) !== expectedPriceId || price.livemode !== stripeLiveModeEnabled ||
     clean(price.type) !== "one_time" || clean(price.currency) !== "usd" || price.unit_amount !== 500000 ||
-    price.custom_unit_amount !== null || price.recurring !== null) {
-  throw new Error("ARC_PAYMENT_INVALID: expanded line item does not match the exact one-time ARC Price");
+    price.custom_unit_amount !== null || price.recurring !== null || clean(price.tax_behavior) !== "exclusive" ||
+    !product || typeof product !== "object" || Array.isArray(product) || product.object !== "product" ||
+    clean(typeof product.tax_code === "object" ? product.tax_code?.id : product.tax_code) !== expectedProductTaxCode) {
+  throw new Error("ARC_PAYMENT_INVALID: expanded line item does not match the exact exclusive-tax ARC Price and Product");
 }
 if (termsConsent !== "accepted") throw new Error("ARC_PAYMENT_INVALID: terms_of_service consent must be accepted");
 if (termsVersion !== expectedTermsVersion) throw new Error("ARC_PAYMENT_INVALID: terms version mismatch");
+if (clean(session.metadata?.tax_contract_version) !== "arc-tax-v1") throw new Error("ARC_TAX_INVALID: tax contract version mismatch");
 if (adultAcknowledgements.length !== 1 || adultAcknowledgement !== "accepted" ||
     clean(adultAcknowledgements[0].type) !== "dropdown" || adultAcknowledgements[0].optional !== false ||
     clean(adultAcknowledgements[0].label?.type) !== "custom" ||
@@ -134,6 +178,22 @@ if (adultAcknowledgements.length !== 1 || adultAcknowledgement !== "accepted" ||
 if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
   throw new Error("ARC_HANDOFF_INVALID: Stripe customer email");
 }
+if (clean(session.customer_details?.tax_exempt) !== "none") {
+  throw new Error("ARC_TAX_INVALID: tax-exempt customers require a separately verified exemption workflow");
+}
+const customerAddress = session.customer_details?.address;
+const requiredAddressFields = ["city", "country", "line1", "postal_code"];
+const customerAddressCountry = clean(customerAddress?.country);
+const customerAddressState = clean(customerAddress?.state);
+if (!customerAddress || typeof customerAddress !== "object" || Array.isArray(customerAddress) ||
+    requiredAddressFields.some(field => !clean(customerAddress[field]) || clean(customerAddress[field]).length > 120 || /[\r\n<>]/.test(clean(customerAddress[field]))) ||
+    !/^[A-Z]{2}$/.test(customerAddressCountry) || !/^[A-Z0-9-]{0,10}$/.test(customerAddressState) ||
+    (customerAddressCountry === "US" && !/^[A-Z]{2}$/.test(customerAddressState))) {
+  throw new Error("ARC_TAX_INVALID: complete Stripe customer destination address is required");
+}
+if (customerAddressCountry === "US" && customerAddressState === "WA" && amountTax <= 0) {
+  throw new Error("ARC_TAX_INVALID: Washington destination requires positive calculated sales tax");
+}
 if (!collectedBusinessName || collectedBusinessName.length > 120 || /[\r\n<>]/.test(collectedBusinessName) ||
     !collectedIndividualName || collectedIndividualName.length > 120 || /[\r\n<>]/.test(collectedIndividualName)) {
   throw new Error("ARC_HANDOFF_INVALID: required Stripe business and individual names");
@@ -141,6 +201,35 @@ if (!collectedBusinessName || collectedBusinessName.length > 120 || /[\r\n<>]/.t
 if (rawClientReferenceId.length > 200 || !/^[A-Za-z0-9_-]+$/.test(rawClientReferenceId)) {
   throw new Error("ARC_PAYMENT_INVALID: client_reference_id exceeds Stripe's allowed syntax");
 }
+const registrationSnapshots = [];
+for (const expected of expectedTaxRegistrations) {
+  const registrationUrl = `https://api.stripe.com/v1/tax/registrations/${encodeURIComponent(clean(expected.id))}`;
+  const registration = await stripeGet(registrationUrl);
+  const activeFrom = registration?.active_from;
+  const expiresAt = registration?.expires_at;
+  const country = clean(registration?.country);
+  const state = clean(registration?.country_options?.us?.state);
+  const type = clean(registration?.country_options?.us?.type);
+  if (!registration || typeof registration !== "object" || Array.isArray(registration) ||
+      registration.object !== "tax.registration" || clean(registration.id) !== clean(expected.id) ||
+      registration.livemode !== stripeLiveModeEnabled || clean(registration.status) !== "active" ||
+      !Number.isSafeInteger(activeFrom) || activeFrom * 1000 > Date.now() + 5 * 60 * 1000 ||
+      (expiresAt !== null && (!Number.isSafeInteger(expiresAt) || expiresAt * 1000 <= Date.now())) ||
+      country !== clean(expected.country) || state !== clean(expected.state) || type !== clean(expected.type)) {
+    throw new Error("ARC_TAX_INVALID: expected Stripe Tax registration is not active or its jurisdiction changed");
+  }
+  registrationSnapshots.push({ id: clean(registration.id), country, state, type, active_from: activeFrom, expires_at: expiresAt });
+}
+registrationSnapshots.sort((first, second) => first.id.localeCompare(second.id));
+const taxRegistrationsSha256 = await sha256Hex(canonicalJson(registrationSnapshots));
+const customerAddressSha256 = await sha256Hex(canonicalJson({
+  city: clean(customerAddress.city),
+  country: clean(customerAddress.country),
+  line1: clean(customerAddress.line1),
+  line2: clean(customerAddress.line2),
+  postal_code: clean(customerAddress.postal_code),
+  state: clean(customerAddress.state)
+}));
 const signedReference = rawClientReferenceId.match(/^([a-f0-9]{8})_([a-f0-9]{64})_([a-f0-9]{64})$/i);
 if (!signedReference) throw new Error("ARC_PAYMENT_INVALID: signed checkout reference");
 const clientReferenceId = signedReference[1].toLowerCase();
@@ -201,7 +290,7 @@ const proofSourceHtml = html.replace(/<!-- ARC_PREVIEW_PROOF_START -->[\s\S]*?<!
 if (await sha256Hex(proofSourceHtml) !== proofSourceSha256.toLowerCase()) {
   throw new Error("ARC_FINALIZE_INVALID: approved preview proof hash mismatch");
 }
-const toolbarBlocks = proofSourceHtml.match(/<aside class="arc-preview-toolbar" aria-label="ARC preview purchase"><span><strong>ARC preview<\/strong>Built for this business\. Purchase only if approved\.<\/span><a data-arc-checkout href="https:\/\/buy\.stripe\.com\/test_[A-Za-z0-9]+\?client_reference_id=[a-f0-9]{8}_[a-f0-9]{64}_[a-f0-9]{64}">Own this website — \$5,000<\/a><\/aside>/g) || [];
+const toolbarBlocks = proofSourceHtml.match(/<aside class="arc-preview-toolbar" aria-label="ARC preview purchase"><span><strong>ARC preview<\/strong>Built for this business\. Purchase only if approved\.<\/span><a data-arc-checkout href="https:\/\/buy\.stripe\.com\/(?:test_)?[A-Za-z0-9]+\?client_reference_id=[a-f0-9]{8}_[a-f0-9]{64}_[a-f0-9]{64}">Own this website — \$5,000<\/a><\/aside>/g) || [];
 if (toolbarBlocks.length !== 1 || !proofSourceHtml.endsWith(`${toolbarBlocks[0]}\n</body>\n</html>`)) {
   throw new Error("ARC_FINALIZE_INVALID: exact terminal preview purchase toolbar is required");
 }
@@ -209,6 +298,12 @@ const toolbarCheckoutUrl = toolbarBlocks[0].match(/href="([^"]+)"/)?.[1] || "";
 let toolbarReference = "";
 try {
   const toolbarCheckout = new URL(toolbarCheckoutUrl.replaceAll("&amp;", "&"));
+  const toolbarPathMatchesMode = stripeLiveModeEnabled
+    ? /^\/[A-Za-z0-9]+$/.test(toolbarCheckout.pathname) && !toolbarCheckout.pathname.startsWith("/test_")
+    : /^\/test_[A-Za-z0-9]+$/.test(toolbarCheckout.pathname);
+  if (toolbarCheckout.origin !== "https://buy.stripe.com" || !toolbarPathMatchesMode) {
+    throw new Error("ARC_FINALIZE_INVALID: preview toolbar Stripe mode mismatch");
+  }
   toolbarReference = toolbarCheckout.searchParams.get("client_reference_id") || "";
 } catch (error) {
   throw new Error("ARC_FINALIZE_INVALID: preview toolbar checkout URL");
@@ -398,9 +493,10 @@ const handoffArtifactEvidenceHmacSha256 = [...new Uint8Array(handoffArtifactEvid
   .join("");
 const customerEmailSha256 = await sha256Hex(customerEmail);
 const paymentEvidence = canonicalJson({
-  version: "arc2-payment-evidence-v1",
-  scope: "authoritative-stripe-test-checkout-session",
+  version: "arc2-payment-evidence-v2",
+  scope: "authoritative-stripe-checkout-session",
   checkout_session_id: sessionId,
+  stripe_account_id_sha256: stripeAccountIdSha256,
   client_reference_id_sha256: await sha256Hex(rawClientReferenceId),
   preview_folder: previewFolder,
   production_content_sha256: productionSha256,
@@ -408,15 +504,27 @@ const paymentEvidence = canonicalJson({
   handoff_artifact_evidence_sha256: handoffArtifactEvidenceSha256,
   bundle_fingerprint: bundleFingerprint,
   customer_email_sha256: customerEmailSha256,
-  livemode: false,
+  livemode: stripeLiveModeEnabled,
   mode: "payment",
   status: "complete",
   payment_status: "paid",
   currency: "usd",
-  amount_total_minor_units: 500000,
-  amount_subtotal_minor_units: 500000,
+  subtotal_amount_minor_units: 500000,
+  tax_amount_minor_units: amountTax,
+  amount_total_minor_units: session.amount_total,
   payment_link_id: paymentLinkId,
   price_id: expectedPriceId,
+  product_tax_code: expectedProductTaxCode,
+  price_tax_behavior: "exclusive",
+  automatic_tax_enabled: true,
+  automatic_tax_status: "complete",
+  customer_address_status: "verified",
+  tax_registration_status: "verified",
+  tax_contract_version: "arc-tax-v1",
+  tax_registrations_sha256: taxRegistrationsSha256,
+  customer_address_sha256: customerAddressSha256,
+  customer_address_country: customerAddressCountry,
+  customer_address_state: customerAddressState,
   quantity: 1,
   terms_of_service_consent: "accepted",
   terms_version: termsVersion,
@@ -425,7 +533,7 @@ const paymentEvidence = canonicalJson({
 const paymentEvidenceSignatureBytes = await globalThis.crypto.subtle.sign(
   "HMAC",
   checkoutBindingKey,
-  encoder.encode(`arc2-payment-evidence-signature-v1\n${paymentEvidence}`)
+  encoder.encode(`arc2-payment-evidence-signature-v2\n${paymentEvidence}`)
 );
 const paymentEvidenceHmacSha256 = [...new Uint8Array(paymentEvidenceSignatureBytes)]
   .map(byte => byte.toString(16).padStart(2, "0"))
@@ -440,17 +548,25 @@ return {
   external_deploy_write_allowed_by_this_step: false,
   claim_invitation_allowed_by_this_step: false,
   email_allowed_by_this_step: false,
-  payment_verification_status: "verified_test_payment_from_stripe_api",
+  payment_verification_status: `verified_${stripeMode}_payment_from_stripe_api`,
   stripe_session_retrieved: true,
   checkout_session_id: sessionId,
   client_reference_id: rawClientReferenceId,
-  livemode: false,
+  livemode: stripeLiveModeEnabled,
   payment_status: "paid",
   currency: "usd",
-  amount_total_minor_units: 500000,
-  amount_subtotal_minor_units: 500000,
+  amount_total_minor_units: session.amount_total,
+  subtotal_amount_minor_units: 500000,
+  tax_amount_minor_units: amountTax,
   payment_link_id: paymentLinkId,
   price_id: expectedPriceId,
+  stripe_account_id_sha256: stripeAccountIdSha256,
+  product_tax_code: expectedProductTaxCode,
+  automatic_tax_status: "complete",
+  customer_address_status: "verified",
+  tax_registration_status: "verified",
+  customer_address_sha256: customerAddressSha256,
+  tax_registrations_sha256: taxRegistrationsSha256,
   quantity: 1,
   terms_of_service_consent: "accepted",
   terms_version: termsVersion,

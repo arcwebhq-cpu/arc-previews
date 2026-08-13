@@ -168,12 +168,15 @@ export function buildPreviewFolder(businessName, trustedEventPrefix) {
   return `${businessSlug}-${prefix}`;
 }
 
-export function buildCheckoutUrl(paymentLinkUrl, previewFolder, approvalContentSha256, checkoutBindingSecret) {
+export function buildCheckoutUrl(paymentLinkUrl, previewFolder, approvalContentSha256, checkoutBindingSecret, stripeLiveModeEnabled = false) {
   const raw = String(paymentLinkUrl ?? "").trim();
-  if (!raw) throw new Error("ARC_PAYMENT_LINK_INVALID: test Payment Link URL is required");
+  if (!raw) throw new Error("ARC_PAYMENT_LINK_INVALID: Payment Link URL is required");
   const url = new URL(raw);
-  if (url.origin !== "https://buy.stripe.com" || !/^\/test_[A-Za-z0-9]+$/.test(url.pathname)) {
-    throw new Error("ARC_PAYMENT_LINK_INVALID: checkout must use a Stripe test-mode Payment Link");
+  const pathMatchesMode = stripeLiveModeEnabled
+    ? /^\/[A-Za-z0-9]+$/.test(url.pathname) && !url.pathname.startsWith("/test_")
+    : /^\/test_[A-Za-z0-9]+$/.test(url.pathname);
+  if (url.origin !== "https://buy.stripe.com" || !pathMatchesMode || url.username || url.password || url.search || url.hash) {
+    throw new Error("ARC_PAYMENT_LINK_INVALID: checkout must use the exact configured-mode Stripe Payment Link");
   }
   const bindingSecret = String(checkoutBindingSecret ?? "").trim();
   if (bindingSecret.length < 32 || bindingSecret.length > 256) {
@@ -237,7 +240,8 @@ export function renderPreview(template, content, options) {
     options?.paymentLinkUrl,
     folder,
     approvalContentSha256,
-    options?.checkoutBindingSecret
+    options?.checkoutBindingSecret,
+    options?.stripeLiveModeEnabled === true
   );
   html = injectPreviewToolbar(html, checkoutUrl);
   const unresolved = [...html.matchAll(/\[\[([A-Z0-9_]+)\]\]/g)].map(match => match[1]);

@@ -23,7 +23,13 @@ function sha256(value) {
   return createHash("sha256").update(value, "utf8").digest("hex");
 }
 
-export function validatePaidSession(session, { expectedPaymentLinkId, expectedPriceId, expectedTermsVersion } = {}) {
+export function validatePaidSession(session, {
+  expectedPaymentLinkId,
+  expectedPriceId,
+  expectedTermsVersion,
+  expectedProductTaxCode,
+  stripeLiveModeEnabled = false
+} = {}) {
   const id = clean(session?.id);
   const object = clean(session?.object);
   const mode = clean(session?.mode).toLowerCase();
@@ -31,6 +37,8 @@ export function validatePaidSession(session, { expectedPaymentLinkId, expectedPr
   const paymentStatus = clean(session?.payment_status).toLowerCase();
   const currency = clean(session?.currency).toLowerCase();
   const amountTotal = session?.amount_total;
+  const amountSubtotal = session?.amount_subtotal;
+  const amountTax = session?.total_details?.amount_tax;
   const paymentLinkId = clean(
     session?.payment_link && typeof session.payment_link === "object"
       ? session.payment_link.id
@@ -41,6 +49,7 @@ export function validatePaidSession(session, { expectedPaymentLinkId, expectedPr
   const termsConsent = clean(session?.consent?.terms_of_service).toLowerCase();
   const termsVersion = clean(session?.metadata?.terms_version);
   const requiredTermsVersion = clean(expectedTermsVersion);
+  const requiredProductTaxCode = clean(expectedProductTaxCode);
   const customerDetailsEmail = clean(session?.customer_details?.email).toLowerCase();
   const customerEmail = clean(session?.customer_email).toLowerCase();
   const adultAcknowledgements = (Array.isArray(session?.custom_fields) ? session.custom_fields : []).filter(field =>
@@ -51,23 +60,30 @@ export function validatePaidSession(session, { expectedPaymentLinkId, expectedPr
     adultAcknowledgements[0]?.text?.value ||
     adultAcknowledgements[0]?.numeric?.value
   ).toLowerCase();
-  if (!/^cs_test_[A-Za-z0-9_]+$/.test(id)) throw new Error("ARC_PAYMENT_INVALID: test checkout session id");
+  const stripeMode = stripeLiveModeEnabled ? "live" : "test";
+  if (!new RegExp(`^cs_${stripeMode}_[A-Za-z0-9_]+$`).test(id)) throw new Error(`ARC_PAYMENT_INVALID: ${stripeMode} checkout session id`);
   if (object !== "checkout.session") throw new Error("ARC_PAYMENT_INVALID: Checkout Session object identity");
-  if (session?.livemode !== false) throw new Error("ARC_PAYMENT_INVALID: livemode must be false");
+  if (session?.livemode !== stripeLiveModeEnabled) throw new Error("ARC_PAYMENT_INVALID: Checkout Session livemode does not match configured Stripe mode");
   if (mode !== "payment" || status !== "complete") {
     throw new Error("ARC_PAYMENT_INVALID: Checkout Session must be a completed one-time payment");
   }
   if (paymentStatus !== "paid") throw new Error("ARC_PAYMENT_INVALID: session is not paid");
   if (currency !== "usd") throw new Error("ARC_PAYMENT_INVALID: currency must be usd");
-  if (!Number.isSafeInteger(amountTotal) || amountTotal !== 500000) {
-    throw new Error("ARC_PAYMENT_INVALID: amount_total must be exactly 500000 minor units ($5,000.00)");
-  }
-  if (!Number.isSafeInteger(session?.amount_subtotal) || session.amount_subtotal !== 500000) {
+  if (!Number.isSafeInteger(amountSubtotal) || amountSubtotal !== 500000) {
     throw new Error("ARC_PAYMENT_INVALID: amount_subtotal must be exactly 500000 minor units ($5,000.00)");
+  }
+  if (!Number.isSafeInteger(amountTax) || amountTax < 0 || !Number.isSafeInteger(amountTotal) ||
+      amountTotal !== amountSubtotal + amountTax || session?.total_details?.amount_discount !== 0 ||
+      session?.total_details?.amount_shipping !== 0) {
+    throw new Error("ARC_TAX_INVALID: total must equal the $5,000 subtotal plus Stripe-calculated tax");
+  }
+  if (session?.automatic_tax?.enabled !== true || clean(session?.automatic_tax?.status) !== "complete") {
+    throw new Error("ARC_TAX_INVALID: Stripe automatic tax must be enabled and complete");
   }
   if (!/^plink_[A-Za-z0-9]+$/.test(requiredPaymentLinkId)) throw new Error("ARC_PAYMENT_INVALID: expected Payment Link id");
   if (paymentLinkId !== requiredPaymentLinkId) throw new Error("ARC_PAYMENT_INVALID: Payment Link identity mismatch");
   if (!/^price_[A-Za-z0-9]+$/.test(requiredPriceId)) throw new Error("ARC_PAYMENT_INVALID: expected Price id");
+  if (!/^txcd_[0-9]{8}$/.test(requiredProductTaxCode)) throw new Error("ARC_TAX_INVALID: expected product tax code");
   const lineItems = session?.line_items;
   if (!lineItems || typeof lineItems !== "object" || Array.isArray(lineItems) || lineItems.object !== "list" ||
       lineItems.has_more !== false || !Array.isArray(lineItems.data) || lineItems.data.length !== 1) {
@@ -75,17 +91,23 @@ export function validatePaidSession(session, { expectedPaymentLinkId, expectedPr
   }
   const lineItem = lineItems.data[0];
   const price = lineItem?.price;
+  const product = price?.product;
   if (!lineItem || lineItem.object !== "item" || lineItem.quantity !== 1 || lineItem.currency !== "usd" ||
-      lineItem.amount_subtotal !== 500000 || lineItem.amount_discount !== 0 || lineItem.amount_tax !== 0 ||
-      lineItem.amount_total !== 500000 || !price || typeof price !== "object" || Array.isArray(price) ||
-      price.object !== "price" || price.id !== requiredPriceId || price.livemode !== false ||
+      lineItem.amount_subtotal !== 500000 || lineItem.amount_discount !== 0 || lineItem.amount_tax !== amountTax ||
+      lineItem.amount_total !== amountTotal || !price || typeof price !== "object" || Array.isArray(price) ||
+      price.object !== "price" || price.id !== requiredPriceId || price.livemode !== stripeLiveModeEnabled ||
       price.type !== "one_time" || price.currency !== "usd" || price.unit_amount !== 500000 ||
-      price.custom_unit_amount !== null || price.recurring !== null) {
-    throw new Error("ARC_PAYMENT_INVALID: expanded line item does not match the exact one-time ARC Price");
+      price.custom_unit_amount !== null || price.recurring !== null || clean(price.tax_behavior) !== "exclusive" ||
+      !product || typeof product !== "object" || Array.isArray(product) || product.object !== "product" ||
+      clean(typeof product.tax_code === "object" ? product.tax_code?.id : product.tax_code) !== requiredProductTaxCode) {
+    throw new Error("ARC_PAYMENT_INVALID: expanded line item does not match the exact exclusive-tax ARC Price and Product");
   }
   if (termsConsent !== "accepted") throw new Error("ARC_PAYMENT_INVALID: terms_of_service consent must be accepted");
   if (!requiredTermsVersion) throw new Error("ARC_PAYMENT_INVALID: expected terms version");
   if (termsVersion !== requiredTermsVersion) throw new Error("ARC_PAYMENT_INVALID: terms version mismatch");
+  if (clean(session?.metadata?.tax_contract_version) !== "arc-tax-v1") {
+    throw new Error("ARC_TAX_INVALID: tax contract version mismatch");
+  }
   if (adultAcknowledgements.length !== 1 || adultAcknowledgement !== "accepted" ||
       clean(adultAcknowledgements[0].type) !== "dropdown" || adultAcknowledgements[0].optional !== false ||
       clean(adultAcknowledgements[0].label?.type) !== "custom" ||
@@ -97,6 +119,22 @@ export function validatePaidSession(session, { expectedPaymentLinkId, expectedPr
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerDetailsEmail || customerEmail)) {
     throw new Error("ARC_HANDOFF_INVALID: Stripe customer email");
+  }
+  if (clean(session?.customer_details?.tax_exempt) !== "none") {
+    throw new Error("ARC_TAX_INVALID: tax-exempt customers require a separately verified exemption workflow");
+  }
+  const address = session?.customer_details?.address;
+  const addressFields = ["city", "country", "line1", "postal_code"];
+  const addressCountry = clean(address?.country);
+  const addressState = clean(address?.state);
+  if (!address || typeof address !== "object" || Array.isArray(address) ||
+      addressFields.some(field => !clean(address[field]) || clean(address[field]).length > 120 || /[\r\n<>]/.test(clean(address[field]))) ||
+      !/^[A-Z]{2}$/.test(addressCountry) || !/^[A-Z0-9-]{0,10}$/.test(addressState) ||
+      (addressCountry === "US" && !/^[A-Z]{2}$/.test(addressState))) {
+    throw new Error("ARC_TAX_INVALID: complete Stripe customer destination address is required");
+  }
+  if (addressCountry === "US" && addressState === "WA" && amountTax <= 0) {
+    throw new Error("ARC_TAX_INVALID: Washington destination requires positive calculated sales tax");
   }
   const collectedBusinessName = clean(session?.collected_information?.business_name);
   const collectedIndividualName = clean(session?.collected_information?.individual_name);
@@ -145,11 +183,18 @@ function parseCheckoutReference(clientReferenceId) {
   return { folderSuffix: match[1], approvalContentSha256: match[2], signature: match[3] };
 }
 
-function removeExactTerminalPreviewToolbar(previewHtml) {
-  const toolbarPattern = /<aside class="arc-preview-toolbar" aria-label="ARC preview purchase"><span><strong>ARC preview<\/strong>Built for this business\. Purchase only if approved\.<\/span><a data-arc-checkout href="https:\/\/buy\.stripe\.com\/test_[A-Za-z0-9]+\?client_reference_id=[a-f0-9]{8}_[a-f0-9]{64}_[a-f0-9]{64}">Own this website — \$5,000<\/a><\/aside>/g;
+function removeExactTerminalPreviewToolbar(previewHtml, stripeLiveModeEnabled = false) {
+  const toolbarPattern = /<aside class="arc-preview-toolbar" aria-label="ARC preview purchase"><span><strong>ARC preview<\/strong>Built for this business\. Purchase only if approved\.<\/span><a data-arc-checkout href="https:\/\/buy\.stripe\.com\/(?:test_)?[A-Za-z0-9]+\?client_reference_id=[a-f0-9]{8}_[a-f0-9]{64}_[a-f0-9]{64}">Own this website — \$5,000<\/a><\/aside>/g;
   const blocks = [...String(previewHtml).matchAll(toolbarPattern)].map(match => match[0]);
   if (blocks.length !== 1 || !String(previewHtml).endsWith(`${blocks[0]}\n</body>\n</html>`)) {
     throw new Error("ARC_FINALIZE_INVALID: exact terminal preview purchase toolbar is required");
+  }
+  const checkout = new URL(blocks[0].match(/href="([^"]+)"/)?.[1] || "");
+  const pathMatchesMode = stripeLiveModeEnabled
+    ? /^\/[A-Za-z0-9]+$/.test(checkout.pathname) && !checkout.pathname.startsWith("/test_")
+    : /^\/test_[A-Za-z0-9]+$/.test(checkout.pathname);
+  if (checkout.origin !== "https://buy.stripe.com" || !pathMatchesMode) {
+    throw new Error("ARC_FINALIZE_INVALID: preview toolbar Stripe mode mismatch");
   }
   return String(previewHtml).replace(`${blocks[0]}\n</body>\n</html>`, "</body>\n</html>");
 }
@@ -170,7 +215,7 @@ export function finalizePreviewHtml(previewHtml, options = {}) {
   if (!/<meta\s+name=["']arc-template-version["']\s+content=["']10\.0["']/i.test(html)) {
     throw new Error("ARC_FINALIZE_INVALID: only verified ARC v10 previews can be delivered");
   }
-  html = removeExactTerminalPreviewToolbar(html);
+  html = removeExactTerminalPreviewToolbar(html, options.stripeLiveModeEnabled === true);
 
   html = upsertHeadTag(
     html,
@@ -231,13 +276,21 @@ export function buildProductionHandoff({
   expectedPaymentLinkId,
   expectedPriceId,
   expectedTermsVersion,
+  expectedProductTaxCode,
+  stripeLiveModeEnabled = false,
   verifiedLeadNotificationEmail,
   leadRouteEvidenceSecret,
   handoffArtifactEvidenceSecret,
   checkoutBindingSecret,
   artifactEvidenceIssuedAt = new Date().toISOString()
 }) {
-  validatePaidSession(session, { expectedPaymentLinkId, expectedPriceId, expectedTermsVersion });
+  validatePaidSession(session, {
+    expectedPaymentLinkId,
+    expectedPriceId,
+    expectedTermsVersion,
+    expectedProductTaxCode,
+    stripeLiveModeEnabled
+  });
   const checkoutReference = parseCheckoutReference(session.client_reference_id);
   const bindingSecret = clean(checkoutBindingSecret);
   if (bindingSecret.length < 32 || bindingSecret.length > 256) {
@@ -253,11 +306,11 @@ export function buildProductionHandoff({
     clientReferenceId: checkoutReference.folderSuffix,
     treePaths
   });
-  const approvalHtml = removeExactTerminalPreviewToolbar(clean(previewHtml));
+  const approvalHtml = removeExactTerminalPreviewToolbar(clean(previewHtml), stripeLiveModeEnabled);
   if (sha256(approvalHtml) !== checkoutReference.approvalContentSha256) {
     throw new Error("ARC_PAYMENT_INVALID: approved preview bytes do not match the checkout approval digest");
   }
-  const productionHtml = finalizePreviewHtml(previewHtml, { canonicalUrl });
+  const productionHtml = finalizePreviewHtml(previewHtml, { canonicalUrl, stripeLiveModeEnabled });
   const customerEmail = clean(session.customer_details?.email || session.customer_email).toLowerCase();
   const formTags = productionHtml.match(/<form\b[^>]*>/gi) || [];
   const formBlocks = productionHtml.match(/<form\b[^>]*>[\s\S]*?<\/form>/gi) || [];

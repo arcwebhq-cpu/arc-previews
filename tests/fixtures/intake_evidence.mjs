@@ -5,7 +5,7 @@ export const TEST_NETLIFY_SITE_ID = "123e4567-e89b-42d3-a456-426614174000";
 export const TEST_NETLIFY_FORM_ID = "a".repeat(40);
 export const TEST_NETLIFY_FORM_NAME = "arc-preview";
 export const TEST_NETLIFY_SUBMISSION_ID = "5231110b5803540aeb000019";
-export const TEST_BUDGET_CONFIRMATION = "Yes, understands the finished ARC website is $5,000 only after preview approval";
+export const TEST_BUDGET_CONFIRMATION = "Yes, understands the finished ARC website subtotal is $5,000 plus applicable sales tax only after preview approval";
 export const TEST_TERMS_ACCEPTANCE = "Accepted ARC preview terms, privacy policy, refund policy, and service scope dated 2026-08-12; separate adult checkout acceptance required";
 
 export function canonicalJson(value) {

@@ -1,183 +1,24 @@
 {
-  "version": "10.0",
+  "version": "10.1",
   "profiles": [
-    {
-      "key": "roofing",
-      "layout": "impact",
-      "variant": 0,
-      "alt": "Professional residential roofing",
-      "match": "\\b(roof(?:er|ing)?|shingles?|siding|gutters?|(?:home|residential) exteriors?)\\b",
-      "provider": "pexels",
-      "photo_ids": [33404248, 31771166, 33404080, 33501308, 11467876, 9431615, 38293531, 12243107, 34019842, 11784496]
-    },
-    {
-      "key": "hvac",
-      "layout": "trusted",
-      "variant": 1,
-      "alt": "Professional HVAC service",
-      "match": "\\b(hvac|air conditioning|air conditioner|heating|furnace|heat pump|climate control)\\b",
-      "provider": "pexels",
-      "photo_ids": [32497161, 5463575, 5463587, 7347538, 5463577, 5463583, 5463581, 5463582, 5463576, 33925031]
-    },
-    {
-      "key": "remodeling",
-      "layout": "editorial",
-      "variant": 2,
-      "alt": "Professional home remodeling",
-      "match": "\\b(remodel(?:ing|er)?|renovat(?:e|ion|ing)?|kitchen|bathroom|home improvement)\\b",
-      "provider": "pexels",
-      "photo_ids": [28885519, 5493654, 20351519, 5493658, 4800189, 5493665, 3990359, 5493672, 5493666, 8961300, 5493671, 4756489]
-    },
-    {
-      "key": "landscaping",
-      "layout": "balanced",
-      "variant": 1,
-      "alt": "Professional landscaping and lawn care",
-      "match": "\\b(landscap(?:e|er|ing)?|lawn care|gardener|gardening|hardscape|yard care|tree service)\\b",
-      "provider": "pexels",
-      "photo_ids": [4079768, 4920293, 17061897, 37172070, 5230937, 4691418, 9620213, 5230933, 9620215, 4079769]
-    },
-    {
-      "key": "auto_detailing",
-      "layout": "impact",
-      "variant": 2,
-      "alt": "Professional auto detailing",
-      "match": "\\b(auto detailing|car detailing|detailer|ceramic coating|paint correction|car wash)\\b",
-      "provider": "pexels",
-      "photo_ids": [20051453, 31389821, 20042056, 29504462, 37809565, 6873103, 20042055, 5233264, 14615269, 14231701, 6873185, 11139239, 31154217, 20042052]
-    },
-    {
-      "key": "dental",
-      "layout": "trusted",
-      "variant": 0,
-      "alt": "Professional dental care",
-      "match": "\\b(dent(?:al|ist|istry)|orthodont(?:ic|ics|ist)|oral surgery)\\b",
-      "provider": "pexels",
-      "photo_ids": [19976606, 18524125, 19976607, 18524124, 19976587, 19976603, 19976594, 19976592, 18523995, 18524126]
-    },
-    {
-      "key": "plumbing",
-      "layout": "impact",
-      "variant": 0,
-      "alt": "Professional plumbing service",
-      "match": "\\b(plumb(?:er|ing)?|drain service|water heater|boiler repair)\\b",
-      "provider": "pexels",
-      "photo_ids": [7859953, 6419128, 29226620, 8486927, 29248902, 5691536, 12644994, 7859947, 6419125, 8486930]
-    },
-    {
-      "key": "home_services",
-      "layout": "balanced",
-      "variant": 1,
-      "alt": "Professional home service",
-      "match": "\\b(contractor|construction|home service|specialty contractor|handyman|painting contractor)\\b",
-      "provider": "pexels",
-      "photo_ids": [5493654, 5493658, 5493665, 5493672, 8961300, 5493671, 3990359, 38293531, 28885519, 5493666]
-    },
-    {
-      "key": "medical_spa",
-      "layout": "editorial",
-      "variant": 2,
-      "alt": "Professional aesthetic treatment",
-      "match": "\\b(med(?:ical)? spa|medspa|aesthetic(?:s)?|injectables?|botox|facial treatment|skin rejuvenation)\\b",
-      "provider": "unsplash",
-      "photo_ids": ["photo-1600334089648-b0d9d3028eb2", "photo-1515377905703-c4788e51af15", "photo-1570172619644-dfd03ed5d881", "photo-1506634064465-7dab4de896ed", "photo-1540555700478-4be289fbecef", "photo-1512290923902-8a9f81dc236c"]
-    },
-    {
-      "key": "healthcare",
-      "layout": "trusted",
-      "variant": 0,
-      "alt": "Professional healthcare",
-      "match": "\\b(medical|health(?:care)?|clinic|doctor|physician|chiropract(?:ic|or)|physical therapy|therapist|urgent care)\\b",
-      "provider": "unsplash",
-      "photo_ids": ["photo-1550831107-1553da8c8464", "photo-1576091160399-112ba8d25d1d", "photo-1538108149393-fbbd81895907", "photo-1584982751601-97dcc096659c", "photo-1516841273335-e39b37888115", "photo-1579684385127-1ef15d508118"]
-    },
-    {
-      "key": "restaurant",
-      "layout": "editorial",
-      "variant": 2,
-      "alt": "Restaurant dining and service",
-      "match": "\\b(restaurant|food|hospitality|cafe|bakery|cater(?:er|ing)?)\\b",
-      "provider": "unsplash",
-      "photo_ids": ["photo-1517248135467-4c7edcad34c4", "photo-1414235077428-338989a2e8c0", "photo-1552566626-52f8b828add9", "photo-1555396273-367ea4eb4db5", "photo-1515003197210-e0cd71810b5f", "photo-1550966871-3ed3cdb5ed0c"]
-    },
-    {
-      "key": "real_estate",
-      "layout": "editorial",
-      "variant": 1,
-      "alt": "Professional real estate",
-      "match": "\\b(real estate|realtor|property|brokerage|home builder|architect(?:ure)?)\\b",
-      "provider": "unsplash",
-      "photo_ids": ["photo-1600585154340-be6161a56a0c", "photo-1600566753190-17f0baa2a6c3", "photo-1512917774080-9991f1c4c750", "photo-1600607687939-ce8a6c25118c", "photo-1600607688969-a5bfcd646154", "photo-1600566753086-00f18fb6b3ea"]
-    },
-    {
-      "key": "fitness",
-      "layout": "impact",
-      "variant": 2,
-      "alt": "Professional fitness training",
-      "match": "\\b(fitness|gym|wellness|personal trainer|yoga|strength club)\\b",
-      "provider": "unsplash",
-      "photo_ids": ["photo-1571902943202-507ec2618e8f", "photo-1571019613454-1cb2f99b2d8b", "photo-1581009146145-b5ef050c2e1e", "photo-1517836357463-d25dfeac3438", "photo-1534438327276-14e5300c3a48", "photo-1540497077202-7c8a3999166f"]
-    },
-    {
-      "key": "legal",
-      "layout": "trusted",
-      "variant": 0,
-      "alt": "Professional legal service",
-      "match": "\\b(law|legal|attorney|lawyer|law firm)\\b",
-      "provider": "unsplash",
-      "photo_ids": ["photo-1589829545856-d10d557cf95f", "photo-1505664194779-8beaceb93744", "photo-1450101499163-c8848c66ca85", "photo-1521587760476-6c12a4b040da", "photo-1589578527966-fdac0f44566c", "photo-1593115057322-e94b77572f20"]
-    },
-    {
-      "key": "finance",
-      "layout": "trusted",
-      "variant": 1,
-      "alt": "Professional financial service",
-      "match": "\\b(account(?:ant|ing)?|cpa|finance|financial|insurance|bookkeep(?:er|ing)?|tax)\\b",
-      "provider": "unsplash",
-      "photo_ids": ["photo-1450101499163-c8848c66ca85", "photo-1497366811353-6870744d04b2", "photo-1454165804606-c3d57bc86b40", "photo-1521791055366-0d553872125f", "photo-1497366216548-37526070297c", "photo-1551836022-d5d88e9218df"]
-    },
-    {
-      "key": "web_design",
-      "layout": "editorial",
-      "variant": 2,
-      "alt": "ARC website design work",
-      "match": "\\b(web design|web designer|website design|web development|digital studio|digital agency|creative agency|ui/ux|ux design|product design|ecommerce design)\\b",
-      "provider": "url",
-      "urls": [
-        "https://arcsites.netlify.app/assets/showcases/arc-roofing-showcase-1785497742846.jpg",
-        "https://arcsites.netlify.app/assets/showcases/arc-dental-showcase-1785497742846.jpg",
-        "https://arcsites.netlify.app/assets/showcases/arc-finance-showcase-1785497742846.jpg",
-        "https://images.unsplash.com/photo-1559028012-481c04fa702d?auto=format&fit=crop&w=1800&q=82",
-        "https://images.unsplash.com/photo-1658297063569-162817482fb6?auto=format&fit=crop&w=1800&q=82",
-        "https://images.unsplash.com/photo-1688561807440-8a57dfa77ee3?auto=format&fit=crop&w=1800&q=82"
-      ]
-    },
-    {
-      "key": "technology",
-      "layout": "balanced",
-      "variant": 1,
-      "alt": "Professional technology team",
-      "match": "\\b(software|technology|saas|consulting|it services?|tech company)\\b",
-      "provider": "unsplash",
-      "photo_ids": ["photo-1497366754035-f200968a6e72", "photo-1522071820081-009f0129c71c", "photo-1521737711867-e3b97375f902", "photo-1531482615713-2afd69097998", "photo-1556761175-b413da4baf72", "photo-1552664730-d307ca884978"]
-    },
-    {
-      "key": "beauty",
-      "layout": "editorial",
-      "variant": 2,
-      "alt": "Professional beauty service",
-      "match": "\\b(beauty|salon|barber|spa|cosmetic|skincare|skin care)\\b",
-      "provider": "unsplash",
-      "photo_ids": ["photo-1521590832167-7bcbfaa6381f", "photo-1560066984-138dadb4c035", "photo-1522337360788-8b13dee7a37e", "photo-1562322140-8baeececf3df", "photo-1595476108010-b4d1f102b1b1", "photo-1487412912498-0447578fcca8"]
-    },
-    {
-      "key": "general",
-      "layout": "balanced",
-      "variant": 0,
-      "alt": "Professional local business service",
-      "match": ".*",
-      "provider": "unsplash",
-      "photo_ids": ["photo-1497366811353-6870744d04b2", "photo-1524758631624-e2822e304c36", "photo-1497366754035-f200968a6e72", "photo-1556761175-b413da4baf72", "photo-1497366216548-37526070297c", "photo-1521737711867-e3b97375f902"]
-    }
+    { "key": "roofing", "layout": "impact", "variant": 0, "match": "\\b(roof(?:er|ing)?|shingles?|siding|gutters?|(?:home|residential) exteriors?)\\b", "provider": "local-css" },
+    { "key": "hvac", "layout": "trusted", "variant": 1, "match": "\\b(hvac|air conditioning|air conditioner|heating|furnace|heat pump|climate control)\\b", "provider": "local-css" },
+    { "key": "remodeling", "layout": "editorial", "variant": 2, "match": "\\b(remodel(?:ing|er)?|renovat(?:e|ion|ing)?|kitchen|bathroom|home improvement)\\b", "provider": "local-css" },
+    { "key": "landscaping", "layout": "balanced", "variant": 1, "match": "\\b(landscap(?:e|er|ing)?|lawn care|gardener|gardening|hardscape|yard care|tree service)\\b", "provider": "local-css" },
+    { "key": "auto_detailing", "layout": "impact", "variant": 2, "match": "\\b(auto detailing|car detailing|detailer|ceramic coating|paint correction|car wash)\\b", "provider": "local-css" },
+    { "key": "dental", "layout": "trusted", "variant": 0, "match": "\\b(dent(?:al|ist|istry)|orthodont(?:ic|ics|ist)|oral surgery)\\b", "provider": "local-css" },
+    { "key": "plumbing", "layout": "impact", "variant": 0, "match": "\\b(plumb(?:er|ing)?|drain service|water heater|boiler repair)\\b", "provider": "local-css" },
+    { "key": "home_services", "layout": "balanced", "variant": 1, "match": "\\b(contractor|construction|home service|specialty contractor|handyman|painting contractor)\\b", "provider": "local-css" },
+    { "key": "medical_spa", "layout": "editorial", "variant": 2, "match": "\\b(med(?:ical)? spa|medspa|aesthetic(?:s)?|injectables?|botox|facial treatment|skin rejuvenation)\\b", "provider": "local-css" },
+    { "key": "healthcare", "layout": "trusted", "variant": 0, "match": "\\b(medical|health(?:care)?|clinic|doctor|physician|chiropract(?:ic|or)|physical therapy|therapist|urgent care)\\b", "provider": "local-css" },
+    { "key": "restaurant", "layout": "editorial", "variant": 2, "match": "\\b(restaurant|food|hospitality|cafe|bakery|cater(?:er|ing)?)\\b", "provider": "local-css" },
+    { "key": "real_estate", "layout": "editorial", "variant": 1, "match": "\\b(real estate|realtor|property|brokerage|home builder|architect(?:ure)?)\\b", "provider": "local-css" },
+    { "key": "fitness", "layout": "impact", "variant": 2, "match": "\\b(fitness|gym|wellness|personal trainer|yoga|strength club)\\b", "provider": "local-css" },
+    { "key": "legal", "layout": "trusted", "variant": 0, "match": "\\b(law|legal|attorney|lawyer|law firm)\\b", "provider": "local-css" },
+    { "key": "finance", "layout": "trusted", "variant": 1, "match": "\\b(account(?:ant|ing)?|cpa|finance|financial|insurance|bookkeep(?:er|ing)?|tax)\\b", "provider": "local-css" },
+    { "key": "web_design", "layout": "editorial", "variant": 2, "match": "\\b(web design|web designer|website design|web development|digital studio|digital agency|creative agency|ui/ux|ux design|product design|ecommerce design)\\b", "provider": "local-css" },
+    { "key": "technology", "layout": "balanced", "variant": 1, "match": "\\b(software|technology|saas|consulting|it services?|tech company)\\b", "provider": "local-css" },
+    { "key": "beauty", "layout": "editorial", "variant": 2, "match": "\\b(beauty|salon|barber|spa|cosmetic|skincare|skin care)\\b", "provider": "local-css" },
+    { "key": "general", "layout": "balanced", "variant": 0, "match": ".*", "provider": "local-css" }
   ]
 }

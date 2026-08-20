@@ -431,11 +431,13 @@ const semanticProfile = semanticProfiles.find(([,pattern]) => pattern.test(seman
 const expectedMediaProfile = clean(html.match(/<body\b[^>]*\bdata-arc-expected-media-profile=["']([^"']+)["']/i)?.[1]);
 const semanticProfilePass =
   expectedMediaProfile === semanticProfile &&
-  html.includes("ARC_MEDIA_MANIFEST_START v10.0") &&
+  html.includes("ARC_COMPOSITION_MANIFEST_START v10.1") &&
   html.includes(`key:\"${semanticProfile}\"`) &&
   html.includes("expectedMediaProfile") &&
   html.includes("dataset.arcMediaProfile=media.key") &&
-  html.includes("replaceMismatchedStock");
+  html.includes("ARC_LOCAL_MEDIA_RUNTIME_START") &&
+  html.includes('dataset.arcMediaProvider="local-css"') &&
+  !/(?:images\.unsplash\.com|images\.pexels\.com|arcsites\.netlify\.app\/assets\/showcases)/i.test(html);
 
 const baseStructurePass =
   /<!doctype html>/i.test(html) &&
@@ -462,7 +464,7 @@ const v10QualityPass =
   templateVersion < 10 ||
   (
     /data-industry=/i.test(html) &&
-    html.includes("mediaPresets") &&
+    html.includes("compositionPresets") &&
     html.includes("mobile-cta") &&
     html.includes("contentIsFake") &&
     html.includes("IntersectionObserver") &&
@@ -470,18 +472,18 @@ const v10QualityPass =
     (
       templateVersion < 9.4 ||
       (
-        html.includes("usedMediaSources") &&
-        html.includes("nextMedia") &&
-        html.includes("recoverImage") &&
-        html.includes("srcset")
+        html.includes("localShell") &&
+        html.includes("galleryShell") &&
+        html.includes("failUpload") &&
+        html.includes("customer-upload")
       )
     ) &&
     (
       templateVersion < 9.5 ||
       (
-        html.includes("replaceMismatchedStock") &&
+        html.includes("ARC_LOCAL_MEDIA_RUNTIME_START") &&
         html.includes("fitLogo") &&
-        html.includes("arcHeroVisual")
+        html.includes("heroVisual")
       )
     ) &&
     (
@@ -490,7 +492,7 @@ const v10QualityPass =
         html.includes("ARC production hardening v10.0") &&
         html.includes("ARC premium composition v10.0") &&
         html.includes("ARC adaptive mobile grid fix v10.0") &&
-        html.includes("ARC_MEDIA_MANIFEST_START v10.0") &&
+        html.includes("ARC_COMPOSITION_MANIFEST_START v10.1") &&
         privatePreviewPass &&
         semanticProfilePass
       )

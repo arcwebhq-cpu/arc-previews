@@ -10,8 +10,9 @@
     "build": "npm run sync:media && npm run build:fixtures && npm run build:showcases",
     "audit": "node scripts/audit_previews.mjs",
     "test:sanitizer": "node tests/content_sanitizer_contract.mjs",
-    "test:arc1-intake-assets": "node tests/arc1_intake_asset_contract.mjs",
-    "test:arc1-payment-link": "node tests/arc1_payment_link_preflight_contract.mjs",
+    "test:no-egress": "node tests/no_egress_contract.mjs",
+    "test:arc1-intake-assets": "node tests/arc1_intake_asset_contract.mjs && node tests/arc1_function_intake_bridge_contract.mjs",
+    "test:arc1-payment-link": "node tests/arc1_payment_link_preflight_contract.mjs && node tests/arc1_private_checkout_link_contract.mjs && node tests/arc1_private_checkout_lifecycle_contract.mjs",
     "test:pipeline": "node tests/pipeline_contract.mjs",
     "test:arc1-pr-gate": "node tests/arc1_pr_gate_contract.mjs",
     "test:arc2-claim": "node tests/arc2_claim_contract.mjs",
@@ -21,7 +22,7 @@
     "test:pages": "node tests/pages_publish_contract.mjs",
     "test:browser": "node tests/preview_quality.mjs",
     "test:images": "ARC_QA_REAL_IMAGES=1 ARC_QA_V10_ONLY=1 ARC_QA_SAVE_SCREENSHOTS=1 node tests/preview_quality.mjs",
-    "test": "npm run build && npm run audit && npm run test:sanitizer && npm run test:arc1-intake-assets && npm run test:arc1-payment-link && npm run test:pipeline && npm run test:arc1-pr-gate && npm run test:arc2-claim && npm run test:arc2-legacy && npm run test:arc2-lead-route && npm run test:wiring && npm run test:pages && npm run test:browser"
+    "test": "npm run build && npm run audit && npm run test:sanitizer && npm run test:no-egress && npm run test:arc1-intake-assets && npm run test:arc1-payment-link && npm run test:pipeline && npm run test:arc1-pr-gate && npm run test:arc2-claim && npm run test:arc2-legacy && npm run test:arc2-lead-route && npm run test:wiring && npm run test:pages && npm run test:browser"
   },
   "devDependencies": {
     "@sparticuz/chromium": "149.0.0",

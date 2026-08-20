@@ -16,7 +16,7 @@
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Clearwater Finance Concept">
   <meta name="twitter:card" content="summary_large_image">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' https: data:; img-src 'self' https: data: blob:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; font-src 'self' https: data:; connect-src 'none'; object-src 'none'; base-uri 'none'; frame-src 'none'; form-action 'self' mailto: tel:; upgrade-insecure-requests">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; font-src 'self' data:; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'">
   <script>document.documentElement.classList.add("js");</script>
   <style>
     :root{
@@ -509,8 +509,24 @@
       inset:0;
       display:grid;
       grid-template-rows:auto 1fr auto;
-      padding:clamp(25px,3.8vw,46px)
+      padding:clamp(25px,3.8vw,46px);
+      background:
+        linear-gradient(135deg,color-mix(in srgb,var(--brand) 15%,transparent),transparent 48%),
+        radial-gradient(circle at 82% 22%,color-mix(in srgb,var(--accent) 20%,transparent),transparent 31%),
+        linear-gradient(160deg,var(--paper),color-mix(in srgb,var(--surface) 62%,var(--bg)))
     }
+    .hero-fallback:before{
+      content:"";
+      position:absolute;
+      width:62%;
+      aspect-ratio:1;
+      right:-26%;
+      bottom:-30%;
+      border:1px solid color-mix(in srgb,var(--brand) 30%,transparent);
+      border-radius:50%;
+      box-shadow:0 0 0 34px color-mix(in srgb,var(--brand) 5%,transparent),0 0 0 74px color-mix(in srgb,var(--accent) 4%,transparent)
+    }
+    .hero-fallback>*{position:relative;z-index:1}
     .hero-visual.has-media .hero-fallback{display:none}
     .fallback-top{
       display:flex;
@@ -758,9 +774,11 @@
       overflow:hidden;
       border:1px solid var(--line);
       border-radius:var(--radius);
-      background:var(--paper);
+      background:
+        linear-gradient(145deg,color-mix(in srgb,var(--brand) 12%,var(--paper)),var(--paper) 55%,color-mix(in srgb,var(--accent) 10%,var(--paper)));
       box-shadow:var(--shadow-soft)
     }
+    .about-media.arc-local-visual:before,
     .about-media:empty:before{
       content:attr(data-monogram);
       position:absolute;
@@ -769,6 +787,17 @@
       color:color-mix(in srgb,var(--ink) 10%,transparent);
       font:900 clamp(130px,29vw,390px)/1 var(--display);
       letter-spacing:-.1em
+    }
+    .about-media.arc-local-visual:after,
+    .about-media:empty:after{
+      content:"";
+      position:absolute;
+      inset:clamp(24px,5vw,54px);
+      border:1px solid color-mix(in srgb,var(--ink) 10%,transparent);
+      border-radius:inherit;
+      background:
+        linear-gradient(90deg,transparent 49.75%,color-mix(in srgb,var(--ink) 8%,transparent) 50%,transparent 50.25%),
+        linear-gradient(transparent 49.75%,color-mix(in srgb,var(--ink) 8%,transparent) 50%,transparent 50.25%)
     }
     .about-media img,
     .about-media picture,
@@ -937,6 +966,36 @@
       inset:0;
       background:linear-gradient(180deg,transparent 54%,rgba(0,0,0,.54));
       pointer-events:none
+    }
+    .gallery-grid>.arc-local-visual{
+      isolation:isolate;
+      background:
+        radial-gradient(circle at 78% 24%,color-mix(in srgb,var(--accent) 34%,transparent),transparent 27%),
+        linear-gradient(135deg,color-mix(in srgb,var(--brand) 30%,#101114),#101114 58%,color-mix(in srgb,var(--accent) 18%,#101114))
+    }
+    .gallery-grid>.arc-local-visual:nth-child(2){
+      background:
+        radial-gradient(circle at 28% 72%,color-mix(in srgb,var(--brand) 32%,transparent),transparent 31%),
+        linear-gradient(155deg,#15161a,color-mix(in srgb,var(--accent) 18%,#0d0e10))
+    }
+    .gallery-grid>.arc-local-visual:nth-child(3){
+      background:
+        linear-gradient(115deg,transparent 0 42%,color-mix(in srgb,var(--brand) 24%,transparent) 42% 58%,transparent 58%),
+        radial-gradient(circle at 70% 30%,color-mix(in srgb,var(--accent) 22%,transparent),transparent 34%),
+        #111216
+    }
+    .gallery-grid>.arc-local-visual:before{
+      content:"";
+      position:absolute;
+      z-index:1;
+      width:42%;
+      aspect-ratio:1;
+      top:50%;
+      left:50%;
+      border:1px solid rgba(255,255,255,.2);
+      border-radius:50%;
+      transform:translate(-50%,-50%);
+      box-shadow:0 0 0 26px rgba(255,255,255,.025),0 0 0 58px rgba(255,255,255,.018)
     }
 
     .proof-grid{
@@ -1573,7 +1632,7 @@
     })();
   </script>
 </head>
-<body data-arc-expected-media-profile="finance" data-style="premium" data-industry="Accounting and Financial Planning" data-arc-site-mode="preview">
+<body data-arc-expected-media-profile="finance" data-style="premium" data-industry="Accounting and Financial Planning" data-arc-site-mode="preview" data-arc-media-provider="local-css">
   <a class="skip" href="#content">Skip to content</a>
   <div class="progress" aria-hidden="true"><span></span></div>
 
@@ -1620,7 +1679,7 @@
             <small>Accounting and Financial Planning</small>
             <strong>Financial Planning, clearly framed</strong>
           </div>
-          <div class="hero-fallback">
+          <div class="hero-fallback" data-arc-media-provider="local-css">
             <div class="fallback-top">
               <span>Financial Planning</span>
               <div class="fallback-logo"></div>
@@ -1666,7 +1725,7 @@
 
     <section class="about" id="about">
       <div class="wrap about-grid">
-        <div class="about-media" data-monogram="Clearwater Finance Concept"></div>
+        <div class="about-media" data-monogram="Clearwater Finance Concept" data-arc-media-provider="local-css"></div>
         <div class="about-copy">
           <p class="eyebrow">Inside Clearwater Finance Concept</p>
           <h2>Clearwater Finance Concept is a semantic media test</h2>
@@ -1695,7 +1754,7 @@
           <h2>A visual system matched to the work</h2>
           <p>Licensed stock imagery is selected from the finance media profile for this fictional concept.</p>
         </div>
-        <div class="gallery-grid"></div>
+        <div class="gallery-grid" data-arc-media-provider="local-css"></div>
       </div>
     </section>
 
@@ -1860,199 +1919,137 @@
         ].some(phrase => value.includes(phrase));
       };
 
-      /*
-       * Real uploads always win. When a client has not supplied photography, ARC
-       * adds industry-matched stock imagery so the preview still
-       * communicates a premium visual system without inventing client work.
-       */
-      const unsplash = id => `https://images.unsplash.com/${id}?auto=format&fit=crop&w=1800&q=82`;
-      const pexels = id => `https://images.pexels.com/photos/${id}/pexels-photo-${id}.jpeg?auto=compress&cs=tinysrgb&w=1800`;
-      /* ARC_MEDIA_MANIFEST_START v10.0 */
-      const mediaPresets = [
+      /* Exact signed customer uploads render as supplied. Missing or failed
+       * media uses deterministic local CSS composition with no network fallback. */
+      /* ARC_COMPOSITION_MANIFEST_START v10.1 */
+      const compositionPresets = [
         {
           key:"roofing",
           layout:"impact",
           variant:0,
-          alt:"Professional residential roofing",
-          match:new RegExp("\\b(roof(?:er|ing)?|shingles?|siding|gutters?|(?:home|residential) exteriors?)\\b","i"),
-          provider:"pexels",
-          images:[pexels(33404248),pexels(31771166),pexels(33404080),pexels(33501308),pexels(11467876),pexels(9431615),pexels(38293531),pexels(12243107),pexels(34019842),pexels(11784496) ]
+          match:new RegExp("\\b(roof(?:er|ing)?|shingles?|siding|gutters?|(?:home|residential) exteriors?)\\b","i")
         },
         {
           key:"hvac",
           layout:"trusted",
           variant:1,
-          alt:"Professional HVAC service",
-          match:new RegExp("\\b(hvac|air conditioning|air conditioner|heating|furnace|heat pump|climate control)\\b","i"),
-          provider:"pexels",
-          images:[pexels(32497161),pexels(5463575),pexels(5463587),pexels(7347538),pexels(5463577),pexels(5463583),pexels(5463581),pexels(5463582),pexels(5463576),pexels(33925031) ]
+          match:new RegExp("\\b(hvac|air conditioning|air conditioner|heating|furnace|heat pump|climate control)\\b","i")
         },
         {
           key:"remodeling",
           layout:"editorial",
           variant:2,
-          alt:"Professional home remodeling",
-          match:new RegExp("\\b(remodel(?:ing|er)?|renovat(?:e|ion|ing)?|kitchen|bathroom|home improvement)\\b","i"),
-          provider:"pexels",
-          images:[pexels(28885519),pexels(5493654),pexels(20351519),pexels(5493658),pexels(4800189),pexels(5493665),pexels(3990359),pexels(5493672),pexels(5493666),pexels(8961300),pexels(5493671),pexels(4756489) ]
+          match:new RegExp("\\b(remodel(?:ing|er)?|renovat(?:e|ion|ing)?|kitchen|bathroom|home improvement)\\b","i")
         },
         {
           key:"landscaping",
           layout:"balanced",
           variant:1,
-          alt:"Professional landscaping and lawn care",
-          match:new RegExp("\\b(landscap(?:e|er|ing)?|lawn care|gardener|gardening|hardscape|yard care|tree service)\\b","i"),
-          provider:"pexels",
-          images:[pexels(4079768),pexels(4920293),pexels(17061897),pexels(37172070),pexels(5230937),pexels(4691418),pexels(9620213),pexels(5230933),pexels(9620215),pexels(4079769) ]
+          match:new RegExp("\\b(landscap(?:e|er|ing)?|lawn care|gardener|gardening|hardscape|yard care|tree service)\\b","i")
         },
         {
           key:"auto_detailing",
           layout:"impact",
           variant:2,
-          alt:"Professional auto detailing",
-          match:new RegExp("\\b(auto detailing|car detailing|detailer|ceramic coating|paint correction|car wash)\\b","i"),
-          provider:"pexels",
-          images:[pexels(20051453),pexels(31389821),pexels(20042056),pexels(29504462),pexels(37809565),pexels(6873103),pexels(20042055),pexels(5233264),pexels(14615269),pexels(14231701),pexels(6873185),pexels(11139239),pexels(31154217),pexels(20042052) ]
+          match:new RegExp("\\b(auto detailing|car detailing|detailer|ceramic coating|paint correction|car wash)\\b","i")
         },
         {
           key:"dental",
           layout:"trusted",
           variant:0,
-          alt:"Professional dental care",
-          match:new RegExp("\\b(dent(?:al|ist|istry)|orthodont(?:ic|ics|ist)|oral surgery)\\b","i"),
-          provider:"pexels",
-          images:[pexels(19976606),pexels(18524125),pexels(19976607),pexels(18524124),pexels(19976587),pexels(19976603),pexels(19976594),pexels(19976592),pexels(18523995),pexels(18524126) ]
+          match:new RegExp("\\b(dent(?:al|ist|istry)|orthodont(?:ic|ics|ist)|oral surgery)\\b","i")
         },
         {
           key:"plumbing",
           layout:"impact",
           variant:0,
-          alt:"Professional plumbing service",
-          match:new RegExp("\\b(plumb(?:er|ing)?|drain service|water heater|boiler repair)\\b","i"),
-          provider:"pexels",
-          images:[pexels(7859953),pexels(6419128),pexels(29226620),pexels(8486927),pexels(29248902),pexels(5691536),pexels(12644994),pexels(7859947),pexels(6419125),pexels(8486930) ]
+          match:new RegExp("\\b(plumb(?:er|ing)?|drain service|water heater|boiler repair)\\b","i")
         },
         {
           key:"home_services",
           layout:"balanced",
           variant:1,
-          alt:"Professional home service",
-          match:new RegExp("\\b(contractor|construction|home service|specialty contractor|handyman|painting contractor)\\b","i"),
-          provider:"pexels",
-          images:[pexels(5493654),pexels(5493658),pexels(5493665),pexels(5493672),pexels(8961300),pexels(5493671),pexels(3990359),pexels(38293531),pexels(28885519),pexels(5493666) ]
+          match:new RegExp("\\b(contractor|construction|home service|specialty contractor|handyman|painting contractor)\\b","i")
         },
         {
           key:"medical_spa",
           layout:"editorial",
           variant:2,
-          alt:"Professional aesthetic treatment",
-          match:new RegExp("\\b(med(?:ical)? spa|medspa|aesthetic(?:s)?|injectables?|botox|facial treatment|skin rejuvenation)\\b","i"),
-          provider:"unsplash",
-          images:[unsplash("photo-1600334089648-b0d9d3028eb2"),unsplash("photo-1515377905703-c4788e51af15"),unsplash("photo-1570172619644-dfd03ed5d881"),unsplash("photo-1506634064465-7dab4de896ed"),unsplash("photo-1540555700478-4be289fbecef"),unsplash("photo-1512290923902-8a9f81dc236c") ]
+          match:new RegExp("\\b(med(?:ical)? spa|medspa|aesthetic(?:s)?|injectables?|botox|facial treatment|skin rejuvenation)\\b","i")
         },
         {
           key:"healthcare",
           layout:"trusted",
           variant:0,
-          alt:"Professional healthcare",
-          match:new RegExp("\\b(medical|health(?:care)?|clinic|doctor|physician|chiropract(?:ic|or)|physical therapy|therapist|urgent care)\\b","i"),
-          provider:"unsplash",
-          images:[unsplash("photo-1550831107-1553da8c8464"),unsplash("photo-1576091160399-112ba8d25d1d"),unsplash("photo-1538108149393-fbbd81895907"),unsplash("photo-1584982751601-97dcc096659c"),unsplash("photo-1516841273335-e39b37888115"),unsplash("photo-1579684385127-1ef15d508118") ]
+          match:new RegExp("\\b(medical|health(?:care)?|clinic|doctor|physician|chiropract(?:ic|or)|physical therapy|therapist|urgent care)\\b","i")
         },
         {
           key:"restaurant",
           layout:"editorial",
           variant:2,
-          alt:"Restaurant dining and service",
-          match:new RegExp("\\b(restaurant|food|hospitality|cafe|bakery|cater(?:er|ing)?)\\b","i"),
-          provider:"unsplash",
-          images:[unsplash("photo-1517248135467-4c7edcad34c4"),unsplash("photo-1414235077428-338989a2e8c0"),unsplash("photo-1552566626-52f8b828add9"),unsplash("photo-1555396273-367ea4eb4db5"),unsplash("photo-1515003197210-e0cd71810b5f"),unsplash("photo-1550966871-3ed3cdb5ed0c") ]
+          match:new RegExp("\\b(restaurant|food|hospitality|cafe|bakery|cater(?:er|ing)?)\\b","i")
         },
         {
           key:"real_estate",
           layout:"editorial",
           variant:1,
-          alt:"Professional real estate",
-          match:new RegExp("\\b(real estate|realtor|property|brokerage|home builder|architect(?:ure)?)\\b","i"),
-          provider:"unsplash",
-          images:[unsplash("photo-1600585154340-be6161a56a0c"),unsplash("photo-1600566753190-17f0baa2a6c3"),unsplash("photo-1512917774080-9991f1c4c750"),unsplash("photo-1600607687939-ce8a6c25118c"),unsplash("photo-1600607688969-a5bfcd646154"),unsplash("photo-1600566753086-00f18fb6b3ea") ]
+          match:new RegExp("\\b(real estate|realtor|property|brokerage|home builder|architect(?:ure)?)\\b","i")
         },
         {
           key:"fitness",
           layout:"impact",
           variant:2,
-          alt:"Professional fitness training",
-          match:new RegExp("\\b(fitness|gym|wellness|personal trainer|yoga|strength club)\\b","i"),
-          provider:"unsplash",
-          images:[unsplash("photo-1571902943202-507ec2618e8f"),unsplash("photo-1571019613454-1cb2f99b2d8b"),unsplash("photo-1581009146145-b5ef050c2e1e"),unsplash("photo-1517836357463-d25dfeac3438"),unsplash("photo-1534438327276-14e5300c3a48"),unsplash("photo-1540497077202-7c8a3999166f") ]
+          match:new RegExp("\\b(fitness|gym|wellness|personal trainer|yoga|strength club)\\b","i")
         },
         {
           key:"legal",
           layout:"trusted",
           variant:0,
-          alt:"Professional legal service",
-          match:new RegExp("\\b(law|legal|attorney|lawyer|law firm)\\b","i"),
-          provider:"unsplash",
-          images:[unsplash("photo-1589829545856-d10d557cf95f"),unsplash("photo-1505664194779-8beaceb93744"),unsplash("photo-1450101499163-c8848c66ca85"),unsplash("photo-1521587760476-6c12a4b040da"),unsplash("photo-1589578527966-fdac0f44566c"),unsplash("photo-1593115057322-e94b77572f20") ]
+          match:new RegExp("\\b(law|legal|attorney|lawyer|law firm)\\b","i")
         },
         {
           key:"finance",
           layout:"trusted",
           variant:1,
-          alt:"Professional financial service",
-          match:new RegExp("\\b(account(?:ant|ing)?|cpa|finance|financial|insurance|bookkeep(?:er|ing)?|tax)\\b","i"),
-          provider:"unsplash",
-          images:[unsplash("photo-1450101499163-c8848c66ca85"),unsplash("photo-1497366811353-6870744d04b2"),unsplash("photo-1454165804606-c3d57bc86b40"),unsplash("photo-1521791055366-0d553872125f"),unsplash("photo-1497366216548-37526070297c"),unsplash("photo-1551836022-d5d88e9218df") ]
+          match:new RegExp("\\b(account(?:ant|ing)?|cpa|finance|financial|insurance|bookkeep(?:er|ing)?|tax)\\b","i")
         },
         {
           key:"web_design",
           layout:"editorial",
           variant:2,
-          alt:"ARC website design work",
-          match:new RegExp("\\b(web design|web designer|website design|web development|digital studio|digital agency|creative agency|ui/ux|ux design|product design|ecommerce design)\\b","i"),
-          provider:"url",
-          images:["https://arcsites.netlify.app/assets/showcases/arc-roofing-showcase-1785497742846.jpg","https://arcsites.netlify.app/assets/showcases/arc-dental-showcase-1785497742846.jpg","https://arcsites.netlify.app/assets/showcases/arc-finance-showcase-1785497742846.jpg","https://images.unsplash.com/photo-1559028012-481c04fa702d?auto=format&fit=crop&w=1800&q=82","https://images.unsplash.com/photo-1658297063569-162817482fb6?auto=format&fit=crop&w=1800&q=82","https://images.unsplash.com/photo-1688561807440-8a57dfa77ee3?auto=format&fit=crop&w=1800&q=82"]
+          match:new RegExp("\\b(web design|web designer|website design|web development|digital studio|digital agency|creative agency|ui/ux|ux design|product design|ecommerce design)\\b","i")
         },
         {
           key:"technology",
           layout:"balanced",
           variant:1,
-          alt:"Professional technology team",
-          match:new RegExp("\\b(software|technology|saas|consulting|it services?|tech company)\\b","i"),
-          provider:"unsplash",
-          images:[unsplash("photo-1497366754035-f200968a6e72"),unsplash("photo-1522071820081-009f0129c71c"),unsplash("photo-1521737711867-e3b97375f902"),unsplash("photo-1531482615713-2afd69097998"),unsplash("photo-1556761175-b413da4baf72"),unsplash("photo-1552664730-d307ca884978") ]
+          match:new RegExp("\\b(software|technology|saas|consulting|it services?|tech company)\\b","i")
         },
         {
           key:"beauty",
           layout:"editorial",
           variant:2,
-          alt:"Professional beauty service",
-          match:new RegExp("\\b(beauty|salon|barber|spa|cosmetic|skincare|skin care)\\b","i"),
-          provider:"unsplash",
-          images:[unsplash("photo-1521590832167-7bcbfaa6381f"),unsplash("photo-1560066984-138dadb4c035"),unsplash("photo-1522337360788-8b13dee7a37e"),unsplash("photo-1562322140-8baeececf3df"),unsplash("photo-1595476108010-b4d1f102b1b1"),unsplash("photo-1487412912498-0447578fcca8") ]
+          match:new RegExp("\\b(beauty|salon|barber|spa|cosmetic|skincare|skin care)\\b","i")
         },
         {
           key:"general",
           layout:"balanced",
           variant:0,
-          alt:"Professional local business service",
-          match:new RegExp(".*","i"),
-          provider:"unsplash",
-          images:[unsplash("photo-1497366811353-6870744d04b2"),unsplash("photo-1524758631624-e2822e304c36"),unsplash("photo-1497366754035-f200968a6e72"),unsplash("photo-1556761175-b413da4baf72"),unsplash("photo-1497366216548-37526070297c"),unsplash("photo-1521737711867-e3b97375f902") ]
+          match:new RegExp(".*","i")
         }
       ];
-      /* ARC_MEDIA_MANIFEST_END */
+      /* ARC_COMPOSITION_MANIFEST_END */
       const expectedMediaProfile=(document.body.dataset.arcExpectedMediaProfile || "").trim();
+      /* ARC_LOCAL_MEDIA_RUNTIME_START */
       const media =
-        mediaPresets.find(preset => preset.key === expectedMediaProfile) ||
-        mediaPresets.find(preset => preset.key !== "general" && preset.match.test(industryContext)) ||
-        mediaPresets[mediaPresets.length - 1];
-      document.body.classList.add(`arc-layout-${media.layout}`);
+        compositionPresets.find(preset => preset.key === expectedMediaProfile) ||
+        compositionPresets.find(preset => preset.key !== "general" && preset.match.test(industryContext)) ||
+        compositionPresets[compositionPresets.length - 1];
+      document.body.classList.add("arc-layout-"+media.layout);
       document.body.dataset.arcLayout=media.layout;
       document.body.dataset.mediaPreset=media.key;
       document.body.dataset.arcMediaProfile=media.key;
-      document.body.dataset.arcMediaProvider=media.provider;
-      document.body.dataset.arcMediaVersion="10.0";
+      document.body.dataset.arcMediaVersion="10.1";
       const compositionOrders={
         impact:["top","ticker","services","why","process","gallery","about","proof","faq","contact"],
         trusted:["top","ticker","proof","services","process","about","why","faq","gallery","contact"],
@@ -2067,184 +2064,83 @@
       (compositionOrders[media.layout] || compositionOrders.balanced).forEach(key => {
         if(compositionNodes[key])contentRoot?.append(compositionNodes[key]);
       });
-      const shortAlt = (kind,index=0) => {
-        const suffix = kind === "hero"
-          ? "featured service"
-          : kind === "about"
-            ? "team and service"
-            : kind === "gallery"
-              ? `project ${index + 1}`
-              : "service";
-        return `${media.alt} ${suffix}`.replace(/\s+/g," ").trim().slice(0,120);
-      };
-      const normalizeAlt = (node,fallback) => {
-        if(!node)return;
-        const value=(node.getAttribute("alt") || "").replace(/\s+/g," ").trim();
-        if(!value || value.length > 140 || /curated preview imagery|image credit|visual direction/i.test(value)){
-          node.alt=fallback;
-        }
-      };
-      const mediaKey = value => {
-        try {
-          const url=new URL(value,location.href);
-          return `${url.origin}${url.pathname}`;
-        } catch(error) {
-          return String(value || "").split("?")[0];
-        }
-      };
       const seedText=[text($(".brand-name")),text($(".brand-location")),primaryIndustry].join("|");
       const mediaSeed=[...seedText].reduce((hash,char) => ((hash * 31) + char.charCodeAt(0)) >>> 0,2166136261);
       const compositionVariant=Number.isInteger(media.variant) ? media.variant : mediaSeed % 3;
-      document.body.classList.add(`arc-variant-${compositionVariant}`);
+      document.body.classList.add("arc-variant-"+compositionVariant);
       document.body.dataset.arcVariant=String(compositionVariant);
-      const mediaOffset=media.images.length ? mediaSeed % media.images.length : 0;
-      const seededMedia=[...media.images.slice(mediaOffset),...media.images.slice(0,mediaOffset)];
-      const approvedStockSources=new Set(media.images.map(mediaKey));
-      const isStockSource = value => /(?:images\.unsplash\.com|images\.pexels\.com)/i.test(String(value || ""));
-      const usedMediaSources = new Set(
-        $$(".hero-media img,.about-media img,.gallery-grid img")
-          .map(node => mediaKey(node.currentSrc || node.getAttribute("src")))
-          .filter(Boolean)
-      );
-      const nextMedia = () => {
-        const source=seededMedia.find(candidate => !usedMediaSources.has(mediaKey(candidate)));
-        if(source) usedMediaSources.add(mediaKey(source));
-        return source || "";
-      };
-      const disclosure = () => {};
-      const tagCuratedMedia = node => {
+
+      const heroVisual=$(".hero-visual");
+      const heroMedia=$(".hero-media");
+      const aboutMedia=$(".about-media");
+      const galleryGrid=$(".gallery-grid");
+      const localShell=node=>{
         if(!node)return;
+        node.replaceChildren();
+        node.classList.add("visual-direction","arc-local-visual");
+        node.dataset.arcMediaProvider="local-css";
+        node.setAttribute("aria-hidden","true");
+      };
+      const galleryShell=()=>{
+        const figure=document.createElement("figure");
+        localShell(figure);
+        return figure;
+      };
+      const updateMediaState=()=>{
+        const heroHasUpload=Boolean(heroMedia?.querySelector("img"));
+        const aboutHasUpload=Boolean(aboutMedia?.querySelector("img"));
+        const galleryHasUpload=Boolean(galleryGrid?.querySelector("img"));
+        heroVisual?.classList.toggle("has-media",heroHasUpload);
+        if(heroMedia)heroMedia.hidden=!heroHasUpload;
+        if(aboutMedia){
+          aboutMedia.classList.toggle("arc-local-visual",!aboutHasUpload);
+          aboutMedia.dataset.arcMediaProvider=aboutHasUpload?"customer-upload":"local-css";
+        }
+        if(galleryGrid)galleryGrid.dataset.arcMediaProvider=galleryHasUpload?"customer-upload":"local-css";
+        document.body.dataset.arcMediaProvider=document.querySelector("img")?"customer-upload":"local-css";
+      };
+      const failUpload=node=>{
+        const grid=node.closest(".gallery-grid");
+        const galleryItem=grid?[...grid.children].find(child=>child===node||child.contains(node)):null;
+        const picture=node.closest("picture");
+        const failedNode=picture||node;
+        if(grid&&galleryItem===failedNode)grid.replaceChild(galleryShell(),galleryItem);
+        else{
+          failedNode.remove();
+          if(galleryItem&&!galleryItem.querySelector("img"))localShell(galleryItem);
+        }
+        updateMediaState();
+      };
+      const prepareUpload=node=>{
+        if(node.dataset.arcMediaFallbackReady==="true")return;
+        node.dataset.arcMediaFallbackReady="true";
         node.dataset.arcMediaProfile=media.key;
-        node.dataset.arcMediaProvider=media.provider;
-        node.dataset.arcMediaVersion="10.0";
+        node.dataset.arcMediaProvider="customer-upload";
+        node.dataset.arcMediaVersion="10.1";
+        node.addEventListener("error",()=>failUpload(node),{once:true});
+        if(node.complete&&node.naturalWidth===0)failUpload(node);
       };
-      const setResponsiveSource = (node,src) => {
-        if(!node || !src)return;
-        node.src=src;
-        if(/images\.(?:unsplash|pexels)\.com/i.test(src)){
-          node.srcset=[
-            `${src.replace(/w=\d+/,"w=720")} 720w`,
-            `${src.replace(/w=\d+/,"w=1200")} 1200w`,
-            `${src.replace(/w=\d+/,"w=1800")} 1800w`
-          ].join(",");
-          node.sizes="(max-width: 660px) 100vw, (max-width: 1000px) 90vw, 50vw";
-          node.referrerPolicy="no-referrer";
-        }else{
-          node.removeAttribute("srcset");
-          node.removeAttribute("sizes");
-        }
-      };
-      const makeVisualCaption = root => {
-        if(root) root.classList.add("visual-direction");
-      };
-      const recoverImage = (node,onFallback) => {
-        if(!node || node.dataset.arcFallbackReady==="true")return;
-        node.dataset.arcFallbackReady="true";
-        node.addEventListener("error",() => {
-          const replacement=nextMedia();
-          if(!replacement){
-            node.hidden=true;
-            return;
-          }
-          node.alt=shortAlt("service");
-          setResponsiveSource(node,replacement);
-          tagCuratedMedia(node);
-          onFallback?.();
-        });
-      };
-      const image = (src,alt,lazy=true) => {
-        const node=document.createElement("img");
-        node.alt=alt;
-        node.decoding="async";
-        if(lazy) node.loading="lazy";
-        setResponsiveSource(node,src);
-        tagCuratedMedia(node);
-        recoverImage(node);
-        return node;
-      };
-      const replaceMismatchedStock = (node,kind,index=0) => {
-        if(!node)return node;
-        const current=node.currentSrc || node.getAttribute("src") || "";
-        if(!isStockSource(current))return node;
-        if(approvedStockSources.has(mediaKey(current))){
-          tagCuratedMedia(node);
-          return node;
-        }
-        const replacement=nextMedia();
-        if(!replacement)return node;
-        setResponsiveSource(node,replacement);
-        node.alt=shortAlt(kind,index);
-        tagCuratedMedia(node);
-        node.dataset.arcReplacedMismatchedStock="true";
-        return node;
-      };
-
-      const heroVisual = $(".hero-visual");
-      const heroMedia = $(".hero-media");
-      const suppliedHeroImage=replaceMismatchedStock(heroMedia?.querySelector("img"),"hero");
-      normalizeAlt(suppliedHeroImage,shortAlt("hero"));
-      recoverImage(suppliedHeroImage,() => {
-        heroMedia.dataset.fallbackMedia="true";
-        disclosure(heroVisual);
-      });
-      if (heroMedia && !heroMedia.querySelector("img,picture,video,svg")) {
-        const node=image(nextMedia(),shortAlt("hero"),false);
-        node.fetchPriority="high";
-        heroMedia.replaceChildren(node);
-        heroMedia.dataset.fallbackMedia="true";
-        disclosure(heroVisual);
+      $$("img").forEach(prepareUpload);
+      const uploadObserver=new MutationObserver(records=>records.forEach(record=>record.addedNodes.forEach(added=>{
+        if(added.nodeType!==Node.ELEMENT_NODE)return;
+        if(added.matches?.("img"))prepareUpload(added);
+        added.querySelectorAll?.("img").forEach(prepareUpload);
+      })));
+      uploadObserver.observe(document.documentElement,{childList:true,subtree:true});
+      if(galleryGrid&&!galleryGrid.querySelector("img")){
+        galleryGrid.replaceChildren(galleryShell(),galleryShell(),galleryShell());
+      }else if(galleryGrid){
+        [...galleryGrid.children].filter(node=>!node.querySelector("img")).forEach(localShell);
       }
-
-      const aboutMedia = $(".about-media");
-      const suppliedAboutImage=replaceMismatchedStock(aboutMedia?.querySelector("img"),"about");
-      normalizeAlt(suppliedAboutImage,shortAlt("about"));
-      recoverImage(suppliedAboutImage,() => {
-        aboutMedia.dataset.fallbackMedia="true";
-        disclosure(aboutMedia);
-      });
-      if (aboutMedia && !aboutMedia.querySelector("img,picture,video,svg")) {
-        aboutMedia.replaceChildren(image(nextMedia(),shortAlt("about")));
-        aboutMedia.dataset.fallbackMedia="true";
-        disclosure(aboutMedia);
-      }
-
-      const galleryGrid = $(".gallery-grid");
-      $$(".gallery-grid img").forEach((original,index) => {
-        const node=replaceMismatchedStock(original,"gallery",index);
-        normalizeAlt(node,shortAlt("gallery",index));
-        recoverImage(node,() => makeVisualCaption(node.parentElement));
-      });
-      if (galleryGrid && contentIsFake(galleryGrid)) {
-        const gallerySources=[nextMedia(),nextMedia(),nextMedia()].filter(Boolean);
-        galleryGrid.replaceChildren(...gallerySources.map((src,index) => {
-          const figure=document.createElement("figure");
-          figure.className="visual-direction";
-          figure.appendChild(image(src,shortAlt("gallery",index)));
-          makeVisualCaption(figure);
-          return figure;
-        }));
-        galleryGrid.dataset.fallbackMedia="true";
-      }
-
       [
         ["#why",".why-grid"],
-        ["#gallery",".gallery-grid"],
         ["#proof",".proof-grid"],
         ["#faq",".faq-list"]
       ].forEach(([section,content]) => {
-        if (contentIsFake($(content))) $(section)?.setAttribute("hidden","");
+        if(contentIsFake($(content)))$(section)?.setAttribute("hidden","");
       });
-
-      if (heroMedia?.querySelector("img,picture,video,svg")) {
-        heroVisual?.classList.add("has-media");
-      } else {
-        heroMedia?.setAttribute("hidden","");
-      }
-
-      if (aboutMedia && !aboutMedia.querySelector("img,picture,video,svg") && empty(aboutMedia)) {
-        aboutMedia.classList.add("is-empty");
-        $(".about-grid")?.classList.add("no-media");
-      }
+      updateMediaState();
+      /* ARC_LOCAL_MEDIA_RUNTIME_END */
 
       $$('a[href=""],a[href="#"]').forEach(link => link.setAttribute("hidden",""));
       $$('a[href^="http"]').forEach(link => {
@@ -2318,6 +2214,6 @@
       if (unresolved) console.warn("Unresolved ARC placeholders",[...new Set(unresolved)]);
     })();
   </script>
-<aside class="arc-preview-toolbar" aria-label="ARC preview purchase"><span><strong>ARC preview</strong>Built for this business. Purchase only if approved.</span><a data-arc-checkout href="https://buy.stripe.com/test_00000000000000?client_reference_id=b2000010_083e361bf8d7f47d9306435e10a993381cea47a0c4532cd3a28d6ffc4712eafa_b24e063c2d361294634173add76924c772eb7be503213dcf326e4fec8da4fc93">Own this website — $5,000</a></aside>
+<aside class="arc-preview-toolbar" aria-label="ARC preview purchase"><span><strong>ARC preview</strong>Built for this business. Purchase only if approved.</span><span data-arc-checkout-private>Checkout is available only through the private approval email.</span></aside>
 </body>
 </html>

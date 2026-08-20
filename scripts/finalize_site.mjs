@@ -178,13 +178,23 @@ export function resolvePreviewFolder({ clientReferenceId, treePaths }) {
 }
 
 function parseCheckoutReference(clientReferenceId) {
-  const match = clean(clientReferenceId).toLowerCase().match(/^([a-f0-9]{8})_([a-f0-9]{64})_([a-f0-9]{64})$/);
-  if (!match) throw new Error("ARC_PAYMENT_INVALID: immutable signed checkout reference");
-  return { folderSuffix: match[1], approvalContentSha256: match[2], signature: match[3] };
+  const raw = clean(clientReferenceId);
+  if (!/^v3_[A-Za-z0-9_-]{135}$/.test(raw)) throw new Error("ARC_PAYMENT_INVALID: immutable signed checkout reference v3");
+  const bytes = Buffer.from(raw.slice(3), "base64url");
+  if (bytes.length !== 101 || bytes.toString("base64url") !== raw.slice(3)) throw new Error("ARC_PAYMENT_INVALID: canonical checkout reference v3");
+  return {
+    raw,
+    payload: bytes.subarray(0, 69),
+    keyId: bytes.subarray(0, 1).toString("hex"),
+    folderSuffix: bytes.subarray(1, 5).toString("hex"),
+    approvalContentSha256: bytes.subarray(5, 37).toString("hex"),
+    checkoutConfigSnapshotSha256: bytes.subarray(37, 69).toString("hex"),
+    signature: bytes.subarray(69),
+  };
 }
 
 function removeExactTerminalPreviewToolbar(previewHtml, stripeLiveModeEnabled = false) {
-  const toolbarPattern = /<aside class="arc-preview-toolbar" aria-label="ARC preview purchase"><span><strong>ARC preview<\/strong>Built for this business\. Purchase only if approved\.<\/span><a data-arc-checkout href="https:\/\/buy\.stripe\.com\/(?:test_)?[A-Za-z0-9]+\?client_reference_id=[a-f0-9]{8}_[a-f0-9]{64}_[a-f0-9]{64}">Own this website — \$5,000<\/a><\/aside>/g;
+  const toolbarPattern = /<aside class="arc-preview-toolbar" aria-label="ARC preview purchase"><span><strong>ARC preview<\/strong>Built for this business\. Purchase only if approved\.<\/span><a data-arc-checkout href="https:\/\/buy\.stripe\.com\/(?:test_)?[A-Za-z0-9]+\?client_reference_id=v3_[A-Za-z0-9_-]{135}">Own this website — \$5,000<\/a><\/aside>/g;
   const blocks = [...String(previewHtml).matchAll(toolbarPattern)].map(match => match[0]);
   if (blocks.length !== 1 || !String(previewHtml).endsWith(`${blocks[0]}\n</body>\n</html>`)) {
     throw new Error("ARC_FINALIZE_INVALID: exact terminal preview purchase toolbar is required");
@@ -257,7 +267,7 @@ export function finalizePreviewHtml(previewHtml, options = {}) {
 }
 
 export function buildHeadersFile() {
-  return `/*\n  X-Content-Type-Options: nosniff\n  X-Frame-Options: DENY\n  X-Robots-Tag: noindex, nofollow, noarchive\n  Referrer-Policy: strict-origin-when-cross-origin\n  Permissions-Policy: camera=(), microphone=(), geolocation=()\n`;
+  return `/*\n  Content-Security-Policy: default-src 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'none'; font-src 'self' data:; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'\n  X-Content-Type-Options: nosniff\n  X-Frame-Options: DENY\n  Referrer-Policy: strict-origin-when-cross-origin\n  Permissions-Policy: camera=(), microphone=(), geolocation=()\n`;
 }
 
 export function buildNetlifyConfig() {
@@ -297,9 +307,8 @@ export function buildProductionHandoff({
     throw new Error("ARC_PAYMENT_INVALID: checkout binding secret must be 32–256 characters");
   }
   const expectedCheckoutSignature = createHmac("sha256", bindingSecret)
-    .update(`arc-checkout-reference-v2\n${checkoutReference.folderSuffix}\n${checkoutReference.approvalContentSha256}`, "utf8")
-    .digest("hex");
-  if (expectedCheckoutSignature !== checkoutReference.signature) {
+    .update(`arc-checkout-reference-v3\narcwebhq-cpu/arc-previews\narc-production\nstripe-${stripeLiveModeEnabled ? "live" : "test"}\n`).update(checkoutReference.payload).digest();
+  if (!expectedCheckoutSignature.equals(checkoutReference.signature)) {
     throw new Error("ARC_PAYMENT_INVALID: checkout reference signature mismatch");
   }
   const previewFolder = resolvePreviewFolder({
@@ -310,13 +319,16 @@ export function buildProductionHandoff({
   if (sha256(approvalHtml) !== checkoutReference.approvalContentSha256) {
     throw new Error("ARC_PAYMENT_INVALID: approved preview bytes do not match the checkout approval digest");
   }
+  const snapshotEncoded = approvalHtml.match(/<meta name="arc-checkout-config" content="([A-Za-z0-9_-]+)">/)?.[1] || "";
+  if (!snapshotEncoded || sha256(Buffer.from(snapshotEncoded, "base64url")) !== checkoutReference.checkoutConfigSnapshotSha256) {
+    throw new Error("ARC_PAYMENT_INVALID: checkout configuration snapshot digest mismatch");
+  }
   const productionHtml = finalizePreviewHtml(previewHtml, { canonicalUrl, stripeLiveModeEnabled });
   const customerEmail = clean(session.customer_details?.email || session.customer_email).toLowerCase();
   const formTags = productionHtml.match(/<form\b[^>]*>/gi) || [];
   const formBlocks = productionHtml.match(/<form\b[^>]*>[\s\S]*?<\/form>/gi) || [];
   const hasLeadForm = formTags.length > 0;
   const routeEmail = clean(verifiedLeadNotificationEmail).toLowerCase();
-  const evidenceSecret = clean(leadRouteEvidenceSecret);
   if (hasLeadForm && (formTags.length !== 1 || formBlocks.length !== 1)) {
     throw new Error("ARC_LEAD_ROUTE_INVALID: production must contain exactly one Netlify-managed form");
   }
@@ -330,17 +342,14 @@ export function buildProductionHandoff({
   if (hasLeadForm && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(routeEmail)) {
     throw new Error("ARC_LEAD_ROUTE_INVALID: verified lead notification email");
   }
-  if (hasLeadForm && (evidenceSecret.length < 32 || evidenceSecret.length > 256)) {
-    throw new Error("ARC_LEAD_ROUTE_INVALID: lead-route evidence secret must be 32–256 characters");
-  }
   const leadRouteRecipientHmacSha256 = hasLeadForm
-    ? createHmac("sha256", evidenceSecret)
-      .update(`arc-lead-route-recipient-v1\n${routeEmail}`, "utf8")
+    ? createHmac("sha256", bindingSecret)
+      .update(`arc-checkout-lead-recipient-v1\n${stripeLiveModeEnabled ? "live" : "test"}\n${routeEmail}`, "utf8")
       .digest("hex")
     : "";
   const headersFile = buildHeadersFile();
   for (const [label, content] of [["production HTML", productionHtml], ["headers file", headersFile]]) {
-    for (const privateValue of [clean(session.id), customerEmail, routeEmail, evidenceSecret].filter(Boolean)) {
+    for (const privateValue of [clean(session.id), customerEmail, routeEmail].filter(Boolean)) {
       if (content.toLowerCase().includes(privateValue.toLowerCase())) {
         throw new Error(`ARC_PRIVACY_FAILED: ${label} contains private handoff data`);
       }
@@ -352,6 +361,7 @@ export function buildProductionHandoff({
   if (relativeReferences.length) {
     throw new Error(`ARC_ARTIFACT_INVALID: unresolved relative assets: ${[...new Set(relativeReferences)].join(",")}`);
   }
+  if (/<base\b/i.test(productionHtml)) throw new Error("ARC_ARTIFACT_INVALID: HTML base elements are forbidden");
   const artifactSecret = clean(handoffArtifactEvidenceSecret);
   if (artifactSecret.length < 32 || artifactSecret.length > 256) {
     throw new Error("ARC_ARTIFACT_INVALID: handoff artifact evidence secret must be 32–256 characters");
@@ -374,9 +384,12 @@ export function buildProductionHandoff({
   const headersContentSha256 = artifactManifest.find(item => item.path === "_headers").sha256;
   const bundleFingerprint = sha256(artifacts.map(artifact => `${artifact.path}\0${artifact.content}\0`).join(""));
   const handoffArtifactEvidencePrivate = canonicalJson({
-    version: "arc2-handoff-artifact-evidence-v1",
+    version: "arc2-handoff-artifact-evidence-v2",
     scope: "netlify-claimable-deploy-artifacts",
     preview_folder: previewFolder,
+    lead_route_mode: hasLeadForm ? "netlify_form" : "not_required",
+    lead_route_form_name: leadRouteFormName,
+    lead_route_recipient_hmac_sha256: leadRouteRecipientHmacSha256,
     production_content_sha256: productionContentSha256,
     artifact_manifest_sha256: artifactManifestSha256,
     bundle_fingerprint: bundleFingerprint,
@@ -385,7 +398,7 @@ export function buildProductionHandoff({
   });
   const handoffArtifactEvidenceSha256 = sha256(handoffArtifactEvidencePrivate);
   const handoffArtifactEvidenceHmacSha256 = createHmac("sha256", artifactSecret)
-    .update(`arc2-handoff-artifact-evidence-signature-v1\n${handoffArtifactEvidencePrivate}`, "utf8")
+    .update(`arc2-handoff-artifact-evidence-signature-v2\n${handoffArtifactEvidencePrivate}`, "utf8")
     .digest("hex");
   return {
     status: "READY_FOR_CLAIMABLE_DEPLOY",

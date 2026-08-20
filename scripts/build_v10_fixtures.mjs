@@ -9,17 +9,13 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const template = await readFile(path.join(root, "ARC_MASTER_TEMPLATE.html"), "utf8");
 const validatorSource = await readFile(path.join(root, "arc_step7_validator.js"), "utf8");
 const validate = new Function("inputData", validatorSource);
-const paymentLinkUrl = "https://buy.stripe.com/test_00000000000000";
-const checkoutBindingSecret = "arc-test-checkout-binding-secret-32-bytes-minimum";
 const manifest = [];
 const fixtures = [...launchFixtures, ...mediaCoverageFixtures];
 
 for (const fixture of fixtures) {
   const rendered = renderPreview(template, fixture.content, {
     trustedEventPrefix: fixture.id,
-    customerEmail: fixture.customerEmail,
-    paymentLinkUrl,
-    checkoutBindingSecret
+    customerEmail: fixture.customerEmail
   });
   const validation = validate({
     html_content: rendered.html,
@@ -48,7 +44,6 @@ for (const fixture of fixtures) {
     expectedProfile: fixture.expectedProfile,
     isLaunch: fixture.isLaunch,
     previewUrl: rendered.previewUrl,
-    checkoutUrl: rendered.checkoutUrl,
     expectedMediaProfile: rendered.expectedMediaProfile,
     validationChecks: validation.validation_check_count
   });

@@ -4,6 +4,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const excludedContractRoots = new Set(
+  [process.env.ARC_SITE_DIR]
+    .filter(Boolean)
+    .map(candidate => path.resolve(root, candidate))
+    .filter(candidate => candidate.startsWith(`${root}${path.sep}`))
+);
 const v10Manifest = JSON.parse(await readFile(path.join(root, "qa-v10/manifest.json"), "utf8"));
 const showcaseManifest = JSON.parse(await readFile(path.join(root, "showcases/manifest.json"), "utf8"));
 const mediaManifest = JSON.parse(await readFile(path.join(root, "config/media-manifest.json"), "utf8"));
@@ -32,6 +38,7 @@ async function listHtmlFiles(directory) {
   for (const entry of entries) {
     if ([".git", ".pages-dist", "node_modules", "test-results"].includes(entry.name)) continue;
     const absolute = path.join(directory, entry.name);
+    if (entry.isDirectory() && excludedContractRoots.has(absolute)) continue;
     if (entry.isDirectory()) files.push(...await listHtmlFiles(absolute));
     if (entry.isFile() && entry.name.endsWith(".html")) files.push(absolute);
   }

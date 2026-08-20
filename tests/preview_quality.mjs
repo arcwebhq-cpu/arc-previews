@@ -3,7 +3,7 @@ import { createReadStream } from "node:fs";
 import { mkdir, readFile, readdir, stat } from "node:fs/promises";
 import http from "node:http";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { chromium } from "playwright";
 
 // tar-fs attempts chown when tests run as root, which some CI/container filesystems reject.
@@ -61,9 +61,12 @@ const showcaseFiles = showcaseManifest.map(item => item.file);
 for (const fixture of v10Manifest) {
   assert.ok(discoveredV10Files.includes(fixture.file), `v10 fixture is missing from browser discovery: ${fixture.file}`);
 }
+const currentReleaseFiles = [...discoveredV10Files, ...showcaseFiles, ...discoveredV10DeliveryFiles];
 const qaFiles = process.env.ARC_QA_V10_ONLY === "1"
   ? [...discoveredV10Files, ...discoveredV10DeliveryFiles]
-  : [...legacyQaFiles, ...discoveredV10Files, ...showcaseFiles, ...discoveredV10DeliveryFiles];
+  : process.env.ARC_QA_INCLUDE_LEGACY === "1"
+    ? [...legacyQaFiles, ...currentReleaseFiles]
+    : currentReleaseFiles;
 const qaLimit = Math.max(1, Math.min(qaFiles.length, Number(process.env.ARC_QA_LIMIT || qaFiles.length)));
 const filesToTest = qaFiles.slice(0, qaLimit);
 const viewports = [
@@ -131,9 +134,14 @@ try {
         hasTouch: viewport.isMobile
       });
       const pageErrors = [];
+      const runtimeRequests = [];
       page.on("pageerror", error => pageErrors.push(error.message));
+      page.on("request", request => runtimeRequests.push({ url: request.url(), type: request.resourceType() }));
       if (!useRealImages) {
         await page.route("**/*", route => {
+          if (new URL(route.request().url()).pathname === "/__arc_missing_customer_upload__.png") {
+            return route.fulfill({ status: 404, contentType: "text/plain", body: "Missing" });
+          }
           if (route.request().resourceType() === "image") {
             return route.fulfill({ status: 200, contentType: "image/svg+xml", body: mockImage });
           }
@@ -144,7 +152,7 @@ try {
       try {
         await page.goto(`${baseUrl}/${file}`, { waitUntil: "domcontentloaded", timeout: 30_000 });
         await page.addStyleTag({ content: "html{scroll-behavior:auto!important}*,*:before,*:after{animation:none!important;transition:none!important}" });
-        await page.waitForFunction(() => document.images.length >= 5, null, { timeout: 5_000 });
+        await page.waitForFunction(() => document.querySelectorAll(".hero-fallback,.about-media.arc-local-visual,.gallery-grid>.arc-local-visual").length >= 5, null, { timeout: 5_000 });
         await page.evaluate(() => {
           for (const image of document.images) image.loading = "eager";
         });
@@ -183,10 +191,15 @@ try {
             await page.waitForFunction(revealIsVisible, index, { timeout: 5_000 });
           }
         }
-        await page.waitForFunction(() => {
-          const images = [...document.images];
-          return images.length >= 5 && images.every(image => image.complete && image.naturalWidth > 0);
-        }, null, { timeout: 8_000 });
+        await page.waitForFunction(() => [...document.images].every(image => image.complete), null, { timeout: 8_000 });
+        await page.evaluate(() => {
+          const upload = document.createElement("img");
+          upload.alt = "Broken customer upload QA probe";
+          upload.dataset.arcMediaProvider = "customer-upload";
+          upload.src = "/__arc_missing_customer_upload__.png";
+          document.querySelector(".hero-media")?.appendChild(upload);
+        });
+        await page.waitForFunction(() => !document.querySelector('img[alt="Broken customer upload QA probe"]'), null, { timeout: 5_000 });
         await page.evaluate(() => window.scrollTo(0, 0));
 
         const report = await page.evaluate(() => {
@@ -281,6 +294,8 @@ try {
               version: image.dataset.arcMediaVersion || "",
               source: (image.currentSrc || image.src).split("?")[0]
             })),
+            localShells: [...document.querySelectorAll('.hero-fallback[data-arc-media-provider="local-css"],.about-media.arc-local-visual[data-arc-media-provider="local-css"],.gallery-grid>.arc-local-visual[data-arc-media-provider="local-css"]')]
+              .filter(visible).map(element => element.className),
             privateEmail: /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(document.documentElement.innerHTML)
           };
         });
@@ -297,6 +312,10 @@ try {
         assert.ok(report.overflow <= 1, `horizontal overflow is ${report.overflow}px`);
         assert.equal(report.unresolved.length, 0, "unresolved placeholders remain");
         assert.equal(report.privateEmail, false, "private requester email is visible");
+        const documentUrl = new URL(`${baseUrl}/${file}`).toString();
+        const expectedProbeUrl = `${baseUrl}/__arc_missing_customer_upload__.png`;
+        const unexpectedRequests = runtimeRequests.filter(request => request.url !== documentUrl && request.url !== "about:blank" && request.url !== expectedProbeUrl);
+        assert.deepEqual(unexpectedRequests, [], `zero-egress page made subresource/network requests: ${JSON.stringify(unexpectedRequests)}`);
         assert.equal(report.hiddenReveals.length, 0, `scroll-reveal content remained hidden: ${JSON.stringify(report.hiddenReveals)}`);
         assert.equal(pageErrors.length, 0, `page errors: ${pageErrors.join(" | ")}`);
         const escapedHeadings = report.headings.filter(item => item.left < -1 || item.right > viewport.width + 1);
@@ -304,10 +323,10 @@ try {
         assert.ok(report.headings.every(item => item.overflowWrap === "normal" && item.wordBreak === "normal"), "a heading may split inside a word");
         assert.ok(report.controls.every(item => item.height >= 43.5), "an important control is smaller than 44px");
         assert.ok(report.darkSections.every(item => item.ratio >= 4.5), "dark-section text contrast is below 4.5:1");
-        assert.ok(report.images.length >= 5, "fewer than five industry images rendered");
         assert.ok(report.images.every(item => item.naturalWidth > 0 && item.naturalHeight > 0), "a rendered image is broken");
         assert.ok(report.images.every(item => item.alt.length > 0 && item.alt.length <= 160), "image alt text is empty or too long");
         assert.equal(new Set(report.images.map(item => item.source)).size, report.images.length, "an image is duplicated");
+        assert.ok(report.images.length || report.localShells.length >= 5, "neither customer uploads nor the complete local visual shell set rendered");
         assert.ok(report.links.every(href => !/^https?:\/\/(?:www\.)?example\.(?:com|org|net)/i.test(href)), "dummy external CTA remains");
         if (viewport.isPhone) {
           assert.ok(report.media.every(item => item.height <= 320), "a phone media block is taller than 320px");
@@ -323,30 +342,19 @@ try {
           assert.equal(report.arcSiteMode, isDelivery ? "production" : showcase ? "showcase" : "preview", "v10 site mode does not match its audit class");
           assert.equal(report.arcMediaProfile, expectedProfile, "semantic media profile mismatch");
           assert.equal(report.arcExpectedMediaProfile, expectedProfile, "server-selected media profile mismatch");
-          assert.equal(report.arcMediaProvider, profile.provider, "media provider mismatch");
+          assert.ok(new Set(["local-css", "customer-upload"]).has(report.arcMediaProvider), "media provider is neither receipt upload nor local CSS");
           assert.equal(report.arcMediaVersion, mediaManifest.version, "media manifest version mismatch");
           assert.equal(report.arcLayout, profile.layout, "industry composition layout mismatch");
           assert.equal(report.arcVariant, String(profile.variant), "industry composition variant mismatch");
           assert.deepEqual(report.mainOrder, compositionOrders[profile.layout], "industry section order mismatch");
           if (v10Fixture?.isLaunch) seenV10Compositions.add(`${report.arcLayout}:${report.arcVariant}`);
           assert.ok(report.curatedImages.every(item => item.profile === expectedProfile), "an image escaped the selected media profile");
-          assert.ok(report.curatedImages.every(item => item.provider === profile.provider), "an image has the wrong provider tag");
+          assert.ok(report.curatedImages.every(item => item.provider === "customer-upload"), "an image is not marked as a customer upload");
           assert.ok(report.curatedImages.every(item => item.version === mediaManifest.version), "an image has a stale manifest tag");
-          const allowed = profile.provider === "pexels"
-            ? new Set(profile.photo_ids.map(id => `/photos/${id}/pexels-photo-${id}.jpeg`))
-            : profile.provider === "unsplash"
-              ? new Set(profile.photo_ids.map(id => `/${id}`))
-              : new Set(profile.urls.map(value => new URL(value).pathname));
-          assert.ok(report.curatedImages.every(item => allowed.has(new URL(item.source).pathname)), "an image URL is outside the selected profile pool");
+          assert.ok(report.curatedImages.every(item => new URL(item.source).origin === baseUrl), "a rendered customer upload escaped the served preview origin");
+          if (!report.curatedImages.length) assert.ok(report.localShells.length >= 5, "no-upload preview lost its CSS visual system");
           const checkout = report.links.find(href => href?.includes("buy.stripe.com"));
-          if (v10Fixture) {
-            assert.ok(checkout, "bound Stripe checkout link is missing");
-            const checkoutReference = new URL(checkout).searchParams.get("client_reference_id") || "";
-            assert.match(checkoutReference, new RegExp(`^${v10Fixture.folder.slice(-8)}_[a-f0-9]{64}_[a-f0-9]{64}$`), "checkout immutable approval binding mismatch");
-            assert.equal(checkoutReference.length, 138, "checkout binding must use the fixed Stripe-safe v2 length");
-          } else {
-            assert.equal(checkout, undefined, "a non-preview page exposed a Stripe checkout link");
-          }
+          assert.equal(checkout, undefined, "a public page exposed a private Stripe checkout capability");
           if (showcase) {
             assert.equal(report.arcShowcaseProfile, showcase.profile, "showcase profile metadata mismatch");
             assert.equal(report.formCount, 0, "showcase retained a customer lead submission form");
@@ -374,6 +382,29 @@ try {
       } finally {
         await page.close();
       }
+    }
+  }
+  if (filesToTest.length) {
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const page = await context.newPage();
+    const pageErrors = [];
+    page.on("pageerror", error => pageErrors.push(error.message));
+    try {
+      await context.setOffline(true);
+      await page.goto(pathToFileURL(path.join(root, filesToTest[0])).href, { waitUntil: "domcontentloaded", timeout: 30_000 });
+      await page.waitForFunction(() => document.querySelectorAll(".hero-fallback,.about-media.arc-local-visual,.gallery-grid>.arc-local-visual").length >= 5);
+      const offlineReport = await page.evaluate(() => ({
+        unresolved: document.documentElement.innerHTML.match(/\[\[[A-Z0-9_]+\]\]/g) || [],
+        shells: document.querySelectorAll('[data-arc-media-provider="local-css"]').length,
+        broken: [...document.images].filter(image => image.complete && image.naturalWidth === 0).length
+      }));
+      assert.equal(pageErrors.length, 0, `offline local artifact raised page errors: ${pageErrors.join(" | ")}`);
+      assert.equal(offlineReport.unresolved.length, 0, "offline local artifact has unresolved placeholders");
+      assert.ok(offlineReport.shells >= 5, "offline local artifact lost its CSS visual shells");
+      assert.equal(offlineReport.broken, 0, "offline local artifact contains a broken image");
+      console.log(`PASS ${filesToTest[0]} [offline-local]`);
+    } finally {
+      await context.close();
     }
   }
 } finally {

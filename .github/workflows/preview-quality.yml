@@ -16,6 +16,11 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: arcwebhq-cpu/arc-site
+          ref: e951ebc9a09ec60de13d47ab65dfa718314f0c8c
+          path: .arc-site-contract
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -26,8 +31,9 @@ jobs:
         env:
           ARC_QA_REAL_IMAGES: "1"
           ARC_QA_PLAYWRIGHT_BROWSER: "1"
+          ARC_SITE_DIR: .arc-site-contract
       - name: Verify generated artifacts are committed
-        run: test -z "$(git status --porcelain)"
+        run: test -z "$(git status --porcelain --untracked-files=all -- . ':(exclude).arc-site-contract/**')"
       - if: failure()
         uses: actions/upload-artifact@v4
         with:

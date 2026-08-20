@@ -38,7 +38,13 @@ const pagesIndex = `<!doctype html>
 `;
 
 const slashPath = value => String(value ?? "").split(path.sep).join("/");
-const sha256 = value => createHash("sha256").update(value, "utf8").digest("hex");
+const sha256 = value => createHash("sha256").update(value, typeof value === "string" ? "utf8" : undefined).digest("hex");
+const privateCheckoutPattern=/buy\.stripe\.com|\bplink_[a-z0-9]+|client_reference_id|arc-checkout-config|v3_[a-z0-9_-]{135}|arc-checkout-offer-snapshot-v1|arc1-checkout-recipient-reservation-v1|arc1-preview-readiness-(?:core|observation)-v1|arc-private-checkout-(?:policy|link-intent|link-receipt|link-reverse)-v1|checkout_(?:binding|offer|recipient|readiness)|link_receipt_(?:private|hmac|sha256)/i;
+const normalizePublicSurface=value=>{let current=String(value??"");for(let pass=0;pass<5;pass+=1){let next=current.replace(/&#(\d+);?/g,(_,code)=>String.fromCodePoint(Number(code))).replace(/&#x([0-9a-f]+);?/gi,(_,code)=>String.fromCodePoint(Number.parseInt(code,16))).replace(/&(amp|period|colon|sol|percnt|num|tab|newline);/gi,(_,name)=>({amp:"&",period:".",colon:":",sol:"/",percnt:"%",num:"#",tab:"\t",newline:"\n"})[name.toLowerCase()]).replace(/\/\*[\s\S]*?\*\//g,"").replace(/\\x([0-9a-f]{2})/gi,(_,hex)=>String.fromCodePoint(Number.parseInt(hex,16))).replace(/\\u\{([0-9a-f]{1,6})\}/gi,(_,hex)=>String.fromCodePoint(Number.parseInt(hex,16))).replace(/\\u([0-9a-f]{4})/gi,(_,hex)=>String.fromCodePoint(Number.parseInt(hex,16))).replace(/\\([0-9a-f]{1,6})\s?/gi,(_,hex)=>String.fromCodePoint(Number.parseInt(hex,16))).replace(/[\u3002\uff0e\uff61]/g,".").replace(/(?:%[0-9a-f]{2})+/gi,encoded=>{try{return decodeURIComponent(encoded);}catch{return encoded.replace(/%([0-9a-f]{2})/gi,(_,hex)=>String.fromCharCode(Number.parseInt(hex,16)));}});if(next===current)break;current=next;}return current.normalize("NFKC").toLowerCase();};
+function assertNoPrivateCheckoutSurface(html,label){const raw=String(html??""),decoded=normalizePublicSurface(raw),compact=decoded.replace(/[\s\u0000-\u001f\u007f]+/g,"");if(/&(?!(?:amp|quot|apos|lt|gt);)[a-z][a-z0-9]+;/i.test(raw)||privateCheckoutPattern.test(decoded)||privateCheckoutPattern.test(compact)||/<[A-Za-z][^>]*\son[a-z0-9_-]+\s*=/i.test(raw))throw new Error(`ARC_PAGES_INVALID: ${label} contains private checkout capability/evidence`);for(const match of raw.matchAll(/\b(?:href|xlink:href|action|formaction|src|srcset|poster|data|content)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/gi)){const attr=match[1]??match[2]??match[3]??"",normalized=normalizePublicSurface(attr);let parsed;try{parsed=new URL(normalized,"https://arc.invalid/");}catch{}const host=parsed?.hostname?.toLowerCase()||"";if(/%(?![0-9a-f]{2})/i.test(attr)||/&(?!(?:amp|quot|apos|lt|gt);)[a-z][a-z0-9]+;?/i.test(attr)||/\p{Default_Ignorable_Code_Point}/u.test(normalized)||host==="buy.stripe.com"||host.endsWith(".buy.stripe.com")||new Set(["javascript:","vbscript:"]).has(parsed?.protocol)||/^(?:javascript|vbscript):/i.test(normalized)||privateCheckoutPattern.test(normalized)||privateCheckoutPattern.test(normalized.replace(/[\s\u0000-\u001f\u007f]+/g,"")))throw new Error(`ARC_PAGES_INVALID: ${label} contains private checkout capability/evidence`);}}
+const trustedScriptHashes=["55335153318fa5a489d033599208d42c1c3c8b25f4a07f6e0a4f17fb5be60937","596ddd07b7b1525a0c2ec32411fa73e34121f8c320687a7249b9f793d8cf2870","98cbb58e3ec829ddaec61983333a8bb500b91558625a346350bfc8fe4842b860"].sort();
+function assertTrustedScripts(html,label){const scripts=html.match(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi)||[],hashes=scripts.map(sha256).sort();if((html.match(/<script\b/gi)||[]).length!==scripts.length||(html.match(/<\/script\b/gi)||[]).length!==scripts.length||hashes.length!==3||JSON.stringify(hashes)!==JSON.stringify(trustedScriptHashes)||sha256(hashes.join("\n"))!=="8ff6073533b7b631ab6657461d3631a2f00ca4a70ed0b79c2c016647948aae7b")throw new Error(`ARC_PAGES_INVALID: ${label} reviewed script manifest changed`);}
+function assertNoUnsafeExecutableSurface(html,label){const raw=String(html??""),nonScript=raw.replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi,""),decodedNonScript=normalizePublicSurface(nonScript);if(/&(?!(?:amp|quot|apos|lt|gt);)[a-z][a-z0-9]+;/i.test(nonScript)||/\p{Default_Ignorable_Code_Point}/u.test(decodedNonScript)||/<[A-Za-z][^>]*(?:\s|\/)on[a-z0-9_-]+\s*=/i.test(raw)||/<style\b[^>]*>[\s\S]*?\\[\s\S]*?<\/style\s*>/i.test(decodedNonScript)||/\bstyle\s*=\s*(?:"[^"]*\\|'[^']*\\)/i.test(decodedNonScript))throw new Error(`ARC_PAGES_INVALID: ${label} contains an unreviewed executable/encoded surface`);}
 
 function attribute(tag, name) {
   const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -83,6 +89,9 @@ function assertV10(html, label) {
 }
 
 function validateShowcase(html, profile, relative) {
+  assertNoPrivateCheckoutSurface(html,relative);
+  assertNoUnsafeExecutableSurface(html,relative);
+  assertTrustedScripts(html,relative);
   assertV10(html, relative);
   assertPrivateRobots(html, relative);
   assertNoEmail(html, relative);
@@ -96,7 +105,7 @@ function validateShowcase(html, profile, relative) {
   if (!html.includes("Fictional ARC design concept — not a real business. Checkout and lead collection are disabled.")) {
     throw new Error(`ARC_PAGES_INVALID: ${relative} is missing its visible fictional-concept disclosure`);
   }
-  if (/<form\b|\bdata-netlify\b|\bnetlify-honeypot\b|\bdata-arc-checkout\b|buy\.stripe\.com/i.test(html)) {
+  if (/<form\b|\bdata-netlify\b|\bnetlify-honeypot\b|\bdata-arc-checkout\b|buy\.stripe\.com|\bplink_[A-Za-z0-9]+|client_reference_id|arc-checkout-config|v3_[A-Za-z0-9_-]{135}/i.test(html)) {
     throw new Error(`ARC_PAGES_INVALID: ${relative} contains an active form or checkout`);
   }
 }
@@ -125,6 +134,9 @@ function validateCustomerPreview(html, folder) {
   assertV10(html, label);
   assertPrivateRobots(html, label);
   assertNoEmail(html, label);
+  assertNoPrivateCheckoutSurface(html,label);
+  assertNoUnsafeExecutableSurface(html,label);
+  assertTrustedScripts(html.replace(/<!-- ARC_PREVIEW_PROOF_START -->[\s\S]*?<!-- ARC_PREVIEW_PROOF_END -->\r?\n?/i,""),label);
 
   const bodyTags = html.match(/<body\b[^>]*>/gi) || [];
   if (bodyTags.length !== 1 || attribute(bodyTags[0], "data-arc-site-mode") !== "preview") {
@@ -147,31 +159,28 @@ function validateCustomerPreview(html, folder) {
     throw new Error(`ARC_PAGES_INVALID: ${label} source proof hash mismatch`);
   }
 
-  const checkoutTags = (html.match(/<a\b[^>]*>/gi) || [])
-    .filter(tag => /(?:^|\s)data-arc-checkout(?:\s|=|>)/i.test(tag));
-  if (checkoutTags.length !== 1) {
-    throw new Error(`ARC_PAGES_INVALID: ${label} must contain exactly one bound test checkout`);
+  const inertNotice=(html.match(/<span data-arc-checkout-private>Checkout is available only through the private approval email\.<\/span>/g)||[]).length;
+  if(inertNotice!==1||/buy\.stripe\.com|\bplink_[A-Za-z0-9]+|client_reference_id|arc-checkout-config|v3_[A-Za-z0-9_-]{135}/i.test(html)){
+    throw new Error(`ARC_PAGES_INVALID: ${label} must contain one inert checkout notice and no private checkout capability/evidence`);
   }
-  const encodedHref = attribute(checkoutTags[0], "href");
-  const href = encodedHref.replaceAll("&amp;", "&");
-  let checkout;
-  try {
-    checkout = new URL(href);
-  } catch (error) {
-    throw new Error(`ARC_PAGES_INVALID: ${label} checkout URL`);
+  const expectedPrefix = `https://arcwebhq-cpu.github.io/arc-previews/${folder}/assets/`;
+  const paths = new Set();
+  for (const tag of html.match(/<(?:img|source)\b[^>]*>/gi) || []) {
+    for (const name of ["src", "srcset"]) {
+      const raw = attribute(tag, name);
+      if (!raw) continue;
+      for (const candidate of (name === "srcset" ? raw.split(",").map(item => item.trim().split(/\s+/)[0]) : [raw])) {
+        if (!candidate.includes(`/${folder}/assets/`)) continue;
+        if (!candidate.startsWith(expectedPrefix)) throw new Error(`ARC_PAGES_INVALID: ${label} asset URL origin or path mismatch`);
+        const relative = candidate.slice("https://arcwebhq-cpu.github.io/arc-previews/".length);
+        if (!new RegExp(`^${folder}/assets/[a-f0-9]{64}\\.(?:png|jpg|webp)$`).test(relative)) {
+          throw new Error(`ARC_PAGES_INVALID: ${label} asset URL is not content-addressed`);
+        }
+        paths.add(relative);
+      }
+    }
   }
-  const references = checkout.searchParams.getAll("client_reference_id");
-  if (
-    checkout.origin !== "https://buy.stripe.com" ||
-    checkout.username ||
-    checkout.password ||
-    !/^\/test_[A-Za-z0-9]+$/.test(checkout.pathname) ||
-    references.length !== 1 ||
-    references[0].length !== 138 ||
-    !new RegExp(`^${folder.slice(-8)}_[a-f0-9]{64}_[a-f0-9]{64}$`).test(references[0])
-  ) {
-    throw new Error(`ARC_PAGES_INVALID: ${label} checkout is not bound to this preview in Stripe test mode`);
-  }
+  return [...paths].sort();
 }
 
 async function readRegularFile(root, relative) {
@@ -193,6 +202,17 @@ async function readRegularFile(root, relative) {
   }
   return readFile(absolute, "utf8");
 }
+async function readRegularBytes(root, relative) {
+  const normalized = slashPath(path.normalize(relative));
+  if (!normalized || normalized.startsWith("../") || path.isAbsolute(normalized)) throw new Error(`ARC_PAGES_INVALID: source path escaped repository: ${relative}`);
+  let absolute = root, stats;
+  for (const segment of normalized.split("/")) {
+    absolute = path.join(absolute, segment); stats = await lstat(absolute);
+    if (stats.isSymbolicLink()) throw new Error(`ARC_PAGES_INVALID: ${normalized} may not use symlinks`);
+  }
+  if (!stats?.isFile()) throw new Error(`ARC_PAGES_INVALID: ${normalized} must be a regular file`);
+  return readFile(absolute);
+}
 
 async function writeArtifactFile(outputRoot, relative, content) {
   const normalized = slashPath(path.normalize(relative));
@@ -201,7 +221,7 @@ async function writeArtifactFile(outputRoot, relative, content) {
   }
   const destination = path.join(outputRoot, ...normalized.split("/"));
   await mkdir(path.dirname(destination), { recursive: true });
-  await writeFile(destination, content, "utf8");
+  await writeFile(destination, content, typeof content === "string" ? "utf8" : undefined);
 }
 
 export async function buildPagesArtifact({ root = moduleRoot, output = path.join(root, ".pages-dist") } = {}) {
@@ -248,7 +268,28 @@ export async function buildPagesArtifact({ root = moduleRoot, output = path.join
     // Old v9 folders share the deterministic path shape. They remain in git for
     // history, but only a complete ARC1 v10 proof opts a folder into Pages.
     if (!customerPreviewSignal(html)) continue;
-    validateCustomerPreview(html, entry.name);
+    const assetPaths = validateCustomerPreview(html, entry.name);
+    const assetsDirectory = path.join(sourceRoot, entry.name, "assets");
+    let directoryEntries = [];
+    try { directoryEntries = await readdir(assetsDirectory, { withFileTypes: true }); } catch (error) { if (error?.code !== "ENOENT") throw error; }
+    if (directoryEntries.some(item => !item.isFile() || item.isSymbolicLink()) ||
+        directoryEntries.map(item => `${entry.name}/assets/${item.name}`).sort().join("\n") !== assetPaths.join("\n")) {
+      throw new Error(`ARC_PAGES_INVALID: ${entry.name}/assets contains extra, missing, or non-regular files`);
+    }
+    let totalAssetBytes = 0;
+    for (const assetPath of assetPaths) {
+      const bytes = await readRegularBytes(sourceRoot, assetPath);
+      const match = assetPath.match(/\/([a-f0-9]{64})\.(png|jpg|webp)$/);
+      totalAssetBytes += bytes.length;
+      if (!match || bytes.length < 1 || bytes.length > 1250000 || totalAssetBytes > 3000000 || sha256(bytes) !== match[1]) {
+        throw new Error(`ARC_PAGES_INVALID: ${assetPath} asset size or digest mismatch`);
+      }
+      const magic = match[2] === "png" ? bytes.length >= 8 && bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])) :
+        match[2] === "jpg" ? bytes.length >= 4 && bytes[0] === 255 && bytes[1] === 216 && bytes.at(-2) === 255 && bytes.at(-1) === 217 :
+        bytes.length >= 12 && bytes.subarray(0,4).toString("ascii") === "RIFF" && bytes.subarray(8,12).toString("ascii") === "WEBP";
+      if (!magic) throw new Error(`ARC_PAGES_INVALID: ${assetPath} media signature mismatch`);
+      artifactFiles.push({ relative: assetPath, content: bytes });
+    }
     artifactFiles.push({ relative, content: html });
     customerPreviews.push(entry.name);
   }
@@ -266,7 +307,7 @@ export async function buildPagesArtifact({ root = moduleRoot, output = path.join
     output: outputRoot,
     showcases: [...seenProfiles].sort(),
     customerPreviews: customerPreviews.sort(),
-    fileCount: 2 + seenProfiles.size + customerPreviews.length
+    fileCount: 1 + artifactFiles.length
   };
 }
 

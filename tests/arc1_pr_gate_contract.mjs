@@ -6,12 +6,19 @@ import { createTestIntakeEvidence } from "./fixtures/intake_evidence.mjs";
 const publisherSource = await readFile(new URL("../zapier/arc1_publish_preview_pr.js", import.meta.url), "utf8");
 const mergeSource = await readFile(new URL("../zapier/arc1_merge_preview_pr.js", import.meta.url), "utf8");
 const emailGateSource = await readFile(new URL("../zapier/arc1_preview_email_gate.js", import.meta.url), "utf8");
+const templateSource=await readFile(new URL("../ARC_MASTER_TEMPLATE.html",import.meta.url),"utf8");
+const trustedScripts=(templateSource.match(/<script\b[^>]*>[\s\S]*?<\/script>/gi)||[]).join("\n");
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 const runPublisher = new AsyncFunction("inputData", "fetch", "Buffer", publisherSource);
 const runMerge = new AsyncFunction("inputData", "fetch", "Buffer", mergeSource);
 const runEmailGate = new AsyncFunction("inputData", "fetch", "Buffer", emailGateSource);
 
 const sha256 = value => createHash("sha256").update(value, "utf8").digest("hex");
+const canonicalJson = value => {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+  return JSON.stringify(value);
+};
 const intakeContext = createTestIntakeEvidence();
 const trustedEventPrefix = intakeContext.publicFolderPrefix;
 const folder = `summit-roofing-${trustedEventPrefix}`;
@@ -94,6 +101,7 @@ class MockGitHubAndPages {
       assert.equal(body.merge_method, "squash");
       const mergeSha = this.sha();
       this.commits.set(mergeSha, { tree: this.commits.get(this.branchHead).tree, content: this.branchHtml });
+      this.mainHead = mergeSha;
       pr.state = "closed";
       pr.merged_at = "2026-08-11T22:00:00Z";
       pr.merge_commit_sha = mergeSha;
@@ -149,6 +157,13 @@ class MockGitHubAndPages {
         ? makeResponse(200, { object: { sha: claimedSha } })
         : makeResponse(404, { message: "Not Found" });
     }
+    if (method === "GET" && url.pathname.includes("/git/ref/tags%2Farc-checkout-v3%2F")) {
+      const refName = decodeURIComponent(url.pathname.split("/git/ref/")[1]);
+      const taggedSha = this.claimRefs.get(refName);
+      return taggedSha
+        ? makeResponse(200, { ref: `refs/${refName}`, object: { type: "commit", sha: taggedSha } })
+        : makeResponse(404, { message: "Not Found" });
+    }
     const commitMatch = url.pathname.match(/\/git\/commits\/([a-f0-9]{40})$/);
     if (method === "GET" && commitMatch) {
       const commit = this.commits.get(commitMatch[1]);
@@ -182,6 +197,12 @@ class MockGitHubAndPages {
     }
     if (method === "POST" && url.pathname.endsWith("/git/refs")) {
       const body = JSON.parse(options.body);
+      if (body.ref.startsWith("refs/tags/arc-checkout-v3/")) {
+        const refName = body.ref.replace(/^refs\//, "");
+        if (this.claimRefs.has(refName)) return makeResponse(422, { message: "Reference already exists" });
+        this.claimRefs.set(refName, body.sha);
+        return makeResponse(201, { ref: body.ref, object: { type: "commit", sha: body.sha } });
+      }
       if (body.ref.startsWith("refs/tags/arc-preview-email/")) {
         const refName = body.ref.replace(/^refs\//, "");
         if (this.claimRefs.has(refName)) return makeResponse(422, { message: "Reference already exists" });
@@ -217,11 +238,30 @@ class MockGitHubAndPages {
   }
 }
 
-const sourceHtml = "<!doctype html><html><head>\n<meta name=\"robots\" content=\"noindex,nofollow,noarchive\">\n<meta name=\"arc-template-version\" content=\"10.0\">\n<title>Summit Roofing</title>\n</head><body data-arc-site-mode=\"preview\"><h1>Summit Roofing</h1></body></html>";
+const checkoutBindingSecret = "arc-test-checkout-binding-secret-32-bytes-minimum";
+const checkoutSnapshot = canonicalJson({
+  checkout_binding_key_id: "01", environment: "arc-production", preview_folder: folder,
+  preview_path: `${folder}/index.html`, preview_source_repository: "arcwebhq-cpu/arc-previews",
+  public_folder_prefix: trustedEventPrefix, scope: "immutable-approved-preview-private-checkout-offer",
+  version: "arc-checkout-offer-snapshot-v1",livemode:false,lead_route_recipient_hmac_sha256:""
+});
+const checkoutSnapshotSha = sha256(checkoutSnapshot);
+const snapshotHmac = createHmac("sha256", checkoutBindingSecret)
+  .update(`arc-checkout-offer-snapshot-signature-v1\ntest\n${checkoutSnapshot}`).digest("hex");
+const approvalHtml = `<!doctype html><html><head>\n<meta name="robots" content="noindex,nofollow,noarchive">\n<meta name="arc-template-version" content="10.0">\n<title>Summit Roofing</title>\n${trustedScripts}\n</head><body data-arc-site-mode="preview"><h1>Summit Roofing</h1></body>\n</html>`;
+const approvalSha = sha256(approvalHtml);
+const checkoutRecipientReservation=canonicalJson({version:"arc1-checkout-recipient-reservation-v1",scope:"private-lead-recipient-for-approved-checkout",
+  approval_content_sha256:approvalSha,checkout_offer_snapshot_sha256:checkoutSnapshotSha,checkout_binding_key_id:"01",stripe_mode:"test",
+  lead_route_recipient_hmac_sha256:"",lead_notification_email:"",claim_recipient_email:"must-not-leak@example.com",
+  claim_recipient_email_sha256:sha256("must-not-leak@example.com")});
+const checkoutRecipientReservationHmac=createHmac("sha256",checkoutBindingSecret)
+  .update(`arc1-checkout-recipient-reservation-signature-v1\ntest\n${checkoutRecipientReservation}`).digest("hex");
+const toolbar = `<aside class="arc-preview-toolbar" aria-label="ARC preview purchase"><span><strong>ARC preview</strong>Built for this business. Purchase only if approved.</span><span data-arc-checkout-private>Checkout is available only through the private approval email.</span></aside>`;
+const sourceHtml = approvalHtml.replace("</body>\n</html>", `${toolbar}\n</body>\n</html>`);
 const pagesBaseUrl = "https://arcwebhq-cpu.github.io/arc-previews";
 const previewUrl = `${pagesBaseUrl}/${folder}/`;
 const customerEmail = "must-not-leak@example.com";
-const renderEvidenceFor = (html, previewFolder = folder) => {
+const renderEvidenceFor = (html, previewFolder = folder, approvalDigest = approvalSha) => {
   const evidence = {
     version: "arc1-render-evidence-v1",
     scope: "signed-sanitized-preview-render",
@@ -230,7 +270,10 @@ const renderEvidenceFor = (html, previewFolder = folder) => {
     intake_evidence_sha256: intakeContext.intakeEvidenceSha256,
     state_digest_sha256: intakeContext.evidence.state_digest_sha256,
     submission_data_sha256: intakeContext.evidence.submission_data_sha256,
-    asset_manifest_sha256: intakeContext.assetManifestSha256
+    asset_manifest_sha256: intakeContext.assetManifestSha256,
+    approval_content_sha256: approvalDigest,
+    checkout_offer_snapshot_sha256: checkoutSnapshotSha,
+    script_manifest_sha256:"8ff6073533b7b631ab6657461d3631a2f00ca4a70ed0b79c2c016647948aae7b"
   };
   const canonical = JSON.stringify(evidence);
   return {
@@ -255,6 +298,11 @@ const publisherInput = {
   render_content_sha256: signedRenderEvidence.contentSha256,
   render_evidence_private: signedRenderEvidence.canonical,
   render_evidence_hmac_sha256: signedRenderEvidence.signature,
+  checkout_config_snapshot_private: checkoutSnapshot,
+  checkout_config_snapshot_sha256: checkoutSnapshotSha,
+  checkout_config_snapshot_hmac_sha256: snapshotHmac,
+  approval_content_sha256: approvalSha,
+  script_manifest_sha256:"8ff6073533b7b631ab6657461d3631a2f00ca4a70ed0b79c2c016647948aae7b",
   ...intakeContext.privateInputs,
   ...intakeContext.injectorOutputs
 };
@@ -272,7 +320,7 @@ await assert.rejects(
 const publisherPrivacyMock = new MockGitHubAndPages();
 await assert.rejects(
   runPublisher({ ...publisherInput, html_content: sourceHtml.replace("</body>", `${customerEmail}</body>`) }, publisherPrivacyMock.fetch.bind(publisherPrivacyMock), Buffer),
-  /requester email appeared in public preview HTML/
+  /ARC_PRIVACY_FAILED: public preview HTML contains private requester email/
 );
 const publisherUnsignedIntakeMock = new MockGitHubAndPages();
 await assert.rejects(
@@ -298,9 +346,20 @@ await assert.rejects(
     ...publisherInput,
     html_content: sourceHtml.replace("Summit Roofing</h1>", "Tampered Render</h1>")
   }, publisherTamperedRenderMock.fetch.bind(publisherTamperedRenderMock), Buffer),
-  /render evidence is not bound to the exact sanitized preview/
+  /checkout reference approval digest binding/
 );
 assert.equal(publisherTamperedRenderMock.requests.length, 0);
+const publisherOversizedMock = new MockGitHubAndPages();
+const oversizedSourceHtml = sourceHtml.replace("</body>", `${"x".repeat(500000)}</body>`);
+const oversizedRenderEvidence = renderEvidenceFor(oversizedSourceHtml);
+await assert.rejects(runPublisher({
+  ...publisherInput,
+  html_content: oversizedSourceHtml,
+  render_content_sha256: oversizedRenderEvidence.contentSha256,
+  render_evidence_private: oversizedRenderEvidence.canonical,
+  render_evidence_hmac_sha256: oversizedRenderEvidence.signature,
+}, publisherOversizedMock.fetch.bind(publisherOversizedMock), Buffer), /bounded paid-delivery HTML size/);
+assert.equal(publisherOversizedMock.requests.length, 0, "Oversized preview HTML must fail before a GitHub read or write.");
 
 const published = await runPublisher(publisherInput, mock.fetch.bind(mock), Buffer);
 assert.equal(published.status, "PR_CREATED");
@@ -347,14 +406,17 @@ assert.equal(mock.requests.filter(request => request.method !== "GET").length, w
 
 const updateMock = new MockGitHubAndPages();
 const updateFirst = await runPublisher(publisherInput, updateMock.fetch.bind(updateMock), Buffer);
-const changedSourceHtml = sourceHtml.replace("<h1>Summit Roofing</h1>", "<h1>Summit Roofing & Exteriors</h1>");
-const changedRenderEvidence = renderEvidenceFor(changedSourceHtml);
+const changedApprovalHtml = approvalHtml.replace("<h1>Summit Roofing</h1>", "<h1>Summit Roofing & Exteriors</h1>");
+const changedApprovalSha=sha256(changedApprovalHtml);
+const changedSourceHtml = changedApprovalHtml.replace("</body>\n</html>", `${toolbar}\n</body>\n</html>`);
+const changedRenderEvidence = renderEvidenceFor(changedSourceHtml,folder,changedApprovalSha);
 const updateSecond = await runPublisher({
   ...publisherInput,
   html_content: changedSourceHtml,
   render_content_sha256: changedRenderEvidence.contentSha256,
   render_evidence_private: changedRenderEvidence.canonical,
-  render_evidence_hmac_sha256: changedRenderEvidence.signature
+  render_evidence_hmac_sha256: changedRenderEvidence.signature,
+  approval_content_sha256:changedApprovalSha
 }, updateMock.fetch.bind(updateMock), Buffer);
 assert.equal(updateSecond.status, "PR_UPDATED");
 assert.equal(updateSecond.pr_number, updateFirst.pr_number);
@@ -393,7 +455,7 @@ await assert.rejects(
       };
     })()
   }, folderCollisionMock.fetch.bind(folderCollisionMock), Buffer),
-  /deterministic preview branch already belongs to another folder/
+  /checkout offer snapshot contract/
 );
 
 const mergeInput = {
@@ -402,6 +464,8 @@ const mergeInput = {
   preview_branch: published.preview_branch,
   file_path: filePath,
   content_sha256: published.content_sha256,
+  checkout_offer_snapshot_sha256:checkoutSnapshotSha,
+  approval_content_sha256:approvalSha,
   head_sha: published.head_sha,
   pr_number: published.pr_number
 };
@@ -416,7 +480,7 @@ mock.prFiles = [
 ];
 await assert.rejects(
   runMerge(mergeInput, mock.fetch.bind(mock), Buffer),
-  /PR must change exactly one file/
+  /PR exact file scope changed/
 );
 mock.prFiles = [{ filename: filePath, status: "added" }];
 
@@ -513,7 +577,7 @@ await assert.rejects(
       };
     })()
   }, mock.fetch.bind(mock), Buffer),
-  /merged preview content differs from this replay/
+  /checkout offer snapshot contract/
 );
 
 const privateToken = "private_state_token_1234567890abcdef";
@@ -544,6 +608,15 @@ const gateInput = {
   email_state: JSON.stringify(pendingEmailState),
   email_state_token: privateToken,
   merge_proof: merged.merge_proof
+  ,approval_content_sha256:approvalSha
+  ,checkout_offer_snapshot_private:checkoutSnapshot
+  ,checkout_offer_snapshot_sha256:checkoutSnapshotSha
+  ,checkout_offer_snapshot_hmac_sha256:snapshotHmac
+  ,checkout_recipient_reservation_private:checkoutRecipientReservation
+  ,checkout_recipient_reservation_hmac_sha256:checkoutRecipientReservationHmac
+  ,checkout_binding_key_id:"01"
+  ,checkout_binding_secret:checkoutBindingSecret
+  ,retired_checkout_binding_keys_json:"{}"
 };
 
 await assert.rejects(
@@ -552,7 +625,7 @@ await assert.rejects(
 );
 await assert.rejects(
   runEmailGate({ ...gateInput, customer_email: "wrong-recipient@example.test" }, mock.fetch.bind(mock), Buffer),
-  /email state is not bound to this exact preview/
+  /private checkout offer\/reference\/reservation binding|email state is not bound to this exact preview/
 );
 await assert.rejects(
   runEmailGate({
@@ -672,55 +745,48 @@ mock.liveHtml = mock.branchHtml.replace("noindex,nofollow,noarchive", "index,fol
 const liveIndexable = await runEmailGate(gateInput, mock.fetch.bind(mock), Buffer);
 assert.equal(liveIndexable.status, "WAITING_FOR_PAGES");
 assert.equal(liveIndexable.send_preview_email, false);
-assert.equal(liveIndexable.proof.live_proof, "noindex");
+assert.equal(liveIndexable.proof.live_proof, "exact-merged-bytes");
 
 mock.liveHtml = mock.branchHtml.replace("arc-template-version\" content=\"10.0", "arc-template-version\" content=\"9.6");
 const liveOldVersion = await runEmailGate(gateInput, mock.fetch.bind(mock), Buffer);
 assert.equal(liveOldVersion.status, "WAITING_FOR_PAGES");
 assert.equal(liveOldVersion.send_preview_email, false);
-assert.equal(liveOldVersion.proof.live_proof, "v10-marker");
+assert.equal(liveOldVersion.proof.live_proof, "exact-merged-bytes");
+
+mock.liveHtml = mock.branchHtml.replace("<!-- ARC_PREVIEW_PROOF_END -->", "<script>tamperedInsideProof()</script>\n<!-- ARC_PREVIEW_PROOF_END -->");
+const liveProofTamper = await runEmailGate(gateInput, mock.fetch.bind(mock), Buffer);
+assert.equal(liveProofTamper.status, "WAITING_FOR_PAGES");
+assert.equal(liveProofTamper.proof.live_proof, "exact-merged-bytes",
+  "Changing only proof-block bytes must still block email.");
+
+mock.liveHtml = `${mock.branchHtml}${"x".repeat(2097152)}`;
+await assert.rejects(runEmailGate(gateInput, mock.fetch.bind(mock), Buffer), /live preview HTML exceeds limit/);
 
 mock.liveHtml = mock.branchHtml;
 const ready = await runEmailGate(gateInput, mock.fetch.bind(mock), Buffer);
-assert.equal(ready.status, "READY_TO_SEND_PREVIEW_EMAIL");
-assert.equal(ready.send_preview_email, true);
-assert.equal(ready.state_write_required_before_email, true);
+assert.equal(ready.status, "PRIVATE_CHECKOUT_CONTENT_READY");
+assert.equal(ready.send_preview_email, false);
+assert.equal(ready.private_checkout_link_allowed, false);
+assert.equal(ready.recipient_ready_state_write_required, true);
 assert.equal(ready.customer_email, customerEmail);
 assert.equal(ready.required_check, "ARC preview quality/preview-quality");
-const claimedEmailState = JSON.parse(ready.next_email_state);
-assert.equal(claimedEmailState.status, "CLAIMED");
-assert.equal(claimedEmailState.token_sha256, sha256(privateToken));
-assert.equal(claimedEmailState.proof.head_sha, published.head_sha);
-assert.equal(claimedEmailState.proof.preview_url, previewUrl);
-assert.equal(claimedEmailState.proof.merge_commit_sha, merged.merge_commit_sha);
-assert.doesNotMatch(ready.next_email_state, new RegExp(privateToken));
-assert.equal(mock.claimRefs.size, 1);
-assert.equal([...mock.claimRefs.values()][0], merged.merge_commit_sha);
+const readinessCore=JSON.parse(ready.checkout_readiness_core_private);
+assert.equal(readinessCore.head_sha,published.head_sha);
+assert.equal(readinessCore.merge_commit_sha,merged.merge_commit_sha);
+assert.equal(readinessCore.current_main_sha,undefined,"volatile current-main observation must not enter immutable core");
+const readinessObservation=JSON.parse(ready.checkout_readiness_observation_private);
+assert.match(readinessObservation.current_main_sha,/^[a-f0-9]{40}$/);
+assert.equal(readinessObservation.current_main_html_sha256,readinessCore.published_html_sha256);
+assert.equal(readinessObservation.pages_content_sha256,readinessCore.published_html_sha256);
+assert.match(ready.checkout_readiness_core_sha256,/^[a-f0-9]{64}$/);
+assert.match(ready.checkout_readiness_observation_hmac_sha256,/^[a-f0-9]{64}$/);
+assert.doesNotMatch(ready.checkout_readiness_core_private,new RegExp(privateToken));
+assert.equal([...mock.claimRefs.entries()].filter(([key]) => key.startsWith("tags/arc-preview-email/")).length,0);
 
 const pendingReplay = await runEmailGate(gateInput, mock.fetch.bind(mock), Buffer);
-assert.equal(pendingReplay.status, "EMAIL_ALREADY_CLAIMED");
-assert.equal(pendingReplay.send_preview_email, false, "atomic claim replay attempted a second email");
-assert.equal(mock.claimRefs.size, 1);
-
-const rotatedToken = "rotated_private_state_token_0987654321abcd";
-const rotatedState = { ...pendingEmailState, token_sha256: sha256(rotatedToken) };
-const rotatedTokenReplay = await runEmailGate({
-  ...gateInput,
-  email_state_token: rotatedToken,
-  email_state: JSON.stringify(rotatedState)
-}, mock.fetch.bind(mock), Buffer);
-assert.equal(rotatedTokenReplay.status, "EMAIL_ALREADY_CLAIMED");
-assert.equal(rotatedTokenReplay.send_preview_email, false, "rotating the private token authorized a duplicate email");
-assert.equal(mock.claimRefs.size, 1);
-
-const requestsBeforeClaimedReplay = mock.requests.length;
-const claimedReplay = await runEmailGate({
-  ...gateInput,
-  email_state: ready.next_email_state
-}, mock.fetch.bind(mock), Buffer);
-assert.equal(claimedReplay.status, "EMAIL_ALREADY_CLAIMED");
-assert.equal(claimedReplay.send_preview_email, false);
-assert.equal(mock.requests.length, requestsBeforeClaimedReplay, "claimed replay should stop before external checks");
+assert.equal(pendingReplay.status, "PRIVATE_CHECKOUT_CONTENT_READY");
+assert.equal(pendingReplay.checkout_readiness_core_private,ready.checkout_readiness_core_private,
+  "renewing freshness must not change the immutable readiness core");
 
 const gateRequests = mock.requests.slice(writeCountAfterPublish);
 assert.doesNotMatch(gateRequests.map(request => `${request.rawUrl}\n${request.body}`).join("\n"), new RegExp(privateToken));
@@ -732,4 +798,4 @@ for (const request of checkRequests) {
   assert.match(request.rawUrl, new RegExp(`/commits/${published.head_sha}/check-runs`));
 }
 
-console.log("ARC1 PR/email gate contract passed: atomic one-file branch commit, one reusable PR, exact CI/merge/Pages proof, and private one-shot email claim.");
+console.log("ARC1 PR/readiness gate contract passed: exact PR replay, CI/merge/Pages proof, immutable readiness core, and renewable private observation.");

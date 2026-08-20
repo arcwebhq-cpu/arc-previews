@@ -80,8 +80,16 @@ const sha256Hex = async value => {
   const digest = await globalThis.crypto.subtle.digest("SHA-256", encoder.encode(value));
   return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("");
 };
+const sha256Bytes = async value => {
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", value);
+  return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("");
+};
 const sha1Hex = async value => {
   const digest = await globalThis.crypto.subtle.digest("SHA-1", encoder.encode(value));
+  return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("");
+};
+const sha1Bytes = async value => {
+  const digest = await globalThis.crypto.subtle.digest("SHA-1", value);
   return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("");
 };
 const evidenceKey = await globalThis.crypto.subtle.importKey(
@@ -109,30 +117,66 @@ const hmacHex = async value => {
   const bytes = await globalThis.crypto.subtle.sign("HMAC", evidenceKey, encoder.encode(value));
   return [...new Uint8Array(bytes)].map(byte => byte.toString(16).padStart(2, "0")).join("");
 };
-const decodeBase64 = (value, label) => {
+const decodeBase64Bytes = (value, label) => {
   const normalized = clean(value).replace(/\s/g, "");
   if (!normalized || !/^[A-Za-z0-9+/]+={0,2}$/.test(normalized)) {
     throw new Error(`ARC_LEAD_ROUTE_VERIFY_INVALID: ${label} base64`);
   }
-  return Buffer.from(normalized, "base64").toString("utf8");
+  const bytes = Buffer.from(normalized, "base64");
+  if (bytes.toString("base64") !== normalized) throw new Error(`ARC_LEAD_ROUTE_VERIFY_INVALID: ${label} base64`);
+  return bytes;
 };
-const productionHtml = decodeBase64(inputData.production_content_base64, "production HTML");
-const headersFile = decodeBase64(inputData.headers_file_base64, "headers file");
+let deployArtifacts;
+const deployArtifactsRaw = clean(inputData.deploy_artifacts_private);
+if (deployArtifactsRaw.length > 4700000) throw new Error("ARC_LEAD_ROUTE_VERIFY_INVALID: deploy artifacts exceed bounded envelope");
+try { deployArtifacts = JSON.parse(deployArtifactsRaw); } catch { throw new Error("ARC_LEAD_ROUTE_VERIFY_INVALID: deploy artifacts JSON"); }
+if (!Array.isArray(deployArtifacts) || deployArtifacts.length < 2 || deployArtifacts.length > 5 || canonicalJson(deployArtifacts) !== deployArtifactsRaw) {
+  throw new Error("ARC_LEAD_ROUTE_VERIFY_INVALID: deploy artifact set");
+}
+const paths = deployArtifacts.map(item => item?.path);
+if (paths[0] !== "_headers" || paths.at(-1) !== "index.html" || new Set(paths).size !== paths.length ||
+    paths.slice(1, -1).some(path => !/^assets\/[a-f0-9]{64}\.(?:png|jpg|webp)$/.test(path)) ||
+    JSON.stringify(paths.slice(1, -1)) !== JSON.stringify([...paths.slice(1, -1)].sort())) {
+  throw new Error("ARC_LEAD_ROUTE_VERIFY_INVALID: deploy artifact paths");
+}
+const artifacts = deployArtifacts.map(item => {
+  if (!item || typeof item !== "object" || Array.isArray(item) ||
+      JSON.stringify(Object.keys(item).sort()) !== JSON.stringify(["content_base64","path"])) {
+    throw new Error("ARC_LEAD_ROUTE_VERIFY_INVALID: deploy artifact fields");
+  }
+  if (clean(item.content_base64).length > 1670000) throw new Error("ARC_LEAD_ROUTE_VERIFY_INVALID: deploy artifact exceeds bounded envelope");
+  const bytes = decodeBase64Bytes(item.content_base64, item.path);
+  return { path: item.path, bytes };
+});
+if (artifacts.reduce((total, artifact) => total + artifact.bytes.length, 0) > 3510000) {
+  throw new Error("ARC_LEAD_ROUTE_VERIFY_INVALID: deploy artifact aggregate");
+}
+const productionBytes = artifacts.at(-1).bytes;
+const headersBytes = artifacts[0].bytes;
+const productionHtml = productionBytes.toString("utf8");
+const headersFile = headersBytes.toString("utf8");
+const productionHeadersFile = `/*\n  Content-Security-Policy: default-src 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'none'; font-src 'self' data:; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'\n  X-Content-Type-Options: nosniff\n  X-Frame-Options: DENY\n  Referrer-Policy: strict-origin-when-cross-origin\n  Permissions-Policy: camera=(), microphone=(), geolocation=()\n`;
+const preclaimHeadersFile = `${productionHeadersFile}  X-Robots-Tag: noindex, nofollow, noarchive\n`;
+if (headersFile !== productionHeadersFile) {
+  throw new Error("ARC_LEAD_ROUTE_VERIFY_INVALID: signed production headers are not the exact indexable security policy");
+}
+if (Buffer.from(productionHtml, "utf8").toString("base64") !== clean(inputData.production_content_base64).replace(/\s/g, "") ||
+    Buffer.from(headersFile, "utf8").toString("base64") !== clean(inputData.headers_file_base64).replace(/\s/g, "")) {
+  throw new Error("ARC_LEAD_ROUTE_VERIFY_INVALID: legacy artifact outputs changed");
+}
 if (productionPath !== "index.html" || headersPath !== "_headers") {
   throw new Error("ARC_LEAD_ROUTE_VERIFY_INVALID: artifacts must be root index.html and _headers");
 }
-const artifacts = [
-  { path: headersPath, content: headersFile },
-  { path: productionPath, content: productionHtml }
-];
 const productionSha256 = await sha256Hex(productionHtml);
-const bundleFingerprint = await sha256Hex(artifacts.map(artifact => `${artifact.path}\0${artifact.content}\0`).join(""));
+const bundleFingerprint = await sha256Bytes(Buffer.concat(artifacts.flatMap(artifact => [
+  Buffer.from(`${artifact.path}\0`, "utf8"), artifact.bytes, Buffer.from("\0", "utf8")
+])));
 const artifactManifest = [];
 for (const artifact of artifacts) {
   artifactManifest.push({
     path: artifact.path,
-    sha256: await sha256Hex(artifact.content),
-    size: encoder.encode(artifact.content).length
+    sha256: await sha256Bytes(artifact.bytes),
+    size: artifact.bytes.length
   });
 }
 const artifactManifestPrivate = canonicalJson(artifactManifest);
@@ -148,8 +192,12 @@ try {
   throw new Error("ARC_ARTIFACT_INVALID: evidence JSON");
 }
 const artifactEvidenceFields = [
-  "version", "scope", "preview_folder", "production_content_sha256", "artifact_manifest_sha256",
-  "bundle_fingerprint", "artifacts", "issued_at"
+  "version", "scope", "approval_content_sha256", "asset_publication_receipt_sha256",
+  "checkout_binding_key_id", "checkout_config_snapshot_sha256", "checkout_reference_sha256", "preview_folder",
+  "preview_source_commit_sha", "preview_source_repository", "preview_source_tag_sha256",
+  "production_content_sha256", "artifact_manifest_sha256",
+  "bundle_fingerprint", "artifacts", "issued_at", "lead_route_mode", "lead_route_form_name",
+  "lead_route_recipient_hmac_sha256"
 ];
 if (!handoffArtifactEvidence || typeof handoffArtifactEvidence !== "object" || Array.isArray(handoffArtifactEvidence) ||
     JSON.stringify(Object.keys(handoffArtifactEvidence).sort()) !== JSON.stringify(artifactEvidenceFields.slice().sort())) {
@@ -159,9 +207,18 @@ const canonicalArtifactEvidence = canonicalJson(handoffArtifactEvidence);
 const artifactEvidenceIssuedAt = clean(handoffArtifactEvidence.issued_at);
 const artifactEvidenceIssuedMs = Date.parse(artifactEvidenceIssuedAt);
 if (canonicalArtifactEvidence !== clean(inputData.handoff_artifact_evidence_private) ||
-    clean(handoffArtifactEvidence.version) !== "arc2-handoff-artifact-evidence-v1" ||
+    clean(handoffArtifactEvidence.version) !== "arc2-handoff-artifact-evidence-v3" ||
     clean(handoffArtifactEvidence.scope) !== "netlify-claimable-deploy-artifacts" ||
     clean(handoffArtifactEvidence.preview_folder).toLowerCase() !== previewFolder ||
+    !/^[a-f0-9]{2}$/.test(clean(handoffArtifactEvidence.checkout_binding_key_id)) ||
+    clean(handoffArtifactEvidence.preview_source_repository) !== "arcwebhq-cpu/arc-previews" ||
+    !/^[a-f0-9]{40}$/.test(clean(handoffArtifactEvidence.preview_source_commit_sha).toLowerCase()) ||
+    ["approval_content_sha256", "asset_publication_receipt_sha256", "checkout_config_snapshot_sha256",
+      "checkout_reference_sha256", "preview_source_tag_sha256"].some(field =>
+      !/^[a-f0-9]{64}$/.test(clean(handoffArtifactEvidence[field]).toLowerCase())) ||
+    clean(handoffArtifactEvidence.lead_route_mode) !== "netlify_form" ||
+    clean(handoffArtifactEvidence.lead_route_form_name) !== expectedFormName ||
+    clean(handoffArtifactEvidence.lead_route_recipient_hmac_sha256).toLowerCase() !== expectedRecipientHmacSha256 ||
     clean(handoffArtifactEvidence.production_content_sha256).toLowerCase() !== productionSha256 ||
     clean(handoffArtifactEvidence.artifact_manifest_sha256).toLowerCase() !== artifactManifestSha256 ||
     clean(handoffArtifactEvidence.bundle_fingerprint).toLowerCase() !== bundleFingerprint ||
@@ -180,11 +237,31 @@ if (!(await globalThis.crypto.subtle.verify(
   "HMAC",
   artifactEvidenceKey,
   artifactSignatureBytes,
-  encoder.encode(`arc2-handoff-artifact-evidence-signature-v1\n${canonicalArtifactEvidence}`)
+  encoder.encode(`arc2-handoff-artifact-evidence-signature-v3\n${canonicalArtifactEvidence}`)
 ))) {
   throw new Error("ARC_ARTIFACT_INVALID: evidence HMAC mismatch");
 }
 const handoffArtifactEvidenceSha256 = await sha256Hex(canonicalArtifactEvidence);
+const assetArtifacts = artifacts.slice(1, -1);
+for (const artifact of assetArtifacts) {
+  const digest = artifact.path.match(/^assets\/([a-f0-9]{64})\.(png|jpg|webp)$/)?.[1];
+  const extension = artifact.path.split(".").at(-1);
+  const magic = extension === "png" ? artifact.bytes.length >= 8 && artifact.bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])) :
+    extension === "jpg" ? artifact.bytes.length >= 4 && artifact.bytes[0] === 255 && artifact.bytes[1] === 216 && artifact.bytes.at(-2) === 255 && artifact.bytes.at(-1) === 217 :
+    artifact.bytes.length >= 20 && artifact.bytes.subarray(0,4).toString("ascii") === "RIFF" && artifact.bytes.subarray(8,12).toString("ascii") === "WEBP" &&
+      artifact.bytes.readUInt32LE(4) + 8 === artifact.bytes.length;
+  if (!digest || await sha256Bytes(artifact.bytes) !== digest || !magic) throw new Error("ARC_ARTIFACT_INVALID: content-addressed asset bytes");
+}
+if (/https:\/\/arcwebhq-cpu\.github\.io\/arc-previews(?:\/|["'?#]|$)/i.test(productionHtml)) {
+  throw new Error("ARC_ARTIFACT_INVALID: production retains preview-host dependency");
+}
+if (/<base\b/i.test(productionHtml) || !/Content-Security-Policy:[^\n]*\bbase-uri\s+'none'(?:;|\s*$)/i.test(headersFile)) {
+  throw new Error("ARC_ARTIFACT_INVALID: production base URL controls are unsafe");
+}
+const referencedAssets = new Set(productionHtml.match(/assets\/[a-f0-9]{64}\.(?:png|jpg|webp)/gi)?.map(value => value.toLowerCase()) || []);
+const includedAssets = new Set(assetArtifacts.map(artifact => artifact.path));
+if (referencedAssets.size !== includedAssets.size || [...referencedAssets].some(path => !includedAssets.has(path)) ||
+    [...includedAssets].some(path => !referencedAssets.has(path))) throw new Error("ARC_ARTIFACT_INVALID: production asset references");
 const canonicalAttributes = (tag, tagName) => {
   const match = tag.match(new RegExp(`^<${tagName}\\b([\\s\\S]*?)>$`, "i"));
   if (!match) return null;
@@ -263,23 +340,67 @@ const apiHeaders = {
   Accept: "application/json",
   Authorization: `Bearer ${netlifyToken}`
 };
-const readJson = async path => {
-  const response = await fetch(`${apiBase}${path}`, { method: "GET", headers: apiHeaders, redirect: "error" });
-  if (!response.ok) throw new Error(`ARC_NETLIFY_READ_FAILED: ${response.status} ${path}`);
-  return response.json();
+const requestedOperationTimeout = clean(inputData.provider_operation_timeout_ms);
+const operationTimeoutMs = requestedOperationTimeout ? Number(requestedOperationTimeout) : 20_000;
+if (!Number.isSafeInteger(operationTimeoutMs) || operationTimeoutMs < 25 || operationTimeoutMs > 25_000) {
+  throw new Error("ARC_NETLIFY_READ_FAILED: operation timeout is invalid");
+}
+const operationDeadlineMs = Date.now() + operationTimeoutMs;
+const remainingRequestMs = () => {
+  const remaining = Math.floor(operationDeadlineMs - Date.now());
+  if (remaining <= 0) throw new Error("ARC_NETLIFY_READ_FAILED: operation deadline exceeded");
+  return Math.min(10_000, remaining);
 };
-const readRaw = async path => {
-  const response = await fetch(`${apiBase}${path}`, {
+const fetchBounded = async (url, options, maximumBytes, validateResponse) => {
+  const controller = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => { timedOut = true; controller.abort(); }, remainingRequestMs());
+  let reader;
+  try {
+    const response = await fetch(url, { ...options, redirect: "error", signal: controller.signal });
+    validateResponse(response);
+    const declared = response.headers?.get?.("content-length");
+    if (declared && (!/^\d{1,9}$/.test(declared) || Number(declared) > maximumBytes)) {
+      throw new Error("ARC_NETLIFY_READ_FAILED: response too large");
+    }
+    reader = response.body?.getReader?.();
+    if (!reader) throw new Error("ARC_NETLIFY_READ_FAILED: streaming response body required");
+    const chunks = []; let total = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!(value instanceof Uint8Array)) throw new Error("ARC_NETLIFY_READ_FAILED: invalid response chunk");
+      total += value.byteLength;
+      if (total > maximumBytes) { try { await reader.cancel(); } catch {} throw new Error("ARC_NETLIFY_READ_FAILED: response too large"); }
+      chunks.push(Buffer.from(value.buffer, value.byteOffset, value.byteLength));
+    }
+    return { response, bytes: Buffer.concat(chunks, total) };
+  } catch (error) {
+    if (timedOut || error?.name === "AbortError") throw new Error("ARC_NETLIFY_READ_FAILED: bounded timeout exceeded");
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    try { reader?.releaseLock?.(); } catch {}
+  }
+};
+const readJson = async (path, maximumBytes) => {
+  const { bytes } = await fetchBounded(`${apiBase}${path}`, { method: "GET", headers: apiHeaders }, maximumBytes, response => {
+    if (!response.ok) throw new Error(`ARC_NETLIFY_READ_FAILED: ${response.status} ${path}`);
+  });
+  try { return JSON.parse(bytes.toString("utf8")); } catch { throw new Error("ARC_NETLIFY_READ_FAILED: response JSON invalid"); }
+};
+const readRaw = async (path, maximumBytes) => {
+  const { bytes } = await fetchBounded(`${apiBase}${path}`, {
     method: "GET",
     headers: {
       ...apiHeaders,
       Accept: "application/vnd.bitballoon.v1.raw",
       "Content-Type": "application/vnd.bitballoon.v1.raw"
-    },
-    redirect: "error"
+    }
+  }, maximumBytes, response => {
+    if (!response.ok) throw new Error(`ARC_NETLIFY_READ_FAILED: ${response.status} ${path}`);
   });
-  if (!response.ok) throw new Error(`ARC_NETLIFY_READ_FAILED: ${response.status} ${path}`);
-  return response.text();
+  return bytes;
 };
 const plainHttpsRoot = (value, label) => {
   let url;
@@ -294,7 +415,7 @@ const plainHttpsRoot = (value, label) => {
   return url;
 };
 
-const site = await readJson(`/sites/${encodeURIComponent(siteId)}`);
+const site = await readJson(`/sites/${encodeURIComponent(siteId)}`, 256_000);
 const siteName = clean(site.name).toLowerCase();
 const siteUrl = plainHttpsRoot(site.ssl_url || site.url, "staging site");
 if (
@@ -310,7 +431,7 @@ if (inputStagingUrl.toString() !== siteUrl.toString()) {
   throw new Error("ARC_LEAD_ROUTE_VERIFY_INVALID: requested staging URL mismatch");
 }
 
-const deploy = await readJson(`/sites/${encodeURIComponent(siteId)}/deploys/${encodeURIComponent(deployId)}`);
+const deploy = await readJson(`/sites/${encodeURIComponent(siteId)}/deploys/${encodeURIComponent(deployId)}`, 256_000);
 const publishedDeployId = clean(site.published_deploy?.id).toLowerCase();
 const deployUrl = plainHttpsRoot(deploy.ssl_url || deploy.url, "staging deploy");
 const immutableDeployUrl = plainHttpsRoot(deploy.deploy_ssl_url || deploy.deploy_url, "immutable staging deploy");
@@ -330,14 +451,17 @@ if (
   throw new Error("ARC_LEAD_ROUTE_VERIFY_INVALID: exact published deploy identity mismatch");
 }
 
-const rootArtifacts = await Promise.all(artifacts.map(async artifact => ({
+const stagingArtifacts = artifacts.map((artifact, index) => index === 0
+  ? { path: artifact.path, bytes: Buffer.from(preclaimHeadersFile, "utf8") }
+  : artifact);
+const rootArtifacts = await Promise.all(stagingArtifacts.map(async artifact => ({
   source_path: artifact.path,
-  path: `/${artifact.path.split("/").pop()}`,
-  content: artifact.content,
-  sha: await sha1Hex(artifact.content),
-  size: encoder.encode(artifact.content).length
+  path: `/${artifact.path}`,
+  bytes: artifact.bytes,
+  sha: await sha1Bytes(artifact.bytes),
+  size: artifact.bytes.length
 })));
-const deployFiles = await readJson(`/sites/${encodeURIComponent(siteId)}/files`);
+const deployFiles = await readJson(`/sites/${encodeURIComponent(siteId)}/files`, 2_000_000);
 if (!Array.isArray(deployFiles) || deployFiles.length !== rootArtifacts.length) {
   throw new Error("ARC_LEAD_ROUTE_VERIFY_INVALID: current deploy file manifest is not the exact claimable bundle");
 }
@@ -353,8 +477,12 @@ for (const expected of rootArtifacts) {
   if (expected.path === "/_headers" && clean(matches[0].mime_type).toLowerCase() !== "text/plain") {
     throw new Error("ARC_LEAD_ROUTE_VERIFY_INVALID: source headers MIME type mismatch");
   }
+  if (/^\/assets\//.test(expected.path)) {
+    const expectedMime = expected.path.endsWith(".png") ? "image/png" : expected.path.endsWith(".jpg") ? "image/jpeg" : "image/webp";
+    if (clean(matches[0].mime_type).toLowerCase() !== expectedMime) throw new Error("ARC_LEAD_ROUTE_VERIFY_INVALID: source asset MIME type mismatch");
+  }
   const rawPath = `/sites/${encodeURIComponent(siteId)}/files/${expected.path.slice(1).split("/").map(encodeURIComponent).join("/")}`;
-  if (await readRaw(rawPath) !== expected.content) {
+  if (!(await readRaw(rawPath, expected.size)).equals(expected.bytes)) {
     throw new Error(`ARC_LEAD_ROUTE_VERIFY_INVALID: original uploaded bytes changed for ${expected.path}`);
   }
   normalizedManifest.push({
@@ -366,7 +494,7 @@ for (const expected of rootArtifacts) {
 }
 normalizedManifest.sort((first, second) => first.path.localeCompare(second.path));
 const deployFileManifestSha256 = await sha256Hex(JSON.stringify(normalizedManifest));
-const snippets = await readJson(`/sites/${encodeURIComponent(siteId)}/snippets`);
+const snippets = await readJson(`/sites/${encodeURIComponent(siteId)}/snippets`, 512_000);
 if (!Array.isArray(snippets) || snippets.length) {
   throw new Error("ARC_LEAD_ROUTE_VERIFY_INVALID: staging site HTML injection snippets are forbidden");
 }
@@ -374,21 +502,27 @@ if (!Array.isArray(snippets) || snippets.length) {
 const expectedProcessedHtml = productionHtml
   .replace(/\sdata-netlify="true"/i, "")
   .replace(/\snetlify-honeypot="bot-field"/i, "");
+const signedCspMatches = [...headersFile.matchAll(/^\s*Content-Security-Policy:\s*(.+?)\s*$/gmi)].map(match => match[1]);
+if (signedCspMatches.length !== 1 || !/(?:^|;)\s*base-uri\s+'none'\s*(?:;|$)/i.test(signedCspMatches[0])) {
+  throw new Error("ARC_LEAD_ROUTE_VERIFY_INVALID: signed content security policy is missing or ambiguous");
+}
+const expectedCsp = signedCspMatches[0];
 let servedHtml = "";
 let stagingRobotsHeader = "";
 for (const liveUrl of [immutableDeployUrl, siteUrl]) {
-  const response = await fetch(liveUrl.toString(), {
+  const { response, bytes: liveBytes } = await fetchBounded(liveUrl.toString(), {
     method: "GET",
-    headers: { Accept: "text/html" },
-    redirect: "manual"
+    headers: { Accept: "text/html" }
+  }, productionBytes.length + 4096, observed => {
+    if (observed.status !== 200) throw new Error("ARC_LEAD_ROUTE_VERIFY_INVALID: live processed index is unavailable");
   });
-  if (response.status !== 200) throw new Error("ARC_LEAD_ROUTE_VERIFY_INVALID: live processed index is unavailable");
   const finalUrl = new URL(response.url || liveUrl.toString());
-  const responseHtml = await response.text();
+  const responseHtml = liveBytes.toString("utf8");
   const robotsHeader = clean(response.headers?.get?.("x-robots-tag")).toLowerCase();
   const robotsTokens = robotsHeader.split(",").map(value => value.trim()).filter(Boolean);
   if (finalUrl.toString() !== liveUrl.toString() || responseHtml !== expectedProcessedHtml ||
       !robotsTokens.includes("noindex") || !robotsTokens.includes("nofollow") || !robotsTokens.includes("noarchive") ||
+      clean(response.headers?.get?.("content-security-policy")) !== expectedCsp ||
       clean(response.headers?.get?.("x-content-type-options")).toLowerCase() !== "nosniff" ||
       clean(response.headers?.get?.("x-frame-options")).toUpperCase() !== "DENY") {
     throw new Error("ARC_LEAD_ROUTE_VERIFY_INVALID: processed staging HTML or staging-only response headers changed");
@@ -399,11 +533,24 @@ for (const liveUrl of [immutableDeployUrl, siteUrl]) {
   } else if (responseHtml !== servedHtml || robotsTokens.sort().join(",") !== stagingRobotsHeader) {
     throw new Error("ARC_LEAD_ROUTE_VERIFY_INVALID: mutable and immutable staging responses disagree");
   }
+  for (const artifact of assetArtifacts) {
+    const assetUrl = new URL(artifact.path, liveUrl).toString();
+    const expectedType = artifact.path.endsWith(".png") ? "image/png" : artifact.path.endsWith(".jpg") ? "image/jpeg" : "image/webp";
+    const { bytes: liveAssetBytes } = await fetchBounded(assetUrl, { method: "GET" }, artifact.bytes.length, assetResponse => {
+      if (assetResponse.status !== 200 || (assetResponse.url && assetResponse.url !== assetUrl) ||
+          clean(assetResponse.headers?.get?.("content-type")).toLowerCase().split(";", 1)[0] !== expectedType) {
+        throw new Error("ARC_LEAD_ROUTE_VERIFY_INVALID: live asset bytes changed");
+      }
+    });
+    if (!liveAssetBytes.equals(artifact.bytes)) {
+      throw new Error("ARC_LEAD_ROUTE_VERIFY_INVALID: live asset bytes changed");
+    }
+  }
 }
 const servedHtmlSha256 = await sha256Hex(servedHtml);
 const stagingRobotsHeaderSha256 = await sha256Hex(stagingRobotsHeader);
 
-const forms = await readJson(`/sites/${encodeURIComponent(siteId)}/forms`);
+const forms = await readJson(`/sites/${encodeURIComponent(siteId)}/forms`, 1_000_000);
 const matchingForms = (Array.isArray(forms) ? forms : []).filter(form =>
   clean(form.site_id).toLowerCase() === siteId && clean(form.name) === expectedFormName && externalId(form.id) &&
   Array.isArray(form.paths) && form.paths.length === 1 && clean(form.paths[0]) === "/"
@@ -414,7 +561,7 @@ if (matchingForms.length !== 1) {
 const form = matchingForms[0];
 const formId = clean(form.id).toLowerCase();
 
-const hooks = await readJson(`/hooks?site_id=${encodeURIComponent(siteId)}&per_page=100`);
+const hooks = await readJson(`/hooks?site_id=${encodeURIComponent(siteId)}&per_page=100`, 1_000_000);
 const matchingHooks = (Array.isArray(hooks) ? hooks : []).filter(hook => {
   const data = hook && typeof hook.data === "object" && !Array.isArray(hook.data) ? hook.data : {};
   const hookRecipient = clean(data.email || data.recipient || data.email_to).toLowerCase();
@@ -431,7 +578,7 @@ if (matchingHooks.length !== 1) {
   throw new Error("ARC_LEAD_ROUTE_VERIFY_INVALID: exact enabled recipient notification hook not found");
 }
 
-const submissions = await readJson(`/forms/${encodeURIComponent(formId)}/submissions?per_page=100&page=1`);
+const submissions = await readJson(`/forms/${encodeURIComponent(formId)}/submissions?per_page=100&page=1`, 2_000_000);
 const matchingSubmissions = (Array.isArray(submissions) ? submissions : []).filter(submission =>
   clean(submission.id).toLowerCase() === syntheticSubmissionId
 );

@@ -9,8 +9,12 @@ Run the local quality gate:
 
 ```sh
 npm ci
-npm test
+ARC_SITE_DIR=/absolute/path/to/arc-site npm test
 ```
+
+`ARC_SITE_DIR` must identify the exact ARC site contract checkout being tested. CI checks out and
+pins that partner repository by immutable commit SHA; the ARC site workflow likewise pins this
+preview contract by immutable commit SHA.
 
 The gate audits every preview, validates the signed intake/payment/claimable-deploy contracts,
 rejects generated-content injection, and renders every ARC v10 media profile plus the retained
@@ -54,9 +58,10 @@ contracts. The repository leaves live events and real charges disabled. Activati
 manual launch action only after the ARC-owned Stripe account, Stripe Tax registrations, legal/tax
 review, exact Product tax code, and full test-mode evidence are verified.
 
-The resolver ends at `READY_FOR_CLAIMABLE_DEPLOY`. Its current signed Netlify distribution contains
-exactly root `index.html` and `_headers`. Additional assets or success pages require a new signed
-evidence version and matching validators. `USAGE.md`, `.arc-handoff.json`, `netlify.toml`, recipient data,
+The resolver ends at `READY_FOR_CLAIMABLE_DEPLOY`. Its signed v3 Netlify distribution contains
+root `index.html` and `_headers`, plus zero to three receipt-bound content-addressed PNG/JPEG/WEBP
+assets when the approved preview uses verified customer uploads. Any other asset or success page
+requires a new signed evidence version and matching validators. `USAGE.md`, `.arc-handoff.json`, `netlify.toml`, recipient data,
 Stripe IDs, and secrets are forbidden deploy artifacts. The resolver does not create a site,
 reserve a claim invitation, send it, or send customer email.
 

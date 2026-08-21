@@ -82,7 +82,7 @@ for(const mutate of [
 }
 const adult=[{key:"adultpurchaserack",type:"dropdown",optional:false,label:{type:"custom",custom:"I am 18+ and authorized to buy for this business"},dropdown:{options:[{label:"I confirm",value:"accepted"}]}}];
 const linkBase={object:"payment_link",id:"plink_ArcPrivateOneUse",livemode:false,active:true,url:"https://buy.stripe.com/test_ArcPrivateOneUse",
-  restrictions:{completed_sessions:{limit:1}},automatic_tax:{enabled:true},billing_address_collection:"auto",consent_collection:{terms_of_service:"required"},
+  restrictions:{completed_sessions:{limit:1}},automatic_tax:{enabled:true},billing_address_collection:"required",consent_collection:{terms_of_service:"required"},
   allow_promotion_codes:false,custom_fields:adult,name_collection:{business:{enabled:true,optional:false},individual:{enabled:true,optional:false}},submit_type:"auto",
   after_completion:{type:"redirect",redirect:{url:stableConfiguration.checkout_redirect_url}},customer_creation:"if_required",invoice_creation:{enabled:false},phone_number_collection:{enabled:false},
   tax_id_collection:{enabled:false},shipping_address_collection:null,optional_items:[]};
@@ -117,6 +117,7 @@ try{created=await runStep({...base,phase:"CREATE",private_checkout_provider_muta
 const createRequest=requests.find(item=>item.method==="POST");
 const params=new URLSearchParams(createRequest.body),metadata={};
 assert.equal([...params.keys()].some(name=>name.startsWith("payment_method_types")),false,"Payment Link create must omit payment_method_types so Stripe can use dynamic methods");
+assert.equal(params.get("billing_address_collection"),"required","Payment Link create must require the customer's full billing address");
 for(const [name,value] of params)if(name.startsWith("metadata["))metadata[name.slice(9,-1)]=value;
 readback={...linkBase,metadata,line_items:{object:"list",has_more:false,data:[{quantity:1,price:{id:stableConfiguration.price_id,product:readbackProduct}}]}};
 reconcileCandidates=[{id:linkBase.id,metadata}];

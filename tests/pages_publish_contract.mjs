@@ -98,6 +98,17 @@ try {
     /unsafe source or output directory/
   );
 
+  for (const [suffix, encodedEmail] of [
+    ["entity", "private&#64;example&#46;test"],
+    ["named", "private&commat;example&period;test"],
+    ["percent", "private%2540example%252etest"]
+  ]) {
+    const folder = `encoded-email-${suffix}-abcde${String(200 + suffix.length).slice(-3)}`;
+    await put(root, `${folder}/index.html`, customerPreview(folder, { injectedCheckout: `<p>${encodedEmail}</p>` }));
+    await assert.rejects(buildPagesArtifact({ root, output }), /contains an email address/, `must reject ${suffix}-encoded email leakage`);
+    await rm(path.join(root, folder), { recursive: true });
+  }
+
   const invalidFolder = "tampered-preview-acde9999";
   const tampered = customerPreview(invalidFolder).replace(/arc-preview-source-sha256" content="[a-f0-9]{64}/, `arc-preview-source-sha256" content="${"0".repeat(64)}`);
   await put(root, `${invalidFolder}/index.html`, tampered);

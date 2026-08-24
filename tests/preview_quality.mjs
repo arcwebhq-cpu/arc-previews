@@ -85,7 +85,7 @@ const compositionOrders = {
 };
 const seenV10Compositions = new Set();
 const mockImage = `<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000"><rect width="1600" height="1000" fill="#2a2d33"/><path d="M0 760 410 420l270 240 260-330 660 670H0Z" fill="#414650"/></svg>`;
-const contentTypes = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8" };
+const contentTypes = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".webp": "image/webp" };
 
 function safeFilePath(urlPath) {
   const decoded = decodeURIComponent(urlPath.split("?")[0]);
@@ -139,9 +139,11 @@ try {
       page.on("request", request => runtimeRequests.push({ url: request.url(), type: request.resourceType() }));
       if (!useRealImages) {
         await page.route("**/*", route => {
-          if (new URL(route.request().url()).pathname === "/__arc_missing_customer_upload__.png") {
+          const pathname = new URL(route.request().url()).pathname;
+          if (pathname === "/__arc_missing_customer_upload__.png") {
             return route.fulfill({ status: 404, contentType: "text/plain", body: "Missing" });
           }
+          if (pathname.startsWith("/showcases/assets/")) return route.continue();
           if (route.request().resourceType() === "image") {
             return route.fulfill({ status: 200, contentType: "image/svg+xml", body: mockImage });
           }
@@ -292,6 +294,7 @@ try {
               profile: image.dataset.arcMediaProfile || "",
               provider: image.dataset.arcMediaProvider || "",
               version: image.dataset.arcMediaVersion || "",
+              owned: image.dataset.arcOwnedAsset || "",
               source: (image.currentSrc || image.src).split("?")[0]
             })),
             localShells: [...document.querySelectorAll('.hero-fallback[data-arc-media-provider="local-css"],.about-media.arc-local-visual[data-arc-media-provider="local-css"],.gallery-grid>.arc-local-visual[data-arc-media-provider="local-css"]')]
@@ -314,7 +317,8 @@ try {
         assert.equal(report.privateEmail, false, "private requester email is visible");
         const documentUrl = new URL(`${baseUrl}/${file}`).toString();
         const expectedProbeUrl = `${baseUrl}/__arc_missing_customer_upload__.png`;
-        const unexpectedRequests = runtimeRequests.filter(request => request.url !== documentUrl && request.url !== "about:blank" && request.url !== expectedProbeUrl);
+        const expectedShowcaseHeroUrl = showcase ? `${baseUrl}/${showcase.heroAsset.file}` : "";
+        const unexpectedRequests = runtimeRequests.filter(request => request.url !== documentUrl && request.url !== "about:blank" && request.url !== expectedProbeUrl && request.url !== expectedShowcaseHeroUrl);
         assert.deepEqual(unexpectedRequests, [], `zero-egress page made subresource/network requests: ${JSON.stringify(unexpectedRequests)}`);
         assert.equal(report.hiddenReveals.length, 0, `scroll-reveal content remained hidden: ${JSON.stringify(report.hiddenReveals)}`);
         assert.equal(pageErrors.length, 0, `page errors: ${pageErrors.join(" | ")}`);
@@ -342,21 +346,27 @@ try {
           assert.equal(report.arcSiteMode, isDelivery ? "production" : showcase ? "showcase" : "preview", "v10 site mode does not match its audit class");
           assert.equal(report.arcMediaProfile, expectedProfile, "semantic media profile mismatch");
           assert.equal(report.arcExpectedMediaProfile, expectedProfile, "server-selected media profile mismatch");
-          assert.ok(new Set(["local-css", "customer-upload"]).has(report.arcMediaProvider), "media provider is neither receipt upload nor local CSS");
+          assert.ok(new Set(["local-css", "customer-upload", "arc-generated"]).has(report.arcMediaProvider), "media provider is not a reviewed local, upload, or ARC-generated class");
           assert.equal(report.arcMediaVersion, mediaManifest.version, "media manifest version mismatch");
           assert.equal(report.arcLayout, profile.layout, "industry composition layout mismatch");
           assert.equal(report.arcVariant, String(profile.variant), "industry composition variant mismatch");
           assert.deepEqual(report.mainOrder, compositionOrders[profile.layout], "industry section order mismatch");
           if (v10Fixture?.isLaunch) seenV10Compositions.add(`${report.arcLayout}:${report.arcVariant}`);
           assert.ok(report.curatedImages.every(item => item.profile === expectedProfile), "an image escaped the selected media profile");
-          assert.ok(report.curatedImages.every(item => item.provider === "customer-upload"), "an image is not marked as a customer upload");
+          assert.ok(report.curatedImages.every(item => item.provider === (showcase ? "arc-generated" : "customer-upload")), "an image has an inaccurate media-provider classification");
           assert.ok(report.curatedImages.every(item => item.version === mediaManifest.version), "an image has a stale manifest tag");
           assert.ok(report.curatedImages.every(item => new URL(item.source).origin === baseUrl), "a rendered customer upload escaped the served preview origin");
           if (!report.curatedImages.length) assert.ok(report.localShells.length >= 5, "no-upload preview lost its CSS visual system");
           const checkout = report.links.find(href => href?.includes("buy.stripe.com"));
           assert.equal(checkout, undefined, "a public page exposed a private Stripe checkout capability");
           if (showcase) {
+            assert.equal(report.arcMediaProvider, "arc-generated", "showcase document is not classified as ARC-generated imagery");
             assert.equal(report.arcShowcaseProfile, showcase.profile, "showcase profile metadata mismatch");
+            assert.equal(report.images.length, 1, "showcase must render exactly one ARC-owned hero photo");
+            assert.equal(report.images[0].source, expectedShowcaseHeroUrl, "showcase rendered an unexpected hero asset");
+            assert.equal(report.images[0].naturalWidth, showcase.heroAsset.width, "showcase hero width changed");
+            assert.equal(report.images[0].naturalHeight, showcase.heroAsset.height, "showcase hero height changed");
+            assert.equal(report.curatedImages[0]?.owned, "true", "showcase hero lacks ARC ownership classification");
             assert.equal(report.formCount, 0, "showcase retained a customer lead submission form");
             assert.equal(report.showcaseDisclosure, true, "visible fictional-concept disclosure missing");
             assert.ok(report.showcaseChrome, "showcase notice or site header is missing");

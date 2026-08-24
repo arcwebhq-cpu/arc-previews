@@ -129,7 +129,7 @@ const linkMetadata={arc_intent_sha256:"",arc_policy_sha256:policySha,arc_preview
 const buildCreateBody=async()=>{
   const params=new URLSearchParams();
   const set=(key,value)=>params.append(key,String(value));
-  set("line_items[0][price]",offer.price_id);set("line_items[0][quantity]","1");set("automatic_tax[enabled]","true");set("billing_address_collection","auto");
+  set("line_items[0][price]",offer.price_id);set("line_items[0][quantity]","1");set("automatic_tax[enabled]","true");set("billing_address_collection","required");
   set("consent_collection[terms_of_service]","required");set("custom_fields[0][key]","adultpurchaserack");set("custom_fields[0][label][type]","custom");
   set("custom_fields[0][label][custom]","I am 18+ and authorized to buy for this business");set("custom_fields[0][optional]","false");set("custom_fields[0][type]","dropdown");
   set("custom_fields[0][dropdown][options][0][label]","I confirm");set("custom_fields[0][dropdown][options][0][value]","accepted");
@@ -237,7 +237,7 @@ const expectedAdultField=[{key:"adultpurchaserack",type:"dropdown",optional:fals
 const expectedNameCollection={business:{enabled:true,optional:false},individual:{enabled:true,optional:false}};
 const validateLink=async link=>{if(!link||link.object!=="payment_link"||!/^plink_[A-Za-z0-9]+$/.test(clean(link.id))||link.livemode!==offer.livemode||link.active!==true||
   !/^https:\/\/buy\.stripe\.com\/(?:test_)?[A-Za-z0-9]+$/.test(clean(link.url))||link.restrictions?.completed_sessions?.limit!==1||link.automatic_tax?.enabled!==true||
-  link.billing_address_collection!=="auto"||link.consent_collection?.terms_of_service!=="required"||link.allow_promotion_codes!==false||
+  link.billing_address_collection!=="required"||link.consent_collection?.terms_of_service!=="required"||link.allow_promotion_codes!==false||
   canonicalJson(link.custom_fields)!==canonicalJson(expectedAdultField)||canonicalJson(link.name_collection)!==canonicalJson(expectedNameCollection)||link.submit_type!=="auto"||
   link.after_completion?.type!=="redirect"||clean(link.after_completion?.redirect?.url)!==offer.checkout_redirect_url||link.customer_creation!=="if_required"||
   link.invoice_creation?.enabled!==false||link.phone_number_collection?.enabled!==false||link.tax_id_collection?.enabled!==false||link.shipping_address_collection!=null||

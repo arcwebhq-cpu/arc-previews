@@ -218,14 +218,13 @@ assert.deepEqual(contract.arc1.function_intake_bridge, {
   },
   external_producer_consumer_wiring_proof_required: true,
   downstream_bound_asset_url_publication_implemented: true,
-  cross_repository_commit_pin_implemented: false,
+  cross_repository_commit_pin_implemented: true,
   cross_repository_commit_pin_required_before_activation: true,
   public_intake_activation_allowed: false,
   remaining_external_wiring: [
     "private-zapier-catch-hook-and-header-mapping", "create-only-ingress-table-action",
     "exact-ack-webhook-response-action", "content-addressed-private-asset-retrieval-wiring-proof",
     "content-addressed-public-asset-publication-wiring-proof", "arc1-publication-receipt-to-arc2-private-input-mapping-proof",
-    "paired-arc-site-and-arc-previews-commit-sha-ci-pin",
     "adult-reviewed-git-history-asset-retention-and-purge-protocol",
     "failure-alert-recipient-proof", "end-to-end-disabled-synthetic-test"
   ]
@@ -651,6 +650,23 @@ assert.equal(contract.browser_qa.real_safari_verified, false);
 assert.equal(contract.browser_qa.real_firefox_verified, false);
 assert.equal(contract.post_handoff_operations.staging_cleanup_verified, false);
 assert.equal(contract.post_handoff_operations.customer_delivery_receipt_verified, false);
+
+assert.deepEqual(contract.synthetic_validation, {
+  source: "tests/five_stripe_test_e2e_contract.mjs",
+  simulator: "scripts/test_mode_e2e_simulator.mjs",
+  provider_neutral: true,
+  network_calls_allowed: false,
+  external_state_mutation_allowed: false,
+  external_provider_proof: false,
+  satisfies_required_test_scenarios: false,
+  stripe_mode: "test",
+  stripe_api_version: "2026-06-24.dahlia",
+  billing_address_collection: "required",
+  niches: ["roofing", "hvac", "remodeling", "landscaping", "auto-detailing"],
+  scenarios: ["paid-happy-path", "duplicate-replay", "unpaid-then-async-success", "expiry-deactivation-renewal", "refund-and-dispute-halt"]
+});
+assert.equal(contract.required_test_scenarios.every(item => item.stripe_test_e2e_verified === false), true,
+  "Synthetic coverage must never be recorded as external Stripe verification");
 
 assert.equal(Object.values(contract.external_verification).every(value => value === false), true);
 for (const retiredExternalFlag of [

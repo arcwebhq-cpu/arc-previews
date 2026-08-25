@@ -27,6 +27,20 @@ preview paths, and unsupported ratings, rankings, customer counts, percentages, 
 guarantees. Real marketing proof needs a separately reviewed source-evidence contract before it
 can be generated automatically; omission is safer than inventing proof.
 
+`npm run test:arc1-generation` verifies the offline ARC1 generation contract across all 19 media
+profiles: an exact 58-string response schema, a positive public-brief projection, deterministic
+provider-neutral request and digests, authoritative intake-field bindings, the existing
+sanitizer/quality/profile/render gates, and a
+maximum of three attempts before `HALT_MANUAL_REVIEW`. This is local contract evidence only. No
+provider or model is configured or verified here, no network call is made, and live generation
+stays blocked until signed provider request/response evidence and the durable provider retry state
+are tested end to end.
+
+`npm run test:customer-upload-browser` loads an exact content-addressed customer image through the
+production-shaped GitHub Pages URL on desktop and phone, proves the broken-image CSS fallback, and
+aborts every unapproved request. This closes the predeploy image-byte QA gap without contacting the
+public Pages origin.
+
 GitHub Pages must use **GitHub Actions** as its build source. On each push to `main`, the
 deployment job waits for the full quality gate and publishes only `.pages-dist`, built by
 `npm run build:pages`. That artifact contains a noindex inert directory, three fixed fictional

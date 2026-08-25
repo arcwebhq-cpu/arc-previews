@@ -1,5 +1,12 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import {
+  ARC1_GENERATION_CONTRACT_SHA256,
+  ARC1_GENERATION_INSTRUCTIONS_SHA256,
+  ARC1_GENERATION_OUTPUT_SCHEMA_SHA256,
+  ARC1_PRIVATE_OR_OPERATIONAL_FIELDS,
+  ARC1_PUBLIC_BRIEF_FIELDS
+} from "../scripts/arc1_generation_contract.mjs";
 
 const read = relative => readFile(new URL(relative, import.meta.url), "utf8");
 const contractText = await read("../zapier/wiring-contract.json");
@@ -40,7 +47,7 @@ const [
   "../zapier/activation-runbook.md"
 ].map(read));
 
-assert.equal(contract.schema, "arc-zapier-wiring-contract-v2");
+assert.equal(contract.schema, "arc-zapier-wiring-contract-v3");
 assert.equal(contract.live_complete, false);
 assert.equal(contract.configuration_state, "local-contract-not-applied");
 assert.equal(Object.values(contract.observed_external_state).every(value => value === false), true);
@@ -112,6 +119,39 @@ assert.deepEqual(contract.arc1.ordered_steps, [
 ]);
 assert.equal(contract.arc1.publish_mode, "pull-request-only");
 assert.equal(contract.arc1.direct_main_publish_allowed, false);
+assert.deepEqual(contract.arc1.generation, {
+  contract_version: "arc1-generation-contract-v1",
+  request_version: "arc1-generation-request-v1",
+  evaluation_version: "arc1-generation-evaluation-v1",
+  retry_state_version: "arc1-generation-retry-state-v1",
+  source: "scripts/arc1_generation_contract.mjs",
+  test: "tests/arc1_generation_contract.mjs",
+  contract_sha256: ARC1_GENERATION_CONTRACT_SHA256,
+  output_schema_sha256: ARC1_GENERATION_OUTPUT_SCHEMA_SHA256,
+  instructions_sha256: ARC1_GENERATION_INSTRUCTIONS_SHA256,
+  offline_contract_verified: true,
+  exact_58_key_string_schema_verified: true,
+  all_19_media_profiles_verified: true,
+  positive_public_brief_projection_verified: true,
+  deterministic_provider_neutral_request_verified: true,
+  authoritative_submission_digest_bound_verified: true,
+  authoritative_business_location_industry_style_service_and_cta_bindings_verified: true,
+  sanitizer_quality_profile_and_render_gate_verified: true,
+  offline_retry_state_verified: true,
+  maximum_attempts: 3,
+  terminal_failure_state: "HALT_MANUAL_REVIEW",
+  network_calls_allowed: false,
+  external_state_mutation_allowed: false,
+  provider_adapter_configured: false,
+  provider_identity_verified: false,
+  model_id_pinned_and_verified: false,
+  provider_structured_output_mode_verified: false,
+  signed_generation_request_evidence_verified: false,
+  signed_generation_response_evidence_verified: false,
+  provider_retry_state_verified: false,
+  live_generation_e2e_verified: false,
+  activation_allowed: false
+});
 assert.deepEqual(contract.arc1.function_intake_bridge.generator_projection, {
   mode: "positive-public-content-allowlist",
   public_fields: [
@@ -130,6 +170,11 @@ assert.deepEqual(contract.arc1.function_intake_bridge.generator_projection, {
   recursive_entity_and_url_decode_privacy_scan_before_git_write: true,
   recursive_entity_and_url_decode_privacy_scan_before_arc2_signature: true
 });
+assert.deepEqual(contract.arc1.function_intake_bridge.generator_projection.public_fields, ARC1_PUBLIC_BRIEF_FIELDS);
+assert.deepEqual(
+  contract.arc1.function_intake_bridge.generator_projection.private_or_operational_fields_never_generator_mapped,
+  ARC1_PRIVATE_OR_OPERATIONAL_FIELDS
+);
 assert.equal(contract.arc1.authoritative_intake.source, "authenticated-netlify-api");
 assert.match(activationRunbook, /normal Catch Hook cannot be the ARC1 destination/);
 assert.match(activationRunbook, /Pointing\s+`ARC_INTAKE_ARC1_ENDPOINT` directly at a Zapier hook/);
@@ -676,12 +721,22 @@ assert.deepEqual(contract.email_outbox, {
   }
 });
 assert.deepEqual(contract.github_controls, {
-  main_branch_protected: false,
-  required_check_configured: false,
+  observed_at: "2026-08-25",
+  ruleset_id: 20730518,
+  ruleset_enforcement: "active",
+  main_branch_protected: true,
+  pull_request_required: true,
+  required_check_configured: true,
   required_check_name: "ARC preview quality/preview-quality",
   required_check_app_slug: "github-actions",
   required_check_app_id: 15368,
+  required_approving_review_count: 0,
+  strict_required_check: false,
+  deletions_blocked: true,
+  non_fast_forward_updates_blocked: true,
+  bypass_actor_count: 0,
   squash_merge_only_for_automation: true,
+  observation_is_point_in_time: true,
   external_verification_required: true
 });
 assert.equal(contract.terms_and_legal_retention.live_retention_verified, false);

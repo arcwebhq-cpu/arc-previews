@@ -44,7 +44,12 @@
       --radius-sm:12px;
       --shadow:0 28px 70px color-mix(in srgb,var(--ink) 12%,transparent);
       --shadow-soft:0 14px 38px color-mix(in srgb,var(--ink) 7%,transparent);
-      --ease:cubic-bezier(.22,.75,.18,1)
+      --ease:cubic-bezier(.22,.75,.18,1);
+      --arc-profile-signature:"general / service";
+      --arc-visual-word:"SERVICE";
+      --arc-visual-radius:50%;
+      --arc-visual-turn:0deg;
+      --arc-profile-pattern:linear-gradient(transparent,transparent)
     }
     *{box-sizing:border-box}
     html{scroll-behavior:smooth;background:var(--bg)}
@@ -511,6 +516,7 @@
       grid-template-rows:auto 1fr auto;
       padding:clamp(25px,3.8vw,46px);
       background:
+        var(--arc-profile-pattern),
         linear-gradient(135deg,color-mix(in srgb,var(--brand) 15%,transparent),transparent 48%),
         radial-gradient(circle at 82% 22%,color-mix(in srgb,var(--accent) 20%,transparent),transparent 31%),
         linear-gradient(160deg,var(--paper),color-mix(in srgb,var(--surface) 62%,var(--bg)))
@@ -526,6 +532,17 @@
       border-radius:50%;
       box-shadow:0 0 0 34px color-mix(in srgb,var(--brand) 5%,transparent),0 0 0 74px color-mix(in srgb,var(--accent) 4%,transparent)
     }
+    .hero-fallback:after{
+      content:var(--arc-visual-word);
+      position:absolute;
+      z-index:0;
+      right:-.06em;
+      bottom:.06em;
+      color:color-mix(in srgb,var(--brand) 8%,transparent);
+      font:900 clamp(72px,10vw,142px)/.78 var(--display);
+      letter-spacing:-.1em;
+      pointer-events:none
+    }
     .hero-fallback>*{position:relative;z-index:1}
     .hero-visual.has-media .hero-fallback{display:none}
     .fallback-top{
@@ -540,6 +557,14 @@
       color:var(--muted);
       font-size:10px;
       font-weight:800;
+      letter-spacing:.14em;
+      text-transform:uppercase
+    }
+    .fallback-top:after{
+      content:var(--arc-profile-signature);
+      color:color-mix(in srgb,var(--brand) 72%,var(--muted));
+      font-size:9px;
+      font-weight:850;
       letter-spacing:.14em;
       text-transform:uppercase
     }
@@ -775,12 +800,13 @@
       border:1px solid var(--line);
       border-radius:var(--radius);
       background:
+        var(--arc-profile-pattern),
         linear-gradient(145deg,color-mix(in srgb,var(--brand) 12%,var(--paper)),var(--paper) 55%,color-mix(in srgb,var(--accent) 10%,var(--paper)));
       box-shadow:var(--shadow-soft)
     }
     .about-media.arc-local-visual:before,
     .about-media:empty:before{
-      content:attr(data-monogram);
+      content:var(--arc-visual-word,attr(data-monogram));
       position:absolute;
       right:-.04em;
       bottom:-.17em;
@@ -970,16 +996,19 @@
     .gallery-grid>.arc-local-visual{
       isolation:isolate;
       background:
+        var(--arc-profile-pattern),
         radial-gradient(circle at 78% 24%,color-mix(in srgb,var(--accent) 34%,transparent),transparent 27%),
         linear-gradient(135deg,color-mix(in srgb,var(--brand) 30%,#101114),#101114 58%,color-mix(in srgb,var(--accent) 18%,#101114))
     }
     .gallery-grid>.arc-local-visual:nth-child(2){
       background:
+        var(--arc-profile-pattern),
         radial-gradient(circle at 28% 72%,color-mix(in srgb,var(--brand) 32%,transparent),transparent 31%),
         linear-gradient(155deg,#15161a,color-mix(in srgb,var(--accent) 18%,#0d0e10))
     }
     .gallery-grid>.arc-local-visual:nth-child(3){
       background:
+        var(--arc-profile-pattern),
         linear-gradient(115deg,transparent 0 42%,color-mix(in srgb,var(--brand) 24%,transparent) 42% 58%,transparent 58%),
         radial-gradient(circle at 70% 30%,color-mix(in srgb,var(--accent) 22%,transparent),transparent 34%),
         #111216
@@ -993,9 +1022,21 @@
       top:50%;
       left:50%;
       border:1px solid rgba(255,255,255,.2);
-      border-radius:50%;
-      transform:translate(-50%,-50%);
+      border-radius:var(--arc-visual-radius);
+      transform:translate(-50%,-50%) rotate(var(--arc-visual-turn));
       box-shadow:0 0 0 26px rgba(255,255,255,.025),0 0 0 58px rgba(255,255,255,.018)
+    }
+    .gallery-grid>.arc-local-visual:after{
+      content:var(--arc-visual-word);
+      z-index:2;
+      display:flex;
+      align-items:flex-end;
+      justify-content:flex-end;
+      padding:clamp(18px,3vw,34px);
+      color:rgba(255,255,255,.075);
+      background:linear-gradient(180deg,transparent 54%,rgba(0,0,0,.54));
+      font:900 clamp(52px,8vw,112px)/.78 var(--display);
+      letter-spacing:-.08em
     }
 
     .proof-grid{
@@ -1439,6 +1480,177 @@
     .media-disclosure{display:none!important}
 
     /*
+     * Semantic local art direction. Each supported profile receives a stable
+     * category signature without remote assets or imagery that could be
+     * mistaken for completed client work.
+     */
+    body[data-arc-expected-media-profile="roofing"]{
+      --arc-profile-signature:"roofing / weather";
+      --arc-visual-word:"ROOF";
+      --arc-visual-radius:8%;
+      --arc-visual-turn:45deg;
+      --arc-profile-pattern:
+        repeating-linear-gradient(135deg,transparent 0 48px,color-mix(in srgb,var(--brand) 10%,transparent) 49px 51px,transparent 52px 96px)
+    }
+    body[data-arc-expected-media-profile="hvac"]{
+      --arc-profile-signature:"hvac / airflow";
+      --arc-visual-word:"AIR";
+      --arc-visual-radius:50%;
+      --arc-visual-turn:0deg;
+      --arc-profile-pattern:
+        repeating-radial-gradient(circle at 24% 76%,transparent 0 28px,color-mix(in srgb,var(--brand) 9%,transparent) 29px 31px,transparent 32px 62px)
+    }
+    body[data-arc-expected-media-profile="remodeling"]{
+      --arc-profile-signature:"remodeling / space";
+      --arc-visual-word:"SPACE";
+      --arc-visual-radius:3%;
+      --arc-visual-turn:0deg;
+      --arc-profile-pattern:
+        linear-gradient(90deg,color-mix(in srgb,var(--brand) 8%,transparent) 1px,transparent 1px) 0 0/52px 52px,
+        linear-gradient(color-mix(in srgb,var(--brand) 8%,transparent) 1px,transparent 1px) 0 0/52px 52px
+    }
+    body[data-arc-expected-media-profile="landscaping"]{
+      --arc-profile-signature:"landscape / season";
+      --arc-visual-word:"GROW";
+      --arc-visual-radius:62% 38% 58% 42%;
+      --arc-visual-turn:-18deg;
+      --arc-profile-pattern:
+        radial-gradient(ellipse at 12% 88%,color-mix(in srgb,var(--brand) 10%,transparent) 0 18%,transparent 19%),
+        radial-gradient(ellipse at 84% 16%,color-mix(in srgb,var(--accent) 8%,transparent) 0 14%,transparent 15%)
+    }
+    body[data-arc-expected-media-profile="auto_detailing"]{
+      --arc-profile-signature:"detailing / finish";
+      --arc-visual-word:"FINISH";
+      --arc-visual-radius:999px 12px;
+      --arc-visual-turn:-14deg;
+      --arc-profile-pattern:
+        repeating-linear-gradient(158deg,transparent 0 72px,color-mix(in srgb,var(--accent) 11%,transparent) 73px 75px,transparent 76px 144px)
+    }
+    body[data-arc-expected-media-profile="dental"]{
+      --arc-profile-signature:"dental / calm";
+      --arc-visual-word:"SMILE";
+      --arc-visual-radius:48% 48% 34% 34%;
+      --arc-visual-turn:0deg;
+      --arc-profile-pattern:
+        radial-gradient(ellipse at 20% 18%,transparent 0 34px,color-mix(in srgb,var(--brand) 9%,transparent) 35px 37px,transparent 38px),
+        radial-gradient(ellipse at 82% 84%,transparent 0 52px,color-mix(in srgb,var(--accent) 7%,transparent) 53px 55px,transparent 56px)
+    }
+    body[data-arc-expected-media-profile="plumbing"]{
+      --arc-profile-signature:"plumbing / flow";
+      --arc-visual-word:"FLOW";
+      --arc-visual-radius:999px;
+      --arc-visual-turn:90deg;
+      --arc-profile-pattern:
+        linear-gradient(90deg,transparent 47%,color-mix(in srgb,var(--brand) 9%,transparent) 48% 52%,transparent 53%) 0 0/84px 84px,
+        linear-gradient(transparent 47%,color-mix(in srgb,var(--accent) 7%,transparent) 48% 52%,transparent 53%) 42px 42px/84px 84px
+    }
+    body[data-arc-expected-media-profile="home_services"]{
+      --arc-profile-signature:"contractor / build";
+      --arc-visual-word:"BUILD";
+      --arc-visual-radius:2%;
+      --arc-visual-turn:0deg;
+      --arc-profile-pattern:
+        linear-gradient(90deg,color-mix(in srgb,var(--brand) 9%,transparent) 1px,transparent 1px) 0 0/34px 34px,
+        linear-gradient(color-mix(in srgb,var(--brand) 9%,transparent) 1px,transparent 1px) 0 0/34px 34px,
+        linear-gradient(135deg,transparent 49%,color-mix(in srgb,var(--accent) 6%,transparent) 50%,transparent 51%)
+    }
+    body[data-arc-expected-media-profile="medical_spa"]{
+      --arc-profile-signature:"aesthetics / restraint";
+      --arc-visual-word:"ASTER";
+      --arc-visual-radius:56% 44% 62% 38%;
+      --arc-visual-turn:18deg;
+      --arc-profile-pattern:
+        conic-gradient(from 28deg at 78% 22%,transparent 0 28%,color-mix(in srgb,var(--accent) 8%,transparent) 29% 38%,transparent 39% 100%)
+    }
+    body[data-arc-expected-media-profile="healthcare"]{
+      --arc-profile-signature:"healthcare / access";
+      --arc-visual-word:"CARE";
+      --arc-visual-radius:18%;
+      --arc-visual-turn:0deg;
+      --arc-profile-pattern:
+        linear-gradient(90deg,transparent 42%,color-mix(in srgb,var(--brand) 7%,transparent) 43% 57%,transparent 58%) 0 0/72px 72px,
+        linear-gradient(transparent 42%,color-mix(in srgb,var(--brand) 7%,transparent) 43% 57%,transparent 58%) 0 0/72px 72px
+    }
+    body[data-arc-expected-media-profile="restaurant"]{
+      --arc-profile-signature:"restaurant / gathering";
+      --arc-visual-word:"TABLE";
+      --arc-visual-radius:50%;
+      --arc-visual-turn:0deg;
+      --arc-profile-pattern:
+        repeating-radial-gradient(circle at 82% 24%,transparent 0 38px,color-mix(in srgb,var(--accent) 9%,transparent) 39px 41px,transparent 42px 76px)
+    }
+    body[data-arc-expected-media-profile="real_estate"]{
+      --arc-profile-signature:"real estate / place";
+      --arc-visual-word:"MOVE";
+      --arc-visual-radius:1%;
+      --arc-visual-turn:0deg;
+      --arc-profile-pattern:
+        linear-gradient(90deg,transparent 0 22%,color-mix(in srgb,var(--brand) 8%,transparent) 23% 24%,transparent 25% 74%,color-mix(in srgb,var(--brand) 8%,transparent) 75% 76%,transparent 77%),
+        linear-gradient(transparent 0 64%,color-mix(in srgb,var(--accent) 7%,transparent) 65% 66%,transparent 67%)
+    }
+    body[data-arc-expected-media-profile="fitness"]{
+      --arc-profile-signature:"fitness / tempo";
+      --arc-visual-word:"TRAIN";
+      --arc-visual-radius:4%;
+      --arc-visual-turn:-22deg;
+      --arc-profile-pattern:
+        repeating-linear-gradient(118deg,transparent 0 42px,color-mix(in srgb,var(--accent) 10%,transparent) 43px 49px,transparent 50px 94px)
+    }
+    body[data-arc-expected-media-profile="legal"]{
+      --arc-profile-signature:"legal / counsel";
+      --arc-visual-word:"COUNSEL";
+      --arc-visual-radius:999px 999px 4px 4px;
+      --arc-visual-turn:0deg;
+      --arc-profile-pattern:
+        repeating-linear-gradient(90deg,transparent 0 58px,color-mix(in srgb,var(--brand) 8%,transparent) 59px 63px,transparent 64px 122px)
+    }
+    body[data-arc-expected-media-profile="finance"]{
+      --arc-profile-signature:"finance / decision";
+      --arc-visual-word:"PLAN";
+      --arc-visual-radius:4%;
+      --arc-visual-turn:-8deg;
+      --arc-profile-pattern:
+        linear-gradient(90deg,color-mix(in srgb,var(--brand) 7%,transparent) 1px,transparent 1px) 0 0/46px 46px,
+        linear-gradient(color-mix(in srgb,var(--brand) 7%,transparent) 1px,transparent 1px) 0 0/46px 46px,
+        linear-gradient(154deg,transparent 46%,color-mix(in srgb,var(--accent) 8%,transparent) 47% 49%,transparent 50%)
+    }
+    body[data-arc-expected-media-profile="web_design"]{
+      --arc-profile-signature:"web design / system";
+      --arc-visual-word:"WEB";
+      --arc-visual-radius:12px;
+      --arc-visual-turn:0deg;
+      --arc-profile-pattern:
+        linear-gradient(90deg,color-mix(in srgb,var(--brand) 8%,transparent) 1px,transparent 1px) 0 0/86px 62px,
+        linear-gradient(color-mix(in srgb,var(--accent) 6%,transparent) 1px,transparent 1px) 0 0/86px 62px
+    }
+    body[data-arc-expected-media-profile="technology"]{
+      --arc-profile-signature:"technology / architecture";
+      --arc-visual-word:"SYSTEM";
+      --arc-visual-radius:22%;
+      --arc-visual-turn:45deg;
+      --arc-profile-pattern:
+        radial-gradient(circle,color-mix(in srgb,var(--brand) 12%,transparent) 0 2px,transparent 3px) 0 0/36px 36px,
+        linear-gradient(135deg,transparent 48%,color-mix(in srgb,var(--accent) 6%,transparent) 49% 51%,transparent 52%)
+    }
+    body[data-arc-expected-media-profile="beauty"]{
+      --arc-profile-signature:"beauty / expression";
+      --arc-visual-word:"SABLE";
+      --arc-visual-radius:68% 32% 60% 40%;
+      --arc-visual-turn:16deg;
+      --arc-profile-pattern:
+        conic-gradient(from 220deg at 18% 82%,transparent 0 38%,color-mix(in srgb,var(--accent) 9%,transparent) 39% 48%,transparent 49% 100%)
+    }
+    body[data-arc-expected-media-profile="general"]{
+      --arc-profile-signature:"general / local";
+      --arc-visual-word:"SERVICE";
+      --arc-visual-radius:16%;
+      --arc-visual-turn:0deg;
+      --arc-profile-pattern:
+        linear-gradient(90deg,color-mix(in srgb,var(--brand) 7%,transparent) 1px,transparent 1px) 0 0/72px 72px,
+        linear-gradient(color-mix(in srgb,var(--accent) 6%,transparent) 1px,transparent 1px) 36px 36px/72px 72px
+    }
+
+    /*
      * One safe master template, four distinct industry directions.
      * The content contract stays fixed while composition changes by category.
      */
@@ -1670,7 +1882,7 @@
             <a class="btn btn-primary" href="#contact">Request a roof assessment <span aria-hidden="true">→</span></a>
             <a class="btn btn-secondary" href="#services">Explore services</a>
           </div>
-          <div class="trust-line"><span>Fictional ARC QA concept</span><span>No invented customer claims</span></div>
+          <div class="trust-line"><span>Roof Replacement scope explained</span><span>Client proof added only after verification</span></div>
         </div>
 
         <div class="hero-visual">
@@ -1717,7 +1929,7 @@
         <p class="eyebrow">Why choose us</p>
         <div class="section-head">
           <h2>Why Ironwood Roofing Concept feels different</h2>
-          <p>A clear, premium customer journey built around useful information and an easy next step.</p>
+          <p>A premium residential roofing journey built around useful decisions and one relevant next step.</p>
         </div>
         <div class="why-grid"><article><h3>Plain-language scope</h3><p>Recommendations are organized so homeowners can understand what is urgent and what can wait.</p></article><article><h3>Material guidance</h3><p>Options are compared by fit, maintenance, appearance, and project requirements.</p></article><article><h3>Respectful workflow</h3><p>The journey sets expectations for access, staging, communication, and cleanup.</p></article><article><h3>One visible next step</h3><p>Every section guides the homeowner toward a focused assessment request.</p></article></div>
       </div>
@@ -1741,7 +1953,7 @@
         <p class="eyebrow">How it works</p>
         <div class="section-head">
           <h2>From first look to finished roof</h2>
-          <p>Every stage explains what happens next, reducing uncertainty before the first conversation.</p>
+          <p>Each stage makes the roof replacement path easier to understand before a commitment.</p>
         </div>
         <div class="process-list"><article><span>01</span><h3>Share the property</h3><p>Provide the address, known issues, and timing so the first conversation is useful.</p></article><article><span>02</span><h3>Assess the roof</h3><p>Review visible conditions and identify the areas that need closer attention.</p></article><article><span>03</span><h3>Choose the scope</h3><p>Compare the recommended work, material direction, and project sequence.</p></article><article><span>04</span><h3>Plan the work</h3><p>Confirm access, communication, and closeout expectations before scheduling.</p></article></div>
       </div>
@@ -1751,8 +1963,8 @@
       <div class="wrap">
         <p class="eyebrow">Work</p>
         <div class="section-head">
-          <h2>A visual system matched to the work</h2>
-          <p>Licensed stock imagery is selected from the roofing media profile for this fictional concept.</p>
+          <h2>Visual direction for roof replacement</h2>
+          <p>The local art direction reflects the roofing category without presenting concept imagery as completed client work.</p>
         </div>
         <div class="gallery-grid" data-arc-media-provider="local-css"></div>
       </div>
@@ -1762,10 +1974,10 @@
       <div class="wrap">
         <p class="eyebrow">Client proof</p>
         <div class="section-head">
-          <h2>Trust without manufactured testimonials</h2>
-          <p>This QA concept uses verifiable service commitments instead of fictional ratings, reviews, or results.</p>
+          <h2>What a credible residential roofing decision should include</h2>
+          <p>This concept demonstrates service-specific evidence structure while withholding claims that Ironwood Roofing Concept has not documented.</p>
         </div>
-        <div class="proof-grid"><article><h3>Clear scope</h3><p>The page explains the service, the next step, and what information a customer should prepare.</p></article><article><h3>Honest proof</h3><p>No customer quote, rating, certification, or performance number appears without source material.</p></article><article><h3>Conversion-ready</h3><p>Primary actions remain visible and usable across desktop and mobile layouts.</p></article></div>
+        <div class="proof-grid"><article><h3>Scope before promises</h3><p>Roof Replacement is introduced through fit, process, and the information a customer needs before deciding.</p></article><article><h3>Evidence belongs to the client</h3><p>Reviews, credentials, and performance claims for Ironwood Roofing Concept stay unpublished until source material is supplied and checked.</p></article><article><h3>A usable request</h3><p>The request a roof assessment action collects only the details needed to begin a relevant conversation.</p></article></div>
       </div>
     </section>
 
@@ -1774,7 +1986,7 @@
         <div class="faq-copy">
           <p class="eyebrow">FAQ</p>
           <h2>Residential Roofing questions, answered</h2>
-          <p>Concise answers help prospective customers decide whether to start a conversation.</p>
+          <p>Practical answers help a prospective customer prepare for a useful residential roofing conversation.</p>
         </div>
         <div class="faq-list"><details><summary>Should I repair or replace?</summary><p>The right path depends on condition, age, damage, and how the roof is performing as a system.</p></details><details><summary>What should I share first?</summary><p>The property address, known leaks, recent storm history, and preferred timing make the first review more useful.</p></details><details><summary>Can materials be compared?</summary><p>Yes. A useful proposal should explain the tradeoffs that matter for the specific home and scope.</p></details><details><summary>Are the claims on this page real?</summary><p>No customer results are claimed. This is a fictional ARC quality-assurance website concept.</p></details></div>
       </div>
@@ -1801,7 +2013,7 @@
     <div class="wrap footer-row">
       <div class="footer-copy">
         <strong>Ironwood Roofing Concept</strong>
-        <span>Fictional residential roofing concept built to test the ARC v10 system.</span><br>
+        <span>Fictional residential roofing concept with client claims intentionally withheld.</span><br>
         <span>© <span id="year"></span> All rights reserved.</span>
       </div>
       <div class="footer-links"><a href="#services">Services</a><a href="#about">About</a><a href="#process">Process</a><a href="#faq">FAQ</a><a href="#contact">Contact</a></div>

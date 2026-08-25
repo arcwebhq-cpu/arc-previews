@@ -5,6 +5,15 @@ const spans = items => items.map(item => `<span>${item}</span>`).join("");
 
 export function fixture(spec) {
   const formName = `${spec.profile}-lead`;
+  const trustLine = spec.trustLine || [
+    `${spec.primaryService} scope explained`,
+    "Client proof added only after verification"
+  ];
+  const proof = spec.proof || [
+    ["Scope before promises", `${spec.primaryService} is introduced through fit, process, and the information a customer needs before deciding.`],
+    ["Evidence belongs to the client", `Reviews, credentials, and performance claims for ${spec.business} stay unpublished until source material is supplied and checked.`],
+    ["A usable request", `The ${spec.cta.toLowerCase()} action collects only the details needed to begin a relevant conversation.`]
+  ];
   return {
     id: spec.id,
     expectedProfile: spec.profile,
@@ -29,8 +38,8 @@ export function fixture(spec) {
       HEADLINE: spec.headline,
       SUBHEADLINE: spec.subheadline,
       SECONDARY_CTA_HREF: "#services",
-      SECONDARY_CTA_LABEL: "Explore services",
-      TRUST_LINE_HTML: "<span>Fictional ARC QA concept</span><span>No invented customer claims</span>",
+      SECONDARY_CTA_LABEL: spec.secondaryCta || "Explore services",
+      TRUST_LINE_HTML: spans(trustLine),
       HERO_MEDIA_HTML: "",
       INDUSTRY_LABEL: spec.industry,
       LOCATION: spec.location,
@@ -42,8 +51,8 @@ export function fixture(spec) {
       SERVICES_HEADING: spec.servicesHeading,
       SERVICES_INTRO: spec.servicesIntro,
       SERVICES_HTML: cards(spec.services),
-      WHY_HEADING: `Why ${spec.business} feels different`,
-      WHY_INTRO: "A clear, premium customer journey built around useful information and an easy next step.",
+      WHY_HEADING: spec.whyHeading || `Why ${spec.business} feels different`,
+      WHY_INTRO: spec.whyIntro || `A premium ${spec.industry.toLowerCase()} journey built around useful decisions and one relevant next step.`,
       DIFFERENTIATORS_HTML: cards(spec.differentiators),
       ABOUT_TITLE: spec.aboutTitle,
       ABOUT_BODY: `<p>${spec.aboutBody}</p>`,
@@ -52,26 +61,22 @@ export function fixture(spec) {
       ABOUT_EYEBROW: `Inside ${spec.business}`,
       ABOUT_QUOTE: spec.aboutQuote,
       PROCESS_HEADING: spec.processHeading,
-      PROCESS_INTRO: "Every stage explains what happens next, reducing uncertainty before the first conversation.",
+      PROCESS_INTRO: spec.processIntro || `Each stage makes the ${spec.primaryService.toLowerCase()} path easier to understand before a commitment.`,
       PROCESS_HTML: steps(spec.process),
-      PROOF_HEADING: "Trust without manufactured testimonials",
-      PROOF_INTRO: "This QA concept uses verifiable service commitments instead of fictional ratings, reviews, or results.",
-      PROOF_HTML: cards([
-        ["Clear scope", "The page explains the service, the next step, and what information a customer should prepare."],
-        ["Honest proof", "No customer quote, rating, certification, or performance number appears without source material."],
-        ["Conversion-ready", "Primary actions remain visible and usable across desktop and mobile layouts."]
-      ]),
-      GALLERY_HEADING: "A visual system matched to the work",
-      GALLERY_INTRO: `Licensed stock imagery is selected from the ${spec.profile.replace("_", " ")} media profile for this fictional concept.`,
+      PROOF_HEADING: spec.proofHeading || `What a credible ${spec.industry.toLowerCase()} decision should include`,
+      PROOF_INTRO: spec.proofIntro || `This concept demonstrates service-specific evidence structure while withholding claims that ${spec.business} has not documented.`,
+      PROOF_HTML: cards(proof),
+      GALLERY_HEADING: spec.galleryHeading || `Visual direction for ${spec.primaryService.toLowerCase()}`,
+      GALLERY_INTRO: spec.galleryIntro || `The local art direction reflects the ${spec.profile.replace("_", " ")} category without presenting concept imagery as completed client work.`,
       GALLERY_HTML: "",
       FAQ_HEADING: `${spec.industry} questions, answered`,
-      FAQ_INTRO: "Concise answers help prospective customers decide whether to start a conversation.",
+      FAQ_INTRO: spec.faqIntro || `Practical answers help a prospective customer prepare for a useful ${spec.industry.toLowerCase()} conversation.`,
       FAQ_HTML: faqs(spec.faqs),
       CONTACT_HEADING: spec.contactHeading,
       CONTACT_BODY: spec.contactBody,
       CONTACT_ACTION_HTML: `<form name="${formName}" method="POST" data-netlify="true" netlify-honeypot="bot-field" action="/?submitted=1"><input type="hidden" name="form-name" value="${formName}"><p hidden><label>Leave blank<input name="bot-field"></label></p><label>Name<input type="text" name="name" autocomplete="name" required></label><label>Email<input type="email" name="email" autocomplete="email" required></label><label>Phone<input type="tel" name="phone" autocomplete="tel"></label><label>Project details<textarea name="project_details" required></textarea></label><p class="form-status" role="note">By submitting this form, you agree that this business may contact you about your request. Do not include sensitive personal, medical, legal, or financial information.</p><button type="submit">${spec.cta}</button></form>`,
       CONTACT_DETAILS_HTML: `<p><strong>Concept location:</strong> ${spec.location}</p><p>Final contact details are added only after client verification.</p>`,
-      FOOTER_TAGLINE: `Fictional ${spec.industry.toLowerCase()} concept built to test the ARC v10 system.`,
+      FOOTER_TAGLINE: spec.footerTagline || `Fictional ${spec.industry.toLowerCase()} concept with client claims intentionally withheld.`,
       FOOTER_LINKS_HTML: '<a href="#services">Services</a><a href="#about">About</a><a href="#process">Process</a><a href="#faq">FAQ</a><a href="#contact">Contact</a>'
     }
   };

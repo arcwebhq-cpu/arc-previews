@@ -7,6 +7,11 @@ import { inspectPremiumContent } from "../scripts/content_quality.mjs";
 
 const template = await readFile(new URL("../ARC_MASTER_TEMPLATE.html", import.meta.url), "utf8");
 const fixtures = [...launchFixtures, ...mediaCoverageFixtures];
+const normalize = value => String(value || "")
+  .replace(/<[^>]+>/g, " ")
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, " ")
+  .trim();
 
 assert.equal(fixtures.length, 19, "ARC must keep one deterministic fixture for each of the 19 semantic niches");
 assert.equal(new Set(fixtures.map(item => item.expectedProfile)).size, 19, "semantic niche profiles must be unique");
@@ -27,7 +32,26 @@ for (const fixture of fixtures) {
   assert.ok(!urls.has(rendered.previewUrl), `${fixture.expectedProfile}: duplicate preview URL`);
   folders.add(rendered.folder);
   urls.add(rendered.previewUrl);
+  assert.ok(
+    template.includes("body[data-arc-expected-media-profile=\"" + fixture.expectedProfile + "\"]"),
+    fixture.expectedProfile + ": semantic local art direction is missing"
+  );
 }
+
+for (const key of ["HEADLINE", "SERVICES_HEADING", "PROCESS_HEADING", "ABOUT_QUOTE", "CONTACT_HEADING"]) {
+  const values = fixtures.map(fixture => normalize(fixture.content[key]));
+  assert.equal(new Set(values).size, fixtures.length, key + " must be differentiated across all 19 niches");
+}
+for (const key of ["SERVICES_HTML", "DIFFERENTIATORS_HTML", "PROCESS_HTML", "PROOF_HTML", "FAQ_HTML"]) {
+  const values = fixtures.map(fixture => normalize(fixture.content[key]));
+  assert.equal(new Set(values).size, fixtures.length, key + " must have a distinct full-section fingerprint for every niche");
+}
+const deprecatedBoilerplate = /presented with clarity|customer guidance|share the need|review the fit|quality assurance market/i;
+for (const fixture of mediaCoverageFixtures) {
+  const visibleCopy = Object.values(fixture.content).join(" ");
+  assert.doesNotMatch(visibleCopy, deprecatedBoilerplate, fixture.expectedProfile + ": generic QA boilerplate returned");
+}
+assert.ok(new Set(fixtures.map(fixture => fixture.content.STYLE_MODE)).size >= 4, "niche set lost its typography/shape direction variety");
 
 assert.notEqual(
   buildPreviewFolder("Same Business", "a1000001"),
@@ -43,7 +67,7 @@ assert.throws(() => buildPreviewFolder("Same Business", "not-safe"), /trusted ev
 
 const base = launchFixtures[0].content;
 const unsupportedClaims = [
-  { PROOF_HTML: base.PROOF_HTML.replace("No customer quote, rating, certification, or performance number appears without source material.", "Rated 4.9/5 by 600 customers.") },
+  { ABOUT_BODY: base.ABOUT_BODY + "<p>Rated 4.9/5 by 600 customers.</p>" },
   { HERO_PROOF_LINE: "24/7 service • Licensed and insured • Guaranteed results" },
   { ABOUT_STATS_HTML: "<article><h3>42%</h3><p>Improved customer conversion across completed projects.</p></article>" }
 ];

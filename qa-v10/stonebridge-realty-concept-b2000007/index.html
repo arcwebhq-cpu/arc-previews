@@ -5,14 +5,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Stonebridge Realty Concept | Home Buying Guidance</title>
-  <meta name="description" content="Stonebridge Realty Concept is a fictional ARC quality-assurance concept demonstrating a premium real estate brokerage website for Quality Assurance Market.">
+  <meta name="description" content="Stonebridge Realty Concept is a fictional ARC quality-assurance concept demonstrating a premium real estate brokerage website for Raleigh, North Carolina.">
   <meta name="theme-color" content="#f8fafc">
   <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
   <meta name="arc-site-mode" content="preview">
   <meta name="arc-template-version" content="10.0">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta property="og:title" content="Stonebridge Realty Concept | Home Buying Guidance">
-  <meta property="og:description" content="Stonebridge Realty Concept is a fictional ARC quality-assurance concept demonstrating a premium real estate brokerage website for Quality Assurance Market.">
+  <meta property="og:description" content="Stonebridge Realty Concept is a fictional ARC quality-assurance concept demonstrating a premium real estate brokerage website for Raleigh, North Carolina.">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Stonebridge Realty Concept">
   <meta name="twitter:card" content="summary_large_image">
@@ -44,7 +44,12 @@
       --radius-sm:12px;
       --shadow:0 28px 70px color-mix(in srgb,var(--ink) 12%,transparent);
       --shadow-soft:0 14px 38px color-mix(in srgb,var(--ink) 7%,transparent);
-      --ease:cubic-bezier(.22,.75,.18,1)
+      --ease:cubic-bezier(.22,.75,.18,1);
+      --arc-profile-signature:"general / service";
+      --arc-visual-word:"SERVICE";
+      --arc-visual-radius:50%;
+      --arc-visual-turn:0deg;
+      --arc-profile-pattern:linear-gradient(transparent,transparent)
     }
     *{box-sizing:border-box}
     html{scroll-behavior:smooth;background:var(--bg)}
@@ -511,6 +516,7 @@
       grid-template-rows:auto 1fr auto;
       padding:clamp(25px,3.8vw,46px);
       background:
+        var(--arc-profile-pattern),
         linear-gradient(135deg,color-mix(in srgb,var(--brand) 15%,transparent),transparent 48%),
         radial-gradient(circle at 82% 22%,color-mix(in srgb,var(--accent) 20%,transparent),transparent 31%),
         linear-gradient(160deg,var(--paper),color-mix(in srgb,var(--surface) 62%,var(--bg)))
@@ -526,6 +532,17 @@
       border-radius:50%;
       box-shadow:0 0 0 34px color-mix(in srgb,var(--brand) 5%,transparent),0 0 0 74px color-mix(in srgb,var(--accent) 4%,transparent)
     }
+    .hero-fallback:after{
+      content:var(--arc-visual-word);
+      position:absolute;
+      z-index:0;
+      right:-.06em;
+      bottom:.06em;
+      color:color-mix(in srgb,var(--brand) 8%,transparent);
+      font:900 clamp(72px,10vw,142px)/.78 var(--display);
+      letter-spacing:-.1em;
+      pointer-events:none
+    }
     .hero-fallback>*{position:relative;z-index:1}
     .hero-visual.has-media .hero-fallback{display:none}
     .fallback-top{
@@ -540,6 +557,14 @@
       color:var(--muted);
       font-size:10px;
       font-weight:800;
+      letter-spacing:.14em;
+      text-transform:uppercase
+    }
+    .fallback-top:after{
+      content:var(--arc-profile-signature);
+      color:color-mix(in srgb,var(--brand) 72%,var(--muted));
+      font-size:9px;
+      font-weight:850;
       letter-spacing:.14em;
       text-transform:uppercase
     }
@@ -775,12 +800,13 @@
       border:1px solid var(--line);
       border-radius:var(--radius);
       background:
+        var(--arc-profile-pattern),
         linear-gradient(145deg,color-mix(in srgb,var(--brand) 12%,var(--paper)),var(--paper) 55%,color-mix(in srgb,var(--accent) 10%,var(--paper)));
       box-shadow:var(--shadow-soft)
     }
     .about-media.arc-local-visual:before,
     .about-media:empty:before{
-      content:attr(data-monogram);
+      content:var(--arc-visual-word,attr(data-monogram));
       position:absolute;
       right:-.04em;
       bottom:-.17em;
@@ -970,16 +996,19 @@
     .gallery-grid>.arc-local-visual{
       isolation:isolate;
       background:
+        var(--arc-profile-pattern),
         radial-gradient(circle at 78% 24%,color-mix(in srgb,var(--accent) 34%,transparent),transparent 27%),
         linear-gradient(135deg,color-mix(in srgb,var(--brand) 30%,#101114),#101114 58%,color-mix(in srgb,var(--accent) 18%,#101114))
     }
     .gallery-grid>.arc-local-visual:nth-child(2){
       background:
+        var(--arc-profile-pattern),
         radial-gradient(circle at 28% 72%,color-mix(in srgb,var(--brand) 32%,transparent),transparent 31%),
         linear-gradient(155deg,#15161a,color-mix(in srgb,var(--accent) 18%,#0d0e10))
     }
     .gallery-grid>.arc-local-visual:nth-child(3){
       background:
+        var(--arc-profile-pattern),
         linear-gradient(115deg,transparent 0 42%,color-mix(in srgb,var(--brand) 24%,transparent) 42% 58%,transparent 58%),
         radial-gradient(circle at 70% 30%,color-mix(in srgb,var(--accent) 22%,transparent),transparent 34%),
         #111216
@@ -993,9 +1022,21 @@
       top:50%;
       left:50%;
       border:1px solid rgba(255,255,255,.2);
-      border-radius:50%;
-      transform:translate(-50%,-50%);
+      border-radius:var(--arc-visual-radius);
+      transform:translate(-50%,-50%) rotate(var(--arc-visual-turn));
       box-shadow:0 0 0 26px rgba(255,255,255,.025),0 0 0 58px rgba(255,255,255,.018)
+    }
+    .gallery-grid>.arc-local-visual:after{
+      content:var(--arc-visual-word);
+      z-index:2;
+      display:flex;
+      align-items:flex-end;
+      justify-content:flex-end;
+      padding:clamp(18px,3vw,34px);
+      color:rgba(255,255,255,.075);
+      background:linear-gradient(180deg,transparent 54%,rgba(0,0,0,.54));
+      font:900 clamp(52px,8vw,112px)/.78 var(--display);
+      letter-spacing:-.08em
     }
 
     .proof-grid{
@@ -1439,6 +1480,177 @@
     .media-disclosure{display:none!important}
 
     /*
+     * Semantic local art direction. Each supported profile receives a stable
+     * category signature without remote assets or imagery that could be
+     * mistaken for completed client work.
+     */
+    body[data-arc-expected-media-profile="roofing"]{
+      --arc-profile-signature:"roofing / weather";
+      --arc-visual-word:"ROOF";
+      --arc-visual-radius:8%;
+      --arc-visual-turn:45deg;
+      --arc-profile-pattern:
+        repeating-linear-gradient(135deg,transparent 0 48px,color-mix(in srgb,var(--brand) 10%,transparent) 49px 51px,transparent 52px 96px)
+    }
+    body[data-arc-expected-media-profile="hvac"]{
+      --arc-profile-signature:"hvac / airflow";
+      --arc-visual-word:"AIR";
+      --arc-visual-radius:50%;
+      --arc-visual-turn:0deg;
+      --arc-profile-pattern:
+        repeating-radial-gradient(circle at 24% 76%,transparent 0 28px,color-mix(in srgb,var(--brand) 9%,transparent) 29px 31px,transparent 32px 62px)
+    }
+    body[data-arc-expected-media-profile="remodeling"]{
+      --arc-profile-signature:"remodeling / space";
+      --arc-visual-word:"SPACE";
+      --arc-visual-radius:3%;
+      --arc-visual-turn:0deg;
+      --arc-profile-pattern:
+        linear-gradient(90deg,color-mix(in srgb,var(--brand) 8%,transparent) 1px,transparent 1px) 0 0/52px 52px,
+        linear-gradient(color-mix(in srgb,var(--brand) 8%,transparent) 1px,transparent 1px) 0 0/52px 52px
+    }
+    body[data-arc-expected-media-profile="landscaping"]{
+      --arc-profile-signature:"landscape / season";
+      --arc-visual-word:"GROW";
+      --arc-visual-radius:62% 38% 58% 42%;
+      --arc-visual-turn:-18deg;
+      --arc-profile-pattern:
+        radial-gradient(ellipse at 12% 88%,color-mix(in srgb,var(--brand) 10%,transparent) 0 18%,transparent 19%),
+        radial-gradient(ellipse at 84% 16%,color-mix(in srgb,var(--accent) 8%,transparent) 0 14%,transparent 15%)
+    }
+    body[data-arc-expected-media-profile="auto_detailing"]{
+      --arc-profile-signature:"detailing / finish";
+      --arc-visual-word:"FINISH";
+      --arc-visual-radius:999px 12px;
+      --arc-visual-turn:-14deg;
+      --arc-profile-pattern:
+        repeating-linear-gradient(158deg,transparent 0 72px,color-mix(in srgb,var(--accent) 11%,transparent) 73px 75px,transparent 76px 144px)
+    }
+    body[data-arc-expected-media-profile="dental"]{
+      --arc-profile-signature:"dental / calm";
+      --arc-visual-word:"SMILE";
+      --arc-visual-radius:48% 48% 34% 34%;
+      --arc-visual-turn:0deg;
+      --arc-profile-pattern:
+        radial-gradient(ellipse at 20% 18%,transparent 0 34px,color-mix(in srgb,var(--brand) 9%,transparent) 35px 37px,transparent 38px),
+        radial-gradient(ellipse at 82% 84%,transparent 0 52px,color-mix(in srgb,var(--accent) 7%,transparent) 53px 55px,transparent 56px)
+    }
+    body[data-arc-expected-media-profile="plumbing"]{
+      --arc-profile-signature:"plumbing / flow";
+      --arc-visual-word:"FLOW";
+      --arc-visual-radius:999px;
+      --arc-visual-turn:90deg;
+      --arc-profile-pattern:
+        linear-gradient(90deg,transparent 47%,color-mix(in srgb,var(--brand) 9%,transparent) 48% 52%,transparent 53%) 0 0/84px 84px,
+        linear-gradient(transparent 47%,color-mix(in srgb,var(--accent) 7%,transparent) 48% 52%,transparent 53%) 42px 42px/84px 84px
+    }
+    body[data-arc-expected-media-profile="home_services"]{
+      --arc-profile-signature:"contractor / build";
+      --arc-visual-word:"BUILD";
+      --arc-visual-radius:2%;
+      --arc-visual-turn:0deg;
+      --arc-profile-pattern:
+        linear-gradient(90deg,color-mix(in srgb,var(--brand) 9%,transparent) 1px,transparent 1px) 0 0/34px 34px,
+        linear-gradient(color-mix(in srgb,var(--brand) 9%,transparent) 1px,transparent 1px) 0 0/34px 34px,
+        linear-gradient(135deg,transparent 49%,color-mix(in srgb,var(--accent) 6%,transparent) 50%,transparent 51%)
+    }
+    body[data-arc-expected-media-profile="medical_spa"]{
+      --arc-profile-signature:"aesthetics / restraint";
+      --arc-visual-word:"ASTER";
+      --arc-visual-radius:56% 44% 62% 38%;
+      --arc-visual-turn:18deg;
+      --arc-profile-pattern:
+        conic-gradient(from 28deg at 78% 22%,transparent 0 28%,color-mix(in srgb,var(--accent) 8%,transparent) 29% 38%,transparent 39% 100%)
+    }
+    body[data-arc-expected-media-profile="healthcare"]{
+      --arc-profile-signature:"healthcare / access";
+      --arc-visual-word:"CARE";
+      --arc-visual-radius:18%;
+      --arc-visual-turn:0deg;
+      --arc-profile-pattern:
+        linear-gradient(90deg,transparent 42%,color-mix(in srgb,var(--brand) 7%,transparent) 43% 57%,transparent 58%) 0 0/72px 72px,
+        linear-gradient(transparent 42%,color-mix(in srgb,var(--brand) 7%,transparent) 43% 57%,transparent 58%) 0 0/72px 72px
+    }
+    body[data-arc-expected-media-profile="restaurant"]{
+      --arc-profile-signature:"restaurant / gathering";
+      --arc-visual-word:"TABLE";
+      --arc-visual-radius:50%;
+      --arc-visual-turn:0deg;
+      --arc-profile-pattern:
+        repeating-radial-gradient(circle at 82% 24%,transparent 0 38px,color-mix(in srgb,var(--accent) 9%,transparent) 39px 41px,transparent 42px 76px)
+    }
+    body[data-arc-expected-media-profile="real_estate"]{
+      --arc-profile-signature:"real estate / place";
+      --arc-visual-word:"MOVE";
+      --arc-visual-radius:1%;
+      --arc-visual-turn:0deg;
+      --arc-profile-pattern:
+        linear-gradient(90deg,transparent 0 22%,color-mix(in srgb,var(--brand) 8%,transparent) 23% 24%,transparent 25% 74%,color-mix(in srgb,var(--brand) 8%,transparent) 75% 76%,transparent 77%),
+        linear-gradient(transparent 0 64%,color-mix(in srgb,var(--accent) 7%,transparent) 65% 66%,transparent 67%)
+    }
+    body[data-arc-expected-media-profile="fitness"]{
+      --arc-profile-signature:"fitness / tempo";
+      --arc-visual-word:"TRAIN";
+      --arc-visual-radius:4%;
+      --arc-visual-turn:-22deg;
+      --arc-profile-pattern:
+        repeating-linear-gradient(118deg,transparent 0 42px,color-mix(in srgb,var(--accent) 10%,transparent) 43px 49px,transparent 50px 94px)
+    }
+    body[data-arc-expected-media-profile="legal"]{
+      --arc-profile-signature:"legal / counsel";
+      --arc-visual-word:"COUNSEL";
+      --arc-visual-radius:999px 999px 4px 4px;
+      --arc-visual-turn:0deg;
+      --arc-profile-pattern:
+        repeating-linear-gradient(90deg,transparent 0 58px,color-mix(in srgb,var(--brand) 8%,transparent) 59px 63px,transparent 64px 122px)
+    }
+    body[data-arc-expected-media-profile="finance"]{
+      --arc-profile-signature:"finance / decision";
+      --arc-visual-word:"PLAN";
+      --arc-visual-radius:4%;
+      --arc-visual-turn:-8deg;
+      --arc-profile-pattern:
+        linear-gradient(90deg,color-mix(in srgb,var(--brand) 7%,transparent) 1px,transparent 1px) 0 0/46px 46px,
+        linear-gradient(color-mix(in srgb,var(--brand) 7%,transparent) 1px,transparent 1px) 0 0/46px 46px,
+        linear-gradient(154deg,transparent 46%,color-mix(in srgb,var(--accent) 8%,transparent) 47% 49%,transparent 50%)
+    }
+    body[data-arc-expected-media-profile="web_design"]{
+      --arc-profile-signature:"web design / system";
+      --arc-visual-word:"WEB";
+      --arc-visual-radius:12px;
+      --arc-visual-turn:0deg;
+      --arc-profile-pattern:
+        linear-gradient(90deg,color-mix(in srgb,var(--brand) 8%,transparent) 1px,transparent 1px) 0 0/86px 62px,
+        linear-gradient(color-mix(in srgb,var(--accent) 6%,transparent) 1px,transparent 1px) 0 0/86px 62px
+    }
+    body[data-arc-expected-media-profile="technology"]{
+      --arc-profile-signature:"technology / architecture";
+      --arc-visual-word:"SYSTEM";
+      --arc-visual-radius:22%;
+      --arc-visual-turn:45deg;
+      --arc-profile-pattern:
+        radial-gradient(circle,color-mix(in srgb,var(--brand) 12%,transparent) 0 2px,transparent 3px) 0 0/36px 36px,
+        linear-gradient(135deg,transparent 48%,color-mix(in srgb,var(--accent) 6%,transparent) 49% 51%,transparent 52%)
+    }
+    body[data-arc-expected-media-profile="beauty"]{
+      --arc-profile-signature:"beauty / expression";
+      --arc-visual-word:"SABLE";
+      --arc-visual-radius:68% 32% 60% 40%;
+      --arc-visual-turn:16deg;
+      --arc-profile-pattern:
+        conic-gradient(from 220deg at 18% 82%,transparent 0 38%,color-mix(in srgb,var(--accent) 9%,transparent) 39% 48%,transparent 49% 100%)
+    }
+    body[data-arc-expected-media-profile="general"]{
+      --arc-profile-signature:"general / local";
+      --arc-visual-word:"SERVICE";
+      --arc-visual-radius:16%;
+      --arc-visual-turn:0deg;
+      --arc-profile-pattern:
+        linear-gradient(90deg,color-mix(in srgb,var(--brand) 7%,transparent) 1px,transparent 1px) 0 0/72px 72px,
+        linear-gradient(color-mix(in srgb,var(--accent) 6%,transparent) 1px,transparent 1px) 36px 36px/72px 72px
+    }
+
+    /*
      * One safe master template, four distinct industry directions.
      * The content contract stays fixed while composition changes by category.
      */
@@ -1632,7 +1844,7 @@
     })();
   </script>
 </head>
-<body data-arc-expected-media-profile="real_estate" data-style="premium" data-industry="Real Estate Brokerage" data-arc-site-mode="preview" data-arc-media-provider="local-css">
+<body data-arc-expected-media-profile="real_estate" data-style="luxury" data-industry="Real Estate Brokerage" data-arc-site-mode="preview" data-arc-media-provider="local-css">
   <a class="skip" href="#content">Skip to content</a>
   <div class="progress" aria-hidden="true"><span></span></div>
 
@@ -1642,7 +1854,7 @@
         <span class="brand-logo"></span>
         <span class="brand-text">
           <span class="brand-name">Stonebridge Realty Concept</span>
-          <span class="brand-location">Quality Assurance Market</span>
+          <span class="brand-location">Raleigh, North Carolina</span>
         </span>
       </a>
       <nav class="nav-links" aria-label="Main menu">
@@ -1653,7 +1865,7 @@
         <a href="#contact">Contact</a>
       </nav>
       <div class="nav-action">
-        <a class="btn btn-primary btn-small" href="#contact">Request an introduction <span aria-hidden="true">→</span></a>
+        <a class="btn btn-primary btn-small" href="#contact">Plan a property conversation <span aria-hidden="true">→</span></a>
       </div>
       <button class="menu" type="button" aria-label="Toggle menu" aria-expanded="false"></button>
     </div>
@@ -1663,21 +1875,21 @@
     <section class="hero" id="top">
       <div class="wrap hero-grid">
         <div class="hero-copy-column">
-          <p class="eyebrow">Quality Assurance Market • Real Estate Brokerage</p>
-          <h1>Real Estate Brokerage, presented with clarity.</h1>
-          <p class="hero-copy">A fictional ARC quality-assurance concept for real estate brokerage, built to verify semantic media, responsive composition, and an honest conversion path.</p>
+          <p class="eyebrow">Raleigh, North Carolina • Real Estate Brokerage</p>
+          <h1>Move with a clearer read on the property decision.</h1>
+          <p class="hero-copy">Whether buying, selling, or exploring a move, begin with priorities, timing, and the questions that shape the right real estate path.</p>
           <div class="hero-actions">
-            <a class="btn btn-primary" href="#contact">Request an introduction <span aria-hidden="true">→</span></a>
-            <a class="btn btn-secondary" href="#services">Explore services</a>
+            <a class="btn btn-primary" href="#contact">Plan a property conversation <span aria-hidden="true">→</span></a>
+            <a class="btn btn-secondary" href="#services">Choose your path</a>
           </div>
-          <div class="trust-line"><span>Fictional ARC QA concept</span><span>No invented customer claims</span></div>
+          <div class="trust-line"><span>Listing facts require source records</span><span>No sales claims without brokerage proof</span></div>
         </div>
 
         <div class="hero-visual">
           <div class="hero-media"></div>
           <div class="hero-photo-caption">
             <small>Real Estate Brokerage</small>
-            <strong>Home Buying Guidance, clearly framed</strong>
+            <strong>A more considered move</strong>
           </div>
           <div class="hero-fallback" data-arc-media-provider="local-css">
             <div class="fallback-top">
@@ -1686,11 +1898,11 @@
             </div>
             <div class="fallback-main">
               <small>Real Estate Brokerage</small>
-              <h2>Home Buying Guidance, clearly framed</h2>
+              <h2>A more considered move</h2>
             </div>
             <div class="fallback-bottom">
-              <div class="chips"><span>Home Buying Guidance</span><span>Real Estate Brokerage Planning</span><span>Real Estate Brokerage Support</span></div>
-              <div class="hero-proof">Clear scope • Honest proof • Responsive experience</div>
+              <div class="chips"><span>Home Buying Guidance</span><span>Selling Strategy</span><span>Relocation Planning</span></div>
+              <div class="hero-proof">Goals first • Market context • Decision support</div>
             </div>
           </div>
         </div>
@@ -1698,17 +1910,17 @@
     </section>
 
     <div class="ticker" role="region" aria-label="Highlights">
-      <div class="ticker-track"><span>Home Buying Guidance</span><span>Real Estate Brokerage Planning</span><span>Real Estate Brokerage Support</span><span>Customer Guidance</span></div>
+      <div class="ticker-track"><span>Home Buying Guidance</span><span>Selling Strategy</span><span>Relocation Planning</span><span>Property Consultation</span></div>
     </div>
 
     <section class="services" id="services">
       <div class="wrap">
         <p class="eyebrow">Services</p>
         <div class="section-head">
-          <h2>Real Estate Brokerage services made easier to understand</h2>
-          <p>A focused service structure for prospective customers evaluating real estate brokerage.</p>
+          <h2>Real estate guidance organized around the move</h2>
+          <p>Distinct entry points for buyers, sellers, relocating households, and property strategy conversations.</p>
         </div>
-        <div class="service-grid"><article><h3>Home Buying Guidance</h3><p>A clear introduction to home buying guidance with the next step stated plainly.</p></article><article><h3>Real Estate Brokerage Planning</h3><p>Organize priorities, timing, and practical requirements before work begins.</p></article><article><h3>Real Estate Brokerage Support</h3><p>Explain what customers can expect before, during, and after the service.</p></article><article><h3>Customer Guidance</h3><p>Answer common questions without inventing outcomes, ratings, licenses, or guarantees.</p></article></div>
+        <div class="service-grid"><article><h3>Home Buying Guidance</h3><p>Frame location, lifestyle, property, financing, and timing priorities before beginning a search.</p></article><article><h3>Selling Strategy</h3><p>Prepare questions about condition, presentation, timing, and the desired sale process.</p></article><article><h3>Relocation Planning</h3><p>Organize neighborhood, commute, property, and transition needs before a market conversation.</p></article><article><h3>Property Consultation</h3><p>Discuss a specific real estate decision without implying value, demand, or transaction outcome.</p></article></div>
       </div>
     </section>
 
@@ -1716,10 +1928,10 @@
       <div class="wrap">
         <p class="eyebrow">Why choose us</p>
         <div class="section-head">
-          <h2>Why Stonebridge Realty Concept feels different</h2>
-          <p>A clear, premium customer journey built around useful information and an easy next step.</p>
+          <h2>A polished brokerage site should still be precise</h2>
+          <p>The experience separates aspiration from verifiable property facts, market data, representation details, and transaction history.</p>
         </div>
-        <div class="why-grid"><article><h3>Readable scope</h3><p>Services and next steps are easy to scan on desktop and mobile.</p></article><article><h3>Honest evidence</h3><p>The concept does not publish unsupported reviews, results, or credentials.</p></article><article><h3>Useful sequence</h3><p>The customer journey explains what happens before a commitment.</p></article><article><h3>Visible action</h3><p>A single primary action stays clear throughout the experience.</p></article></div>
+        <div class="why-grid"><article><h3>Decision-led entry</h3><p>Visitors choose buying, selling, relocating, or a property question before seeing generic promotion.</p></article><article><h3>Fact-aware structure</h3><p>Listing details, availability, and market information have clear places for source-controlled data.</p></article><article><h3>No borrowed success</h3><p>Transaction volume, rankings, awards, and testimonials remain absent without brokerage evidence.</p></article><article><h3>Editorial restraint</h3><p>Architectural spacing and refined typography communicate high consideration without luxury clichés.</p></article></div>
       </div>
     </section>
 
@@ -1728,9 +1940,9 @@
         <div class="about-media" data-monogram="Stonebridge Realty Concept" data-arc-media-provider="local-css"></div>
         <div class="about-copy">
           <p class="eyebrow">Inside Stonebridge Realty Concept</p>
-          <h2>Stonebridge Realty Concept is a semantic media test</h2>
-          <div class="about-body"><p>This fictional concept verifies that ARC selects the real estate media profile and a suitable composition without presenting stock imagery as client work.</p></div>
-          <div class="about-quote">Specific visuals. Verifiable claims. One clear next step.</div>
+          <h2>A property decision deserves more than a search box</h2>
+          <div class="about-body"><p>This fictional real estate concept pairs architectural composition with decision-focused guidance while withholding listings, market statistics, representation claims, sales history, awards, and client stories.</p></div>
+          <div class="about-quote">Start with the move you are trying to make.</div>
           <div class="stats"></div>
         </div>
       </div>
@@ -1740,10 +1952,10 @@
       <div class="wrap">
         <p class="eyebrow">How it works</p>
         <div class="section-head">
-          <h2>A straightforward real estate brokerage journey</h2>
-          <p>Every stage explains what happens next, reducing uncertainty before the first conversation.</p>
+          <h2>From priorities to an informed property path</h2>
+          <p>The journey prepares the context a real estate professional needs before discussing representation or a specific property.</p>
         </div>
-        <div class="process-list"><article><span>01</span><h3>Share the need</h3><p>Describe the situation, priorities, and desired timing.</p></article><article><span>02</span><h3>Review the fit</h3><p>A real provider would confirm service area, scope, and required information.</p></article><article><span>03</span><h3>Compare the path</h3><p>Discuss practical options and the tradeoffs that matter.</p></article><article><span>04</span><h3>Confirm next steps</h3><p>Agree on scope, timing, access, and communication before work begins.</p></article></div>
+        <div class="process-list"><article><span>01</span><h3>Define the move</h3><p>Share whether you are buying, selling, relocating, or evaluating a property decision.</p></article><article><span>02</span><h3>Set the priorities</h3><p>Clarify timing, location, property needs, tradeoffs, and the people involved.</p></article><article><span>03</span><h3>Review the context</h3><p>A real brokerage would discuss current information, representation, and relevant next steps.</p></article><article><span>04</span><h3>Choose the path</h3><p>Align on search, preparation, property review, or another agreed real estate action.</p></article></div>
       </div>
     </section>
 
@@ -1751,8 +1963,8 @@
       <div class="wrap">
         <p class="eyebrow">Work</p>
         <div class="section-head">
-          <h2>A visual system matched to the work</h2>
-          <p>Licensed stock imagery is selected from the real estate media profile for this fictional concept.</p>
+          <h2>Architectural direction without fictional listings</h2>
+          <p>Window grids and spatial lines create a property-specific visual identity without depicting homes as active inventory.</p>
         </div>
         <div class="gallery-grid" data-arc-media-provider="local-css"></div>
       </div>
@@ -1762,10 +1974,10 @@
       <div class="wrap">
         <p class="eyebrow">Client proof</p>
         <div class="section-head">
-          <h2>Trust without manufactured testimonials</h2>
-          <p>This QA concept uses verifiable service commitments instead of fictional ratings, reviews, or results.</p>
+          <h2>Property confidence depends on sourced information</h2>
+          <p>The concept reserves listings, market commentary, and brokerage performance for current records while showing a premium advisory path.</p>
         </div>
-        <div class="proof-grid"><article><h3>Clear scope</h3><p>The page explains the service, the next step, and what information a customer should prepare.</p></article><article><h3>Honest proof</h3><p>No customer quote, rating, certification, or performance number appears without source material.</p></article><article><h3>Conversion-ready</h3><p>Primary actions remain visible and usable across desktop and mobile layouts.</p></article></div>
+        <div class="proof-grid"><article><h3>Property facts stay sourced</h3><p>Addresses, status, features, and media should come from authorized listing records.</p></article><article><h3>Representation is explicit</h3><p>A real brokerage can add the disclosures and relationship details required for its market.</p></article><article><h3>History stays documented</h3><p>Sales, reviews, rankings, and market claims remain unavailable until the client provides evidence.</p></article></div>
       </div>
     </section>
 
@@ -1774,9 +1986,9 @@
         <div class="faq-copy">
           <p class="eyebrow">FAQ</p>
           <h2>Real Estate Brokerage questions, answered</h2>
-          <p>Concise answers help prospective customers decide whether to start a conversation.</p>
+          <p>Property questions distinguish planning information from current listings and professional representation.</p>
         </div>
-        <div class="faq-list"><details><summary>What should a customer share first?</summary><p>The need, location, timing, and any constraints make the first response more useful.</p></details><details><summary>Are the images client work?</summary><p>No. Licensed stock imagery is used only as visual direction in this fictional QA concept.</p></details><details><summary>Are the results and reviews real?</summary><p>No unsupported result, rating, review, license, or guarantee is published here.</p></details><details><summary>What happens after the request?</summary><p>A real provider would verify fit and explain the appropriate next step.</p></details></div>
+        <div class="faq-list"><details><summary>Are the properties on this concept for sale?</summary><p>No listing, address, availability, or price is presented in this fictional ARC concept.</p></details><details><summary>What should a buyer share first?</summary><p>Location, property needs, timing, financing context, and important tradeoffs make the conversation more useful.</p></details><details><summary>What should a seller prepare?</summary><p>Property context, timing, condition questions, occupancy, and decision-maker availability are helpful starting points.</p></details><details><summary>Does this page establish representation?</summary><p>No. A real brokerage should explain representation and required disclosures through its approved process.</p></details></div>
       </div>
     </section>
 
@@ -1786,11 +1998,11 @@
           <div class="contact-grid">
             <div>
               <p class="eyebrow">Next step</p>
-              <h2>Start a clear real estate brokerage conversation</h2>
-              <div class="contact-body">Share the need and timing. A real provider would confirm fit before recommending a service path.</div>
-              <div class="contact-actions"><form name="real_estate-lead" method="POST" data-netlify="true" netlify-honeypot="bot-field" action="/?submitted=1"><input type="hidden" name="form-name" value="real_estate-lead"><p hidden><label>Leave blank<input name="bot-field"></label></p><label>Name<input type="text" name="name" autocomplete="name" required></label><label>Email<input type="email" name="email" autocomplete="email" required></label><label>Phone<input type="tel" name="phone" autocomplete="tel"></label><label>Project details<textarea name="project_details" required></textarea></label><p class="form-status" role="note">By submitting this form, you agree that this business may contact you about your request. Do not include sensitive personal, medical, legal, or financial information.</p><button type="submit">Request an introduction</button></form></div>
+              <h2>Start with the move, not a generic search</h2>
+              <div class="contact-body">Share whether you are buying, selling, relocating, or exploring a property decision, plus the timing and priorities that matter.</div>
+              <div class="contact-actions"><form name="real_estate-lead" method="POST" data-netlify="true" netlify-honeypot="bot-field" action="/?submitted=1"><input type="hidden" name="form-name" value="real_estate-lead"><p hidden><label>Leave blank<input name="bot-field"></label></p><label>Name<input type="text" name="name" autocomplete="name" required></label><label>Email<input type="email" name="email" autocomplete="email" required></label><label>Phone<input type="tel" name="phone" autocomplete="tel"></label><label>Project details<textarea name="project_details" required></textarea></label><p class="form-status" role="note">By submitting this form, you agree that this business may contact you about your request. Do not include sensitive personal, medical, legal, or financial information.</p><button type="submit">Plan a property conversation</button></form></div>
             </div>
-            <div class="contact-details"><p><strong>Concept location:</strong> Quality Assurance Market</p><p>Final contact details are added only after client verification.</p></div>
+            <div class="contact-details"><p><strong>Concept location:</strong> Raleigh, North Carolina</p><p>Final contact details are added only after client verification.</p></div>
           </div>
         </div>
       </div>
@@ -1801,13 +2013,13 @@
     <div class="wrap footer-row">
       <div class="footer-copy">
         <strong>Stonebridge Realty Concept</strong>
-        <span>Fictional real estate brokerage concept built to test the ARC v10 system.</span><br>
+        <span>Fictional real estate concept with listings, representation, and performance claims intentionally withheld.</span><br>
         <span>© <span id="year"></span> All rights reserved.</span>
       </div>
       <div class="footer-links"><a href="#services">Services</a><a href="#about">About</a><a href="#process">Process</a><a href="#faq">FAQ</a><a href="#contact">Contact</a></div>
     </div>
   </footer>
-  <a class="btn btn-primary mobile-cta" href="#contact">Request an introduction <span aria-hidden="true">→</span></a>
+  <a class="btn btn-primary mobile-cta" href="#contact">Plan a property conversation <span aria-hidden="true">→</span></a>
 
   <script>
     (() => {

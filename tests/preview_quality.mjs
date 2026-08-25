@@ -84,6 +84,7 @@ const compositionOrders = {
   balanced: ["top", "ticker", "services", "about", "why", "process", "proof", "gallery", "faq", "contact"]
 };
 const seenV10Compositions = new Set();
+const seenV10VisualSignatures = new Set();
 const mockImage = `<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000"><rect width="1600" height="1000" fill="#2a2d33"/><path d="M0 760 410 420l270 240 260-330 660 670H0Z" fill="#414650"/></svg>`;
 const contentTypes = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".webp": "image/webp" };
 
@@ -268,6 +269,7 @@ try {
             arcExpectedMediaProfile: document.body.dataset.arcExpectedMediaProfile || "",
             arcLayout: document.body.dataset.arcLayout || "",
             arcVariant: document.body.dataset.arcVariant || "",
+            arcVisualSignature: getComputedStyle(document.body).getPropertyValue("--arc-profile-signature").trim().replace(/^['\"]|['\"]$/g, ""),
             mainOrder: [...(document.querySelector("#content")?.children || [])].map(element => element.id || (element.classList.contains("ticker") ? "ticker" : "")),
             hiddenReveals: [...document.querySelectorAll(".reveal")].filter(element => {
               const rect = element.getBoundingClientRect();
@@ -350,6 +352,11 @@ try {
           assert.equal(report.arcMediaVersion, mediaManifest.version, "media manifest version mismatch");
           assert.equal(report.arcLayout, profile.layout, "industry composition layout mismatch");
           assert.equal(report.arcVariant, String(profile.variant), "industry composition variant mismatch");
+          assert.ok(report.arcVisualSignature, "semantic visual signature is missing");
+          if (v10Fixture && viewport.name === "desktop") {
+            assert.ok(!seenV10VisualSignatures.has(report.arcVisualSignature), `duplicate visual signature: ${report.arcVisualSignature}`);
+            seenV10VisualSignatures.add(report.arcVisualSignature);
+          }
           assert.deepEqual(report.mainOrder, compositionOrders[profile.layout], "industry section order mismatch");
           if (v10Fixture?.isLaunch) seenV10Compositions.add(`${report.arcLayout}:${report.arcVariant}`);
           assert.ok(report.curatedImages.every(item => item.profile === expectedProfile), "an image escaped the selected media profile");
@@ -429,6 +436,9 @@ if (failures.length) {
 
 if (launchV10Manifest.every(item => filesToTest.includes(item.file))) {
   assert.equal(seenV10Compositions.size, 5, "the five launch niches must retain five distinct layout/variant compositions");
+}
+if (v10Manifest.every(item => filesToTest.includes(item.file)) && viewports.some(item => item.name === "desktop")) {
+  assert.equal(seenV10VisualSignatures.size, 19, "all 19 niches must retain distinct semantic visual signatures");
 }
 
 console.log(`Browser audit passed: ${filesToTest.length * viewports.length}/${filesToTest.length * viewports.length} requested renders.`);

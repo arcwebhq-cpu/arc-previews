@@ -19,13 +19,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: arcwebhq-cpu/arc-site
-          ref: a46628bc47fa2a89daf4bc8dea6cfa66156484a1
+          ref: 163f6e2a4c769c779fa23e5c3df1c1008e819a2f
           path: .arc-site-contract
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Install pinned ARC site contract dependencies
+        run: npm ci --prefix .arc-site-contract
       - run: npx playwright install --with-deps chromium
       - run: npm test
         env:

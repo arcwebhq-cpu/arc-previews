@@ -8,12 +8,12 @@ const workflow = await readFile(path.join(projectRoot, ".github/workflows/previe
 const dependabot = await readFile(path.join(projectRoot, ".github/dependabot.yml"), "utf8");
 
 const reviewedActions = new Map([
-  ["actions/checkout", { sha: "11d5960a326750d5838078e36cf38b85af677262", version: "v4.4.0", count: 3 }],
-  ["actions/setup-node", { sha: "49933ea5288caeca8642d1e84afbd3f7d6820020", version: "v4.4.0", count: 2 }],
+  ["actions/checkout", { sha: "3d3c42e5aac5ba805825da76410c181273ba90b1", version: "v7.0.1", count: 3 }],
+  ["actions/setup-node", { sha: "820762786026740c76f36085b0efc47a31fe5020", version: "v7.0.0", count: 2 }],
   ["actions/upload-artifact", { sha: "ea165f8d65b6e75b540449e92b4886f43607fa02", version: "v4.6.2", count: 1 }],
-  ["actions/configure-pages", { sha: "983d7736d9b0ae728b81ab479565c72886d7745b", version: "v5.0.0", count: 1 }],
-  ["actions/upload-pages-artifact", { sha: "56afc609e74202658d3ffba0e8f6dda462b719fa", version: "v3.0.1", count: 1 }],
-  ["actions/deploy-pages", { sha: "d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e", version: "v4.0.5", count: 1 }]
+  ["actions/configure-pages", { sha: "45bfe0192ca1faeb007ade9deae92b16b8254a0d", version: "v6.0.0", count: 1 }],
+  ["actions/upload-pages-artifact", { sha: "fc324d3547104276b827a68afc52ff2a11cc49c9", version: "v5.0.0", count: 1 }],
+  ["actions/deploy-pages", { sha: "cd2ce8fcbc39b97be8ca5fce6e763baed58fa128", version: "v5.0.0", count: 1 }]
 ]);
 
 const uses = [...workflow.matchAll(/^[ \t]*-?[ \t]*uses:[ \t]+([^ \t#]+)(?:[ \t]+#[ \t]*(\S+))?[ \t]*$/gm)].map(match => ({

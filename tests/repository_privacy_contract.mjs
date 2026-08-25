@@ -11,7 +11,8 @@ const protectedNameHashes = new Set([
   "f2e604d38c2363c1450d1a0fe2fb75ea7aaee39038d4a3f04210891a8b5733fe"
 ]);
 const protectedPhoneHashes = new Set([
-  "ea099f85ce2ab1e20cfa5581d3a5804b9683a79c1994e669c133c9fa441b2aab"
+  "ea099f85ce2ab1e20cfa5581d3a5804b9683a79c1994e669c133c9fa441b2aab",
+  "420207f8384ec73554e2defb10614f34198d76b995d141693e3b4c517d38b3da"
 ]);
 const protectedAddressHashes = new Set([
   "e19eaa28325965c716382fc33b306c9de3d1587571ebd67ff65a9f13990f5eb3"

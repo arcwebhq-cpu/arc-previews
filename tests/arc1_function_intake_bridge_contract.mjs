@@ -280,9 +280,14 @@ await assert.rejects(runPublisher({
   checkout_config_snapshot_hmac_sha256: rendered.checkout_config_snapshot_hmac_sha256,
   checkout_recipient_reservation_private: rendered.checkout_recipient_reservation_private,
   checkout_recipient_reservation_hmac_sha256: rendered.checkout_recipient_reservation_hmac_sha256,
-}, async () => {
+}, async url => {
   publisherReachedGitHub = true;
-  return { ok: false, status: 500, json: async () => ({}), text: async () => 'expected test stop' };
+  const response = new Response(JSON.stringify({ message: 'expected test stop' }), {
+    status: 500,
+    headers: { 'content-type': 'application/json' },
+  });
+  Object.defineProperty(response, 'url', { value: url });
+  return response;
 }, Buffer), /ARC_GITHUB_FAILED: 500/);
 assert.equal(publisherReachedGitHub, true, 'Publisher must fully validate v2 evidence before the first GitHub read.');
 
@@ -420,9 +425,16 @@ const makeGitHubMock = () => {
     refs: new Map([['main', baseCommit]]), commits: new Map([[baseCommit, baseTree]]), trees: new Map(), blobs: new Map(),
     pulls: [], calls: [], extraAsset: false, extraFolderSibling: false, checkRuns: [], prFiles: [], claimRefs: new Map(),
   };
-  const response = (status, body) => new Response(JSON.stringify(body), {
-    status, headers: { 'content-type': 'application/json' },
-  });
+  let currentResponseUrl = '';
+  const response = (status, body) => {
+    const payload = JSON.stringify(body);
+    const result = new Response(payload, {
+      status,
+      headers: { 'content-type': 'application/json', 'content-length': String(Buffer.byteLength(payload)) },
+    });
+    Object.defineProperty(result, 'url', { value: currentResponseUrl });
+    return result;
+  };
   const treeView = treeSha => {
     if (treeSha === baseTree) return { tree: [] };
     const direct = state.trees.get(treeSha);
@@ -445,6 +457,7 @@ const makeGitHubMock = () => {
     return null;
   };
   const fetch = async (url, options = {}) => {
+    currentResponseUrl = url;
     const method = String(options.method || 'GET').toUpperCase();
     const parsed = new URL(url);
     const path = decodeURIComponent(parsed.pathname);

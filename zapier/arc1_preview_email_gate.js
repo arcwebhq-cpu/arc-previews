@@ -215,9 +215,72 @@ const githubHeaders = {
   Authorization: `Bearer ${token}`,
   "X-GitHub-Api-Version": "2022-11-28"
 };
+const requestedOperationTimeout = clean(inputData.provider_operation_timeout_ms);
+const operationTimeoutMs = requestedOperationTimeout ? Number(requestedOperationTimeout) : 25000;
+if (!Number.isSafeInteger(operationTimeoutMs) || operationTimeoutMs < 100 || operationTimeoutMs > 25000) {
+  throw new Error("ARC_PROVIDER_READ_FAILED: operation timeout is invalid");
+}
+const operationDeadline = Date.now() + operationTimeoutMs;
+const fetchBounded = async (url, options, maximumBytes, expectedOrigin, label) => {
+  const requestedUrl = new URL(url);
+  if (requestedUrl.origin !== expectedOrigin || requestedUrl.username || requestedUrl.password || requestedUrl.port) {
+    throw new Error(`${label}: invalid request origin`);
+  }
+  if (!Number.isSafeInteger(maximumBytes) || maximumBytes < 1 || maximumBytes > 4 * 1024 * 1024) {
+    throw new Error(`${label}: invalid response limit`);
+  }
+  const remaining = operationDeadline - Date.now();
+  if (remaining <= 0) throw new Error(`${label}: operation deadline exceeded`);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), Math.max(1, Math.min(10000, remaining)));
+  let reader;
+  try {
+    const response = await fetch(requestedUrl.toString(), {
+      ...options,
+      redirect: "error",
+      signal: controller.signal
+    });
+    if (!response.url || response.url !== requestedUrl.toString()) {
+      throw new Error(`${label}: response URL changed`);
+    }
+    const declared = clean(response.headers?.get?.("content-length"));
+    if (declared && (!/^\d{1,10}$/.test(declared) || Number(declared) > maximumBytes)) {
+      throw new Error(`${label}: declared response exceeds limit`);
+    }
+    if (response.status === 204) return { response, bytes: Buffer.alloc(0) };
+    reader = response.body?.getReader?.();
+    if (!reader) throw new Error(`${label}: streaming response required`);
+    let total = 0;
+    const chunks = [];
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maximumBytes) {
+        try { await reader.cancel(); } catch {}
+        throw new Error(`${label}: streamed response exceeds limit`);
+      }
+      chunks.push(Buffer.from(value));
+    }
+    return { response, bytes: Buffer.concat(chunks, total) };
+  } catch (error) {
+    if (error?.name === "AbortError") throw new Error(`${label}: request timeout`);
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    try { reader?.releaseLock?.(); } catch {}
+  }
+};
 const request = async (url, options = {}, allowed = []) => {
-  const response = await fetch(url, { ...options, headers: { ...githubHeaders, ...(options.headers || {}) } });
-  const body = response.status === 204 ? {} : await response.json().catch(() => ({}));
+  const { response, bytes } = await fetchBounded(url, {
+    ...options,
+    headers: { ...githubHeaders, ...(options.headers || {}) }
+  }, 4 * 1024 * 1024, "https://api.github.com", "ARC_GITHUB_FAILED");
+  let body = {};
+  if (response.status !== 204) {
+    try { body = JSON.parse(bytes.toString("utf8")); }
+    catch { throw new Error("ARC_GITHUB_FAILED: malformed JSON response"); }
+  }
   if (response.ok) return body;
   if (allowed.includes(response.status)) return { _status: response.status, _body: body };
   throw new Error(`ARC_GITHUB_FAILED: ${response.status} ${JSON.stringify(body).slice(0, 240)}`);
@@ -361,49 +424,16 @@ if (decodeURIComponent(previewUrl.pathname) !== expectedPath) {
 }
 previewUrl.search = "";
 previewUrl.hash = "";
-const liveResponse = await fetch(previewUrl.toString(), {
+const { response: liveResponse, bytes: liveBytes } = await fetchBounded(previewUrl.toString(), {
   method: "GET",
-  headers: { Accept: "text/html" },
-  redirect: "follow",
-  signal: AbortSignal.timeout(10000)
-});
+  headers: { Accept: "text/html" }
+}, 2097152, previewUrl.origin, "ARC_PREVIEW_GATE_MISMATCH");
 if (liveResponse.status !== 200) {
   return wait("WAITING_FOR_PAGES", { quality_check: "success", pr_merged: true, live_status: liveResponse.status });
 }
-const finalUrl = new URL(liveResponse.url || previewUrl.toString());
-if (finalUrl.origin !== previewUrl.origin || decodeURIComponent(finalUrl.pathname) !== expectedPath) {
-  throw new Error("ARC_PREVIEW_GATE_MISMATCH: Pages redirected away from the exact preview folder");
-}
-const readBoundedHtml = async response => {
-  const limit = 2097152;
-  const declared = clean(response.headers?.get?.("content-length"));
-  if (declared && (!/^\d{1,10}$/.test(declared) || Number(declared) > limit)) {
-    throw new Error("ARC_PREVIEW_GATE_MISMATCH: live preview HTML exceeds limit");
-  }
-  const reader = response.body?.getReader?.();
-  if (!reader) {
-    const text = await response.text();
-    if (new TextEncoder().encode(text).byteLength > limit) throw new Error("ARC_PREVIEW_GATE_MISMATCH: live preview HTML exceeds limit");
-    return text;
-  }
-  const decoder = new TextDecoder("utf-8", { fatal: true });
-  let total = 0, text = "";
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      total += value.byteLength;
-      if (total > limit) {
-        try { await reader.cancel(); } catch {}
-        throw new Error("ARC_PREVIEW_GATE_MISMATCH: live preview HTML exceeds limit");
-      }
-      text += decoder.decode(value, { stream: true });
-    }
-    text += decoder.decode();
-  } finally { try { reader.releaseLock(); } catch {} }
-  return text;
-};
-const liveHtml = await readBoundedHtml(liveResponse);
+let liveHtml;
+try { liveHtml = new TextDecoder("utf-8", { fatal: true }).decode(liveBytes); }
+catch { throw new Error("ARC_PREVIEW_GATE_MISMATCH: live preview HTML is not valid UTF-8"); }
 if (liveHtml !== mergedHtml) {
   return wait("WAITING_FOR_PAGES", { quality_check: "success", pr_merged: true, live_status: 200, live_proof: "exact-merged-bytes" });
 }
@@ -417,9 +447,9 @@ if (!liveInspection.ok) {
   });
 }
 for(const entry of publicAssetEntries){
-  const assetUrl=new URL(entry.public_url);const response=await fetch(assetUrl.toString(),{method:"GET",headers:{Accept:entry.content_type},redirect:"error",signal:AbortSignal.timeout(10000)});
-  if(response.status!==200||response.url!==assetUrl.toString()||clean(response.headers?.get?.("content-type")).toLowerCase()!==entry.content_type)return wait("WAITING_FOR_PAGES",{quality_check:"success",pr_merged:true,live_asset:entry.repository_path});
-  const reader=response.body?.getReader?.();if(!reader)throw new Error("ARC_PREVIEW_GATE_MISMATCH: live asset streaming required");let total=0;const chunks=[];while(true){const {done,value}=await reader.read();if(done)break;total+=value.byteLength;if(total>entry.size_bytes){try{await reader.cancel();}catch{}throw new Error("ARC_PREVIEW_GATE_MISMATCH: live asset exceeds signed size");}chunks.push(value);}if(total!==entry.size_bytes){return wait("WAITING_FOR_PAGES",{quality_check:"success",pr_merged:true,live_asset:entry.repository_path});}const bytes=new Uint8Array(total);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}if(await sha256Bytes(bytes)!==entry.sha256)return wait("WAITING_FOR_PAGES",{quality_check:"success",pr_merged:true,live_asset:entry.repository_path});
+  const assetUrl=new URL(entry.public_url);const {response,bytes}=await fetchBounded(assetUrl.toString(),{method:"GET",headers:{Accept:entry.content_type}},entry.size_bytes,assetUrl.origin,"ARC_PREVIEW_GATE_MISMATCH");
+  if(response.status!==200||clean(response.headers?.get?.("content-type")).toLowerCase()!==entry.content_type||bytes.length!==entry.size_bytes)return wait("WAITING_FOR_PAGES",{quality_check:"success",pr_merged:true,live_asset:entry.repository_path});
+  if(await sha256Bytes(bytes)!==entry.sha256)return wait("WAITING_FOR_PAGES",{quality_check:"success",pr_merged:true,live_asset:entry.repository_path});
 }
 
 const sourceCommit=await request(`${api}/git/commits/${mergeCommitSha}`);

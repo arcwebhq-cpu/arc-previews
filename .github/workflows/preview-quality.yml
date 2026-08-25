@@ -19,7 +19,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: arcwebhq-cpu/arc-site
-          ref: 5c4b853133e526f7ccbbf7d4e44a006a172f1fd0
+          ref: a46628bc47fa2a89daf4bc8dea6cfa66156484a1
           path: .arc-site-contract
       - uses: actions/setup-node@v4
         with:

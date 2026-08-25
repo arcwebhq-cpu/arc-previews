@@ -25,14 +25,15 @@ const folder = `summit-roofing-${trustedEventPrefix}`;
 const filePath = `${folder}/index.html`;
 const previewBranch = `arc-preview/${trustedEventPrefix}`;
 const encodedPreviewBranch = encodeURIComponent(previewBranch);
-const makeResponse = (status, body = {}, url = "") => ({
-  ok: status >= 200 && status < 300,
-  status,
-  statusText: status === 404 ? "Not Found" : "OK",
-  url,
-  json: async () => body,
-  text: async () => typeof body === "string" ? body : JSON.stringify(body)
-});
+const makeResponse = (status, body = {}, url = "", extraHeaders = {}) => {
+  const payload = status === 204 ? null : typeof body === "string" ? body : JSON.stringify(body);
+  const headers = new Headers(extraHeaders);
+  if (payload !== null && !headers.has("content-type")) headers.set("content-type", "application/json");
+  if (payload !== null && !headers.has("content-length")) headers.set("content-length", String(Buffer.byteLength(payload)));
+  const response = new Response(payload, { status, headers });
+  Object.defineProperty(response, "url", { value: url });
+  return response;
+};
 
 class MockGitHubAndPages {
   constructor() {
@@ -68,22 +69,23 @@ class MockGitHubAndPages {
   async fetch(rawUrl, options = {}) {
     const method = options.method || "GET";
     const url = new URL(rawUrl);
+    const respond = (status, body = {}, responseUrl = rawUrl, headers = {}) => makeResponse(status, body, responseUrl, headers);
     this.requests.push({ rawUrl, method, body: options.body || "", headers: options.headers || {} });
 
     if (url.hostname !== "api.github.com") {
-      return makeResponse(this.liveStatus, this.liveHtml, this.liveUrl || rawUrl);
+      return respond(this.liveStatus, this.liveHtml, this.liveUrl || rawUrl, { "content-type": "text/html" });
     }
 
     if (method === "GET" && /\/commits\/[a-f0-9]{40}\/check-runs$/.test(url.pathname)) {
-      return makeResponse(200, { total_count: this.checkRuns.length, check_runs: this.checkRuns });
+      return respond(200, { total_count: this.checkRuns.length, check_runs: this.checkRuns });
     }
 
     if (method === "POST" && url.pathname === "/graphql") {
       const body = JSON.parse(options.body);
       const pr = this.prs.find(item => item.node_id === body.variables.pullRequestId);
-      if (!pr) return makeResponse(200, { errors: [{ message: "Not Found" }] });
+      if (!pr) return respond(200, { errors: [{ message: "Not Found" }] });
       pr.draft = false;
-      return makeResponse(200, {
+      return respond(200, {
         data: {
           markPullRequestReadyForReview: {
             pullRequest: { number: pr.number, isDraft: false, headRefOid: pr.head.sha }
@@ -95,9 +97,9 @@ class MockGitHubAndPages {
     const mergeMatch = url.pathname.match(/\/pulls\/(\d+)\/merge$/);
     if (method === "PUT" && mergeMatch) {
       const pr = this.prs.find(item => item.number === Number(mergeMatch[1]));
-      if (!pr) return makeResponse(404, { message: "Not Found" });
+      if (!pr) return respond(404, { message: "Not Found" });
       const body = JSON.parse(options.body);
-      if (body.sha !== pr.head.sha) return makeResponse(409, { message: "Head changed" });
+      if (body.sha !== pr.head.sha) return respond(409, { message: "Head changed" });
       assert.equal(body.merge_method, "squash");
       const mergeSha = this.sha();
       this.commits.set(mergeSha, { tree: this.commits.get(this.branchHead).tree, content: this.branchHtml });
@@ -105,25 +107,25 @@ class MockGitHubAndPages {
       pr.state = "closed";
       pr.merged_at = "2026-08-11T22:00:00Z";
       pr.merge_commit_sha = mergeSha;
-      return makeResponse(200, { merged: true, sha: mergeSha, message: "Merged" });
+      return respond(200, { merged: true, sha: mergeSha, message: "Merged" });
     }
 
     const filesMatch = url.pathname.match(/\/pulls\/(\d+)\/files$/);
-    if (method === "GET" && filesMatch) return makeResponse(200, this.prFiles);
+    if (method === "GET" && filesMatch) return respond(200, this.prFiles);
 
     const pullMatch = url.pathname.match(/\/pulls\/(\d+)$/);
     if (method === "GET" && pullMatch) {
       const pr = this.prs.find(item => item.number === Number(pullMatch[1]));
-      return pr ? makeResponse(200, pr) : makeResponse(404, { message: "Not Found" });
+      return pr ? respond(200, pr) : respond(404, { message: "Not Found" });
     }
     if (method === "PATCH" && pullMatch) {
       const pr = this.prs.find(item => item.number === Number(pullMatch[1]));
-      if (!pr) return makeResponse(404, { message: "Not Found" });
+      if (!pr) return respond(404, { message: "Not Found" });
       Object.assign(pr, JSON.parse(options.body));
-      return makeResponse(200, pr);
+      return respond(200, pr);
     }
     if (url.pathname.endsWith("/pulls") && method === "GET") {
-      return makeResponse(200, this.prs);
+      return respond(200, this.prs);
     }
     if (url.pathname.endsWith("/pulls") && method === "POST") {
       const body = JSON.parse(options.body);
@@ -139,52 +141,52 @@ class MockGitHubAndPages {
         head: { ref: body.head, sha: this.branchHead }
       };
       this.prs.push(pr);
-      return makeResponse(201, pr);
+      return respond(201, pr);
     }
 
     if (method === "GET" && url.pathname.includes("/git/ref/heads%2Fmain")) {
-      return makeResponse(200, { object: { sha: this.mainHead } });
+      return respond(200, { object: { sha: this.mainHead } });
     }
     if (method === "GET" && url.pathname.includes(`/git/ref/heads%2F${encodedPreviewBranch}`)) {
       return this.branchHead
-        ? makeResponse(200, { object: { sha: this.branchHead } })
-        : makeResponse(404, { message: "Not Found" });
+        ? respond(200, { object: { sha: this.branchHead } })
+        : respond(404, { message: "Not Found" });
     }
     if (method === "GET" && url.pathname.includes("/git/ref/tags%2Farc-preview-email%2F")) {
       const refName = decodeURIComponent(url.pathname.split("/git/ref/")[1]);
       const claimedSha = this.claimRefs.get(refName);
       return claimedSha
-        ? makeResponse(200, { object: { sha: claimedSha } })
-        : makeResponse(404, { message: "Not Found" });
+        ? respond(200, { object: { sha: claimedSha } })
+        : respond(404, { message: "Not Found" });
     }
     if (method === "GET" && url.pathname.includes("/git/ref/tags%2Farc-checkout-v3%2F")) {
       const refName = decodeURIComponent(url.pathname.split("/git/ref/")[1]);
       const taggedSha = this.claimRefs.get(refName);
       return taggedSha
-        ? makeResponse(200, { ref: `refs/${refName}`, object: { type: "commit", sha: taggedSha } })
-        : makeResponse(404, { message: "Not Found" });
+        ? respond(200, { ref: `refs/${refName}`, object: { type: "commit", sha: taggedSha } })
+        : respond(404, { message: "Not Found" });
     }
     const commitMatch = url.pathname.match(/\/git\/commits\/([a-f0-9]{40})$/);
     if (method === "GET" && commitMatch) {
       const commit = this.commits.get(commitMatch[1]);
-      return commit ? makeResponse(200, { tree: { sha: commit.tree } }) : makeResponse(404, { message: "Not Found" });
+      return commit ? respond(200, { tree: { sha: commit.tree } }) : respond(404, { message: "Not Found" });
     }
     if (method === "GET" && url.pathname.includes(`/contents/${filePath}`)) {
       return this.branchHtml
-        ? makeResponse(200, { content: Buffer.from(this.branchHtml, "utf8").toString("base64") })
-        : makeResponse(404, { message: "Not Found" });
+        ? respond(200, { content: Buffer.from(this.branchHtml, "utf8").toString("base64") })
+        : respond(404, { message: "Not Found" });
     }
     if (method === "POST" && url.pathname.endsWith("/git/blobs")) {
       const body = JSON.parse(options.body);
       const blobSha = this.sha();
       this.blobs.set(blobSha, body.content);
-      return makeResponse(201, { sha: blobSha });
+      return respond(201, { sha: blobSha });
     }
     if (method === "POST" && url.pathname.endsWith("/git/trees")) {
       const body = JSON.parse(options.body);
       const treeSha = this.sha();
       this.trees.set(treeSha, body);
-      return makeResponse(201, { sha: treeSha });
+      return respond(201, { sha: treeSha });
     }
     if (method === "POST" && url.pathname.endsWith("/git/commits")) {
       const body = JSON.parse(options.body);
@@ -193,21 +195,21 @@ class MockGitHubAndPages {
       const content = Buffer.from(this.blobs.get(blobSha), "base64").toString("utf8");
       const commitSha = this.sha();
       this.commits.set(commitSha, { tree: body.tree, content });
-      return makeResponse(201, { sha: commitSha });
+      return respond(201, { sha: commitSha });
     }
     if (method === "POST" && url.pathname.endsWith("/git/refs")) {
       const body = JSON.parse(options.body);
       if (body.ref.startsWith("refs/tags/arc-checkout-v3/")) {
         const refName = body.ref.replace(/^refs\//, "");
-        if (this.claimRefs.has(refName)) return makeResponse(422, { message: "Reference already exists" });
+        if (this.claimRefs.has(refName)) return respond(422, { message: "Reference already exists" });
         this.claimRefs.set(refName, body.sha);
-        return makeResponse(201, { ref: body.ref, object: { type: "commit", sha: body.sha } });
+        return respond(201, { ref: body.ref, object: { type: "commit", sha: body.sha } });
       }
       if (body.ref.startsWith("refs/tags/arc-preview-email/")) {
         const refName = body.ref.replace(/^refs\//, "");
-        if (this.claimRefs.has(refName)) return makeResponse(422, { message: "Reference already exists" });
+        if (this.claimRefs.has(refName)) return respond(422, { message: "Reference already exists" });
         this.claimRefs.set(refName, body.sha);
-        return makeResponse(201, { ref: body.ref, object: { sha: body.sha } });
+        return respond(201, { ref: body.ref, object: { sha: body.sha } });
       }
       assert.equal(body.ref, `refs/heads/${previewBranch}`);
       if (this.branchCreateRace) {
@@ -218,12 +220,12 @@ class MockGitHubAndPages {
           this.branchHead = "e".repeat(40);
           this.branchHtml = "<!doctype html><title>conflicting branch</title>";
         }
-        return makeResponse(422, { message: "Reference already exists" });
+        return respond(422, { message: "Reference already exists" });
       }
       this.branchHead = body.sha;
       this.branchHtml = this.commits.get(body.sha).content;
       this.syncPrHead();
-      return makeResponse(201, { object: { sha: this.branchHead } });
+      return respond(201, { object: { sha: this.branchHead } });
     }
     if (method === "PATCH" && url.pathname.includes(`/git/refs/heads%2F${encodedPreviewBranch}`)) {
       const body = JSON.parse(options.body);
@@ -231,10 +233,10 @@ class MockGitHubAndPages {
       this.branchHead = body.sha;
       this.branchHtml = this.commits.get(body.sha).content;
       this.syncPrHead();
-      return makeResponse(200, { object: { sha: this.branchHead } });
+      return respond(200, { object: { sha: this.branchHead } });
     }
 
-    return makeResponse(404, { message: `Unhandled ${method} ${rawUrl}` });
+    return respond(404, { message: `Unhandled ${method} ${rawUrl}` });
   }
 }
 
@@ -360,6 +362,57 @@ await assert.rejects(runPublisher({
   render_evidence_hmac_sha256: oversizedRenderEvidence.signature,
 }, publisherOversizedMock.fetch.bind(publisherOversizedMock), Buffer), /bounded paid-delivery HTML size/);
 assert.equal(publisherOversizedMock.requests.length, 0, "Oversized preview HTML must fail before a GitHub read or write.");
+
+let declaredLengthCalls = 0;
+await assert.rejects(runPublisher(publisherInput, async (url, options = {}) => {
+  declaredLengthCalls += 1;
+  assert.equal(new URL(url).origin, "https://api.github.com");
+  assert.equal(options.redirect, "error");
+  return makeResponse(200, {}, url, { "content-length": String(4 * 1024 * 1024 + 1) });
+}, Buffer), /ARC_GITHUB_FAILED: declared response exceeds limit/);
+assert.equal(declaredLengthCalls, 1, "An oversized declared response must stop the operation on its first provider read.");
+
+let chunkedResponseCancelled = false;
+let chunkedResponseCalls = 0;
+await assert.rejects(runPublisher(publisherInput, async (url, options = {}) => {
+  chunkedResponseCalls += 1;
+  assert.equal(options.redirect, "error");
+  const stream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(new Uint8Array(4 * 1024 * 1024));
+      controller.enqueue(new Uint8Array([1]));
+    },
+    cancel() { chunkedResponseCancelled = true; }
+  });
+  const response = new Response(stream, { status: 200, headers: { "content-type": "application/json" } });
+  Object.defineProperty(response, "url", { value: url });
+  return response;
+}, Buffer), /ARC_GITHUB_FAILED: streamed response exceeds limit/);
+assert.equal(chunkedResponseCalls, 1);
+assert.equal(chunkedResponseCancelled, true, "An oversized chunked response must be cancelled immediately.");
+
+await assert.rejects(runPublisher(publisherInput, async (url, options = {}) => {
+  assert.equal(options.redirect, "error");
+  return makeResponse(200, {}, `${new URL(url).origin}/redirected`);
+}, Buffer), /ARC_GITHUB_FAILED: response URL changed/);
+
+await assert.rejects(runPublisher(publisherInput, async (url, options = {}) => {
+  assert.equal(options.redirect, "error");
+  return makeResponse(200, "{", url, { "content-type": "application/json" });
+}, Buffer), /ARC_GITHUB_FAILED: malformed JSON response/);
+
+let timeoutCalls = 0;
+await assert.rejects(runPublisher({ ...publisherInput, provider_operation_timeout_ms: "200" }, async (_url, options = {}) => {
+  timeoutCalls += 1;
+  assert.equal(options.redirect, "error");
+  assert.ok(options.signal instanceof AbortSignal, "Provider reads must receive an AbortSignal.");
+  return new Promise((resolve, reject) => {
+    const rejectOnAbort = () => reject(options.signal.reason || Object.assign(new Error("aborted"), { name: "AbortError" }));
+    if (options.signal.aborted) rejectOnAbort();
+    else options.signal.addEventListener("abort", rejectOnAbort, { once: true });
+  });
+}, Buffer), /ARC_GITHUB_FAILED: request timeout/);
+assert.equal(timeoutCalls, 1);
 
 const published = await runPublisher(publisherInput, mock.fetch.bind(mock), Buffer);
 assert.equal(published.status, "PR_CREATED");
@@ -760,7 +813,7 @@ assert.equal(liveProofTamper.proof.live_proof, "exact-merged-bytes",
   "Changing only proof-block bytes must still block email.");
 
 mock.liveHtml = `${mock.branchHtml}${"x".repeat(2097152)}`;
-await assert.rejects(runEmailGate(gateInput, mock.fetch.bind(mock), Buffer), /live preview HTML exceeds limit/);
+await assert.rejects(runEmailGate(gateInput, mock.fetch.bind(mock), Buffer), /declared response exceeds limit|live preview HTML exceeds limit/);
 
 mock.liveHtml = mock.branchHtml;
 const ready = await runEmailGate(gateInput, mock.fetch.bind(mock), Buffer);

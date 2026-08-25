@@ -492,13 +492,73 @@ if (entries.length) {
   const api = `https://api.github.com/repos/${OWNER}/${REPOSITORY}`;
   const headers = { Accept: "application/vnd.github+json", Authorization: `Bearer ${token}`, "Content-Type": "application/json",
     "X-GitHub-Api-Version": "2022-11-28" };
+  const requestedOperationTimeout = clean(inputData.provider_operation_timeout_ms);
+  const operationTimeoutMs = requestedOperationTimeout ? Number(requestedOperationTimeout) : 25000;
+  if (!Number.isSafeInteger(operationTimeoutMs) || operationTimeoutMs < 100 || operationTimeoutMs > 25000) {
+    throw new Error("ARC1_ASSET_GITHUB_FAILED: operation timeout is invalid");
+  }
+  const operationDeadline = Date.now() + operationTimeoutMs;
+  const maximumResponseBytes = 4 * 1024 * 1024;
+  const readBoundedBytes = async response => {
+    const declared = clean(response.headers?.get?.("content-length"));
+    if (declared && (!/^\d{1,10}$/.test(declared) || Number(declared) > maximumResponseBytes)) {
+      throw new Error("ARC1_ASSET_GITHUB_FAILED: declared response exceeds limit");
+    }
+    if (response.status === 204) return Buffer.alloc(0);
+    const reader = response.body?.getReader?.();
+    if (!reader) throw new Error("ARC1_ASSET_GITHUB_FAILED: streaming response required");
+    let total = 0;
+    const chunks = [];
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        total += value.byteLength;
+        if (total > maximumResponseBytes) {
+          try { await reader.cancel(); } catch {}
+          throw new Error("ARC1_ASSET_GITHUB_FAILED: streamed response exceeds limit");
+        }
+        chunks.push(Buffer.from(value));
+      }
+    } finally {
+      try { reader.releaseLock(); } catch {}
+    }
+    return Buffer.concat(chunks, total);
+  };
   const request = async (url, options = {}, allowed = []) => {
-    const response = await fetch(url, { ...options, redirect: "error", signal: AbortSignal.timeout(10000),
-      headers: { ...headers, ...(options.headers || {}) } });
-    const body = response.status === 204 ? {} : await response.json().catch(() => ({}));
-    if (response.ok) return body;
-    if (allowed.includes(response.status)) return { _status: response.status, _body: body };
-    throw new Error(`ARC1_ASSET_GITHUB_FAILED: ${response.status}`);
+    const requestedUrl = new URL(url);
+    if (requestedUrl.origin !== "https://api.github.com" || requestedUrl.username || requestedUrl.password || requestedUrl.port) {
+      throw new Error("ARC1_ASSET_GITHUB_FAILED: invalid API origin");
+    }
+    const remaining = operationDeadline - Date.now();
+    if (remaining <= 0) throw new Error("ARC1_ASSET_GITHUB_FAILED: operation deadline exceeded");
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), Math.max(1, Math.min(10000, remaining)));
+    try {
+      const response = await fetch(requestedUrl.toString(), {
+        ...options,
+        redirect: "error",
+        signal: controller.signal,
+        headers: { ...headers, ...(options.headers || {}) }
+      });
+      if (!response.url || response.url !== requestedUrl.toString()) {
+        throw new Error("ARC1_ASSET_GITHUB_FAILED: response URL changed");
+      }
+      const bytes = await readBoundedBytes(response);
+      let body = {};
+      if (response.status !== 204) {
+        try { body = JSON.parse(bytes.toString("utf8")); }
+        catch { throw new Error("ARC1_ASSET_GITHUB_FAILED: malformed JSON response"); }
+      }
+      if (response.ok) return body;
+      if (allowed.includes(response.status)) return { _status: response.status, _body: body };
+      throw new Error(`ARC1_ASSET_GITHUB_FAILED: ${response.status}`);
+    } catch (error) {
+      if (error?.name === "AbortError") throw new Error("ARC1_ASSET_GITHUB_FAILED: request timeout");
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
   };
   const branch = receipt.preview_branch;
   const getRef = (name, allowed = []) => request(`${api}/git/ref/${encodeURIComponent(`heads/${name}`)}`, {}, allowed);

@@ -3,6 +3,9 @@ import { lstat, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { assertNoRemoteRuntimeDependencies } from "./no_egress_contract.mjs";
+import { assertSafeImageAsset } from "./image_asset_contract.mjs";
+
 const moduleRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const customerFolderPattern = /^[a-z0-9][a-z0-9-]*-[a-f0-9]{8}$/;
 const emailAddressPattern = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
@@ -79,6 +82,14 @@ function assertNoEmail(html, label) {
   }
 }
 
+function assertPagesImageAsset(bytes, contentType, label) {
+  try {
+    assertSafeImageAsset(bytes, contentType, label);
+  } catch (error) {
+    throw new Error(`ARC_PAGES_INVALID: ${error?.message || `${label} image validation failed`}`);
+  }
+}
+
 function assertPrivateRobots(html, label) {
   const tokens = oneMetaContent(html, "robots", label)
     .toLowerCase()
@@ -97,6 +108,7 @@ function assertV10(html, label) {
 }
 
 function validateShowcase(html, profile, relative) {
+  assertNoRemoteRuntimeDependencies(html);
   assertNoPrivateCheckoutSurface(html,relative);
   assertNoUnsafeExecutableSurface(html,relative);
   assertTrustedScripts(html,relative,"showcase");
@@ -138,6 +150,7 @@ function validateShowcase(html, profile, relative) {
 }
 
 function validatePagesIndex(html) {
+  assertNoRemoteRuntimeDependencies(html);
   assertPrivateRobots(html, "index.html");
   assertNoEmail(html, "index.html");
   const links = (html.match(/<a\b[^>]*>/gi) || []).map(tag => attribute(tag, "href")).sort();
@@ -311,10 +324,9 @@ export async function buildPagesArtifact({ root = moduleRoot, output = path.join
     if (
       heroBytes.length < 1 ||
       heroBytes.length > 1_250_000 ||
-      sha256(heroBytes) !== expectedAsset.sha256 ||
-      heroBytes.subarray(0, 4).toString("ascii") !== "RIFF" ||
-      heroBytes.subarray(8, 12).toString("ascii") !== "WEBP"
-    ) throw new Error(`ARC_PAGES_INVALID: ${expectedAsset.file} asset size, digest, or signature mismatch`);
+      sha256(heroBytes) !== expectedAsset.sha256
+    ) throw new Error(`ARC_PAGES_INVALID: ${expectedAsset.file} asset size or digest mismatch`);
+    assertPagesImageAsset(heroBytes, "image/webp", expectedAsset.file);
     artifactFiles.push({ relative: expectedAsset.file, content: heroBytes });
     artifactFiles.push({ relative, content: html });
   }
@@ -344,6 +356,10 @@ export async function buildPagesArtifact({ root = moduleRoot, output = path.join
     // history, but only a complete ARC1 v10 proof opts a folder into Pages.
     if (!customerPreviewSignal(html)) continue;
     const assetPaths = validateCustomerPreview(html, entry.name);
+    const exactReceiptUrls = assetPaths.map(assetPath =>
+      `https://arcwebhq-cpu.github.io/arc-previews/${assetPath}`
+    );
+    assertNoRemoteRuntimeDependencies(html, { exactReceiptUrls });
     const assetsDirectory = path.join(sourceRoot, entry.name, "assets");
     let directoryEntries = [];
     try { directoryEntries = await readdir(assetsDirectory, { withFileTypes: true }); } catch (error) { if (error?.code !== "ENOENT") throw error; }
@@ -359,10 +375,8 @@ export async function buildPagesArtifact({ root = moduleRoot, output = path.join
       if (!match || bytes.length < 1 || bytes.length > 1250000 || totalAssetBytes > 3000000 || sha256(bytes) !== match[1]) {
         throw new Error(`ARC_PAGES_INVALID: ${assetPath} asset size or digest mismatch`);
       }
-      const magic = match[2] === "png" ? bytes.length >= 8 && bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])) :
-        match[2] === "jpg" ? bytes.length >= 4 && bytes[0] === 255 && bytes[1] === 216 && bytes.at(-2) === 255 && bytes.at(-1) === 217 :
-        bytes.length >= 12 && bytes.subarray(0,4).toString("ascii") === "RIFF" && bytes.subarray(8,12).toString("ascii") === "WEBP";
-      if (!magic) throw new Error(`ARC_PAGES_INVALID: ${assetPath} media signature mismatch`);
+      const contentType = ({ png: "image/png", jpg: "image/jpeg", webp: "image/webp" })[match[2]];
+      assertPagesImageAsset(bytes, contentType, assetPath);
       artifactFiles.push({ relative: assetPath, content: bytes });
     }
     artifactFiles.push({ relative, content: html });

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { unsupportedMarketingClaims } from "./content_quality.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const excludedContractRoots = new Set(
@@ -64,6 +65,9 @@ for (const file of previewFiles) {
   assert.match(html, /<meta\s+name=["']robots["']\s+content=["'][^"']*noindex[^"']*nofollow/i, `${relative}: private robots metadata missing`);
   assert.doesNotMatch(html, /content=["']\s*index\s*,?\s*follow/i, `${relative}: public indexing is still enabled`);
   assert.doesNotMatch(html, emailAddressPattern, `${relative}: an email address leaked into public HTML`);
+  if (/<meta\s+name=["']arc-template-version["']\s+content=["']10\.0["']/i.test(html)) {
+    assert.deepEqual(unsupportedMarketingClaims(html), [], `${relative}: unsupported marketing proof requires source evidence`);
+  }
 }
 
 assert.deepEqual(
@@ -134,6 +138,8 @@ assert.ok(template.includes("ARC_COMPOSITION_MANIFEST_START v10.1"), "Master tem
 assert.ok(template.includes('const previewMode=document.body.dataset.arcSiteMode!=="production"'), "Form mode is still inferred from the hosting domain");
 
 assert.equal(v10Manifest.length, mediaManifest.profiles.length, "Every media profile must have a v10 browser fixture");
+assert.equal(new Set(v10Manifest.map(item => item.folder)).size, v10Manifest.length, "Every v10 fixture folder must be unique");
+assert.equal(new Set(v10Manifest.map(item => item.previewUrl)).size, v10Manifest.length, "Every v10 fixture preview URL must be unique");
 assert.deepEqual(
   [...new Set(v10Manifest.map(item => item.expectedProfile))].sort(),
   mediaManifest.profiles.map(item => item.key).sort(),
@@ -184,6 +190,8 @@ assert.ok(validator.includes("dummy_link_pass"), "Validator does not reject dumm
 assert.ok(validator.includes("generated_media_ownership_pass"), "Validator does not reject unowned AI-selected media");
 assert.ok(validator.includes("semantic_media_profile_pass"), "Validator does not enforce semantic media selection");
 assert.ok(validator.includes("scalar_render_escaping_pass"), "Validator does not attest scalar escaping");
+assert.ok(validator.includes("premium_content_contract_pass"), "Validator does not reject thin or repeated generated sections");
+assert.ok(validator.includes("unsupported_claims_pass"), "Validator does not reject unsupported marketing proof");
 assert.ok(contentSanitizer.includes("sanitizeStructuredMarkup"), "Typed structured-markup sanitizer is missing");
 assert.ok(contentSanitizer.includes("generated class is not allowlisted"), "Generated classes are not fail-closed");
 assert.ok(contentSanitizer.includes("form action must stay same-origin"), "Generated forms can escape same-origin routing");
@@ -192,6 +200,8 @@ assert.match(arc1, /Scalar fields are HTML-escaped/, "Zapier ARC1 does not docum
 assert.match(arc1, /sanitizeMarkup/, "Zapier ARC1 does not use the typed structured-markup sanitizer");
 assert.match(arc1, /verifiedAssetUrl\.search/, "Zapier ARC1 can publish a signed customer-upload URL containing query credentials or PII");
 assert.match(arc1, /generated class is not allowlisted/, "Zapier ARC1 generated classes are not fail-closed");
+assert.match(arc1, /ARC_CONTENT_QUALITY_INVALID/, "Zapier ARC1 does not enforce the premium content contract before signing a preview");
+assert.match(arc1, /ARC_CLAIM_EVIDENCE_REQUIRED/, "Zapier ARC1 can sign unsupported marketing proof");
 assert.doesNotMatch(arc1, /payment_link_url\s*\|\|\s*["']https:\/\/buy\.stripe\.com/i, "ARC1 retains a default live Payment Link");
 assert.match(arc1, /stripe_live_mode_enabled must be true or false/, "ARC1 does not fail closed on Stripe mode selection");
 assert.match(arc1, /arc1-checkout-offer-template-evidence-v1/, "ARC1 does not require signed offer-template preflight evidence");

@@ -21,6 +21,12 @@ rejects generated-content injection, and renders every ARC v10 media profile plu
 legacy QA set at desktop, tablet, and phone widths. GitHub CI also verifies real external image
 URLs; local runs use deterministic image fixtures unless `npm run test:images` is requested.
 
+The v10 generator also fails closed on thin or repeated service/process/proof/FAQ sections,
+unfinished placeholder copy, mismatched lead-form CTAs, inaccessible lead controls, duplicate
+preview paths, and unsupported ratings, rankings, customer counts, percentages, credentials, or
+guarantees. Real marketing proof needs a separately reviewed source-evidence contract before it
+can be generated automatically; omission is safer than inventing proof.
+
 GitHub Pages must use **GitHub Actions** as its build source. On each push to `main`, the
 deployment job waits for the full quality gate and publishes only `.pages-dist`, built by
 `npm run build:pages`. That artifact contains a noindex inert directory, three fixed fictional

@@ -239,6 +239,22 @@ const inspectLeadForm = markup => {
   const control = name => namedControls.find(item => item.name === name);
   const type = name => clean(control(name)?.attributes.get("type")).toLowerCase();
   const required = name => control(name)?.attributes.has("required");
+  const labels = formBlocks[0].match(/<label\b[^>]*>[\s\S]*?<\/label>/gi) || [];
+  const labelText = label => label
+    .replace(/<(?:input|textarea|select)\b[^>]*>[\s\S]*?<\/(?:textarea|select)>/gi, " ")
+    .replace(/<input\b[^>]*>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&(?:nbsp|amp|lt|gt|quot|apos|#39);/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const labelsPass = [honeypotName, "name", "email", "phone", "project_details"].every(name => {
+    const matching = labels.filter(label => new RegExp(`\\bname=["']${name}["']`, "i").test(label));
+    return matching.length === 1 && Boolean(labelText(matching[0]));
+  });
+  const autocompletePass =
+    clean(control("name")?.attributes.get("autocomplete")) === "name" &&
+    clean(control("email")?.attributes.get("autocomplete")) === "email" &&
+    clean(control("phone")?.attributes.get("autocomplete")) === "tel";
   const submitButtons = formBlocks[0].match(/<button\b[^>]*type="submit"[^>]*>/gi) || [];
   const pass =
     control("form-name")?.tagName === "input" && type("form-name") === "hidden" &&
@@ -248,7 +264,7 @@ const inspectLeadForm = markup => {
     control("email")?.tagName === "input" && type("email") === "email" && required("email") &&
     control("phone")?.tagName === "input" && type("phone") === "tel" &&
     control("project_details")?.tagName === "textarea" && required("project_details") &&
-    submitButtons.length === 1;
+    submitButtons.length === 1 && labelsPass && autocompletePass;
   return { pass, formName };
 };
 const formHtml = clean(generated.CONTACT_ACTION_HTML);
@@ -373,6 +389,104 @@ const copyDensityBreaches = Object.entries(copyLimits)
   .filter(([key, limit]) => wordCount(generated[key]) > limit)
   .map(([key, limit]) => `${key}:${wordCount(generated[key])}/${limit}`);
 const copyDensityPass = copyDensityBreaches.length === 0;
+
+const normalizedContentText = value => plainText(value)
+  .normalize("NFKC")
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, " ")
+  .trim();
+const contentBlocks = (markup, tag) => String(markup ?? "").match(new RegExp(`<${tag}\\b[^>]*>[\\s\\S]*?<\\/${tag}>`, "gi")) || [];
+const inspectContentBlocks = (markup, tag, minimum, maximum, label) => {
+  const blocks = contentBlocks(markup, tag);
+  const titles = [];
+  const bodies = [];
+  const errors = [];
+  if (blocks.length < minimum || blocks.length > maximum) errors.push(`${label} requires ${minimum}-${maximum} ${tag} blocks`);
+  for (const block of blocks) {
+    const title = plainText(block.match(/<(?:h3|summary)\b[^>]*>[\s\S]*?<\/(?:h3|summary)>/i)?.[0] || "");
+    const body = plainText(block.replace(/<(?:h3|summary)\b[^>]*>[\s\S]*?<\/(?:h3|summary)>/i, ""));
+    if (wordCount(title) < 1 || wordCount(title) > 12) errors.push(`${label} has an empty or oversized title`);
+    if (wordCount(body) < 5) errors.push(`${label} has thin body copy`);
+    titles.push(normalizedContentText(title));
+    bodies.push(normalizedContentText(body));
+  }
+  if (new Set(titles.filter(Boolean)).size !== titles.filter(Boolean).length) errors.push(`${label} repeats a title`);
+  if (new Set(bodies.filter(Boolean)).size !== bodies.filter(Boolean).length) errors.push(`${label} repeats body copy`);
+  return errors;
+};
+const premiumContentErrors = [];
+const importantCopyKeys = [
+  "SEO_TITLE", "SEO_DESCRIPTION", "BUSINESS_NAME", "HEADLINE", "SUBHEADLINE", "INDUSTRY_LABEL", "LOCATION",
+  "VISUAL_HEADLINE", "HIGHEST_PROFIT_SERVICE", "SERVICES_HEADING", "SERVICES_INTRO", "WHY_HEADING", "WHY_INTRO",
+  "ABOUT_TITLE", "ABOUT_BODY", "PROCESS_HEADING", "PROCESS_INTRO", "PROOF_HEADING", "PROOF_INTRO", "FAQ_HEADING",
+  "FAQ_INTRO", "CONTACT_HEADING", "CONTACT_BODY", "FOOTER_TAGLINE"
+];
+for (const key of importantCopyKeys) if (!plainText(generated[key])) premiumContentErrors.push(`${key} is empty`);
+const minimumCopyWords = {
+  HEADLINE: 4,
+  SUBHEADLINE: 10,
+  SERVICES_INTRO: 7,
+  WHY_INTRO: 7,
+  ABOUT_BODY: 20,
+  PROCESS_INTRO: 7,
+  PROOF_INTRO: 7,
+  FAQ_INTRO: 6,
+  CONTACT_BODY: 8
+};
+for (const [key, minimum] of Object.entries(minimumCopyWords)) {
+  if (wordCount(generated[key]) < minimum) premiumContentErrors.push(`${key} needs at least ${minimum} words`);
+}
+premiumContentErrors.push(
+  ...inspectContentBlocks(generated.SERVICES_HTML, "article", 3, 6, "SERVICES_HTML"),
+  ...inspectContentBlocks(generated.DIFFERENTIATORS_HTML, "article", 3, 6, "DIFFERENTIATORS_HTML"),
+  ...inspectContentBlocks(generated.PROCESS_HTML, "article", 3, 6, "PROCESS_HTML"),
+  ...inspectContentBlocks(generated.PROOF_HTML, "article", 2, 6, "PROOF_HTML"),
+  ...inspectContentBlocks(generated.FAQ_HTML, "details", 3, 8, "FAQ_HTML")
+);
+const trustItemCount = contentBlocks(generated.TRUST_LINE_HTML, "span").length;
+const heroChipCount = contentBlocks(generated.HERO_CHIPS_HTML, "span").length;
+const tickerItemCount = contentBlocks(generated.TICKER_HTML, "span").length;
+if (trustItemCount < 2 || trustItemCount > 4) premiumContentErrors.push("TRUST_LINE_HTML requires 2-4 trust items");
+if (heroChipCount < 2 || heroChipCount > 4) premiumContentErrors.push("HERO_CHIPS_HTML requires 2-4 service chips");
+if (tickerItemCount < 3 || tickerItemCount > 8) premiumContentErrors.push("TICKER_HTML requires 3-8 service items");
+const normalizedPrimaryService = normalizedContentText(generated.HIGHEST_PROFIT_SERVICE);
+if (!normalizedPrimaryService || !normalizedContentText(generated.SERVICES_HTML).includes(normalizedPrimaryService)) {
+  premiumContentErrors.push("HIGHEST_PROFIT_SERVICE must appear in SERVICES_HTML");
+}
+const generatedLeadForm = contentBlocks(generated.CONTACT_ACTION_HTML, "form")[0] || "";
+if (generatedLeadForm) {
+  const submitText = plainText(generatedLeadForm.match(/<button\b[^>]*type=["']submit["'][^>]*>[\s\S]*?<\/button>/i)?.[0] || "");
+  if (normalizedContentText(submitText) !== normalizedContentText(generated.PRIMARY_CTA_LABEL)) {
+    premiumContentErrors.push("lead form submit text must exactly match PRIMARY_CTA_LABEL");
+  }
+}
+const publicMarketingCopyParts = Object.entries(generated || {})
+  .filter(([key]) => !/(?:_COLOR|_HREF)$/.test(key) && !["LOGO_HTML", "HERO_MEDIA_HTML", "ABOUT_MEDIA_HTML", "GALLERY_HTML"].includes(key))
+  .map(([, value]) => plainText(value));
+const publicMarketingCopy = publicMarketingCopyParts.join("\n");
+if (/\b(?:lorem ipsum|placeholder copy|insert (?:copy|text|content) here|your business name|business name here|tbd|todo|coming soon)\b/i.test(publicMarketingCopy)) {
+  premiumContentErrors.push("placeholder or unfinished copy is visible");
+}
+const unsupportedClaimPatterns = [
+  ["rating", /(?:\b[1-5](?:\.\d)?\s*(?:\/\s*5|stars?)\b|[★☆]{3,})/i],
+  ["ranking", /(?:#\s*1\b|\bnumber\s+one\b|\btop[-\s]?rated\b|\baward[-\s]?winning\b)/i],
+  ["volume", /\b[1-9]\d*(?:,\d{3})*(?:\.\d+)?\+?\s+(?:years?|clients?|customers?|patients?|projects?|homes?|jobs?|reviews?|cases?|businesses?)\b/i],
+  ["percentage", /\b\d+(?:\.\d+)?\s*%/i],
+  ["availability", /\b24\s*\/\s*7\b/i],
+  ["credential", /\b(?:licensed\s+(?:and|&)\s+insured|licensed\s+(?:contractor|professional|provider|technician|plumber|electrician)|certified\s+(?:professional|provider|technician|specialist)|accredited\s+(?:business|practice|provider)|fully bonded)\b/i],
+  ["guarantee", /\b(?:satisfaction guaranteed|money[-\s]?back guarantee|lifetime warranty|guaranteed results?)\b/i],
+  ["numeric result", /\b(?:saved|increased|grew|reduced|improved|generated|delivered)\s+(?:by\s+)?\$?\d[\d,.]*/i]
+];
+const unsupportedClaimBreaches = [];
+for (const part of publicMarketingCopyParts) {
+  for (const segment of part.split(/(?<=[.!?])\s+|[\r\n]+/).map(clean).filter(Boolean)) {
+    for (const [kind, pattern] of unsupportedClaimPatterns) {
+      if (pattern.test(segment)) unsupportedClaimBreaches.push(kind);
+    }
+  }
+}
+const premiumContentPass = premiumContentErrors.length === 0;
+const unsupportedClaimsPass = unsupportedClaimBreaches.length === 0;
 
 const mediaMarkup = [
   generated.HERO_MEDIA_HTML,
@@ -541,6 +655,8 @@ const checks = {
   media_alt_text_pass: mediaAltPass,
   seo_contract_pass: seoContractPass,
   concise_copy_contract_pass: copyDensityPass,
+  premium_content_contract_pass: premiumContentPass,
+  unsupported_claims_pass: unsupportedClaimsPass,
   unique_media_contract_pass: uniqueMediaPass,
   generated_media_ownership_pass: generatedMediaOwnershipPass,
   semantic_media_profile_pass: semanticProfilePass
@@ -581,6 +697,8 @@ return {
   seo_title_length: seoTitleLength,
   seo_description_length: seoDescriptionLength,
   copy_density_breaches: copyDensityBreaches.join(", ") || "none",
+  premium_content_errors: [...new Set(premiumContentErrors)].join(", ") || "none",
+  unsupported_claim_breaches: [...new Set(unsupportedClaimBreaches)].join(", ") || "none",
   generated_media_source_count: mediaSources.length,
   generated_stock_source_count: generatedStockSources.length,
   unapproved_client_media: unapprovedClientMedia.join(", ") || "none",

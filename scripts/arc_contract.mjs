@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { sanitizeContentForRender } from "./content_sanitizer.mjs";
+import { assertPremiumContentContract } from "./content_quality.mjs";
 
 const moduleRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const canonicalJson = value => {
@@ -189,6 +190,7 @@ export function renderPreview(template, content, options) {
     heroImageUrl: options?.heroImageUrl,
     supportingImageUrl: options?.supportingImageUrl
   });
+  assertPremiumContentContract(renderContent);
   const templateKeys = [...template.matchAll(/\[\[([A-Z0-9_]+)\]\]/g)].map(match => match[1]);
   const uniqueTemplateKeys = [...new Set(templateKeys)];
   if (uniqueTemplateKeys.length !== 58 || uniqueTemplateKeys.some(key => !REQUIRED_KEYS.includes(key))) {

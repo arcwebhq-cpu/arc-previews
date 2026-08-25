@@ -224,6 +224,8 @@ const recoveredClaim = await claimArc1ConsumerPacket(packetRaw, stableAttemptId,
 assert.equal(lostResponseCalls, 2);
 assert.equal(recoveredClaim.claim.idempotent_replay, true);
 assert.equal(recoveredClaim.claim.consumer_attempt_id, claimRequest.consumer_attempt_id);
+assert.equal(recoveredClaim.claim.fenceRaw, observedFence,
+  "The transport-only replay marker must not change durable mutation-fence bytes after a crash.");
 
 const recoveredDurableResult = createArc1DurableResultReceipt({
   deliveryId, packetSha256: sha256(packetRaw), consumerAttemptId: recoveredClaim.claim.consumer_attempt_id,
@@ -395,11 +397,44 @@ assert.equal(claimRaceCalls, 2);
 assert.ok(claimRaceCallTimes[1] - claimRaceCallTimes[0] >= 40,
   "A 425 claim race must wait briefly for the site Hook-accepted CAS before its one bounded replay.");
 
+let htmlProxyCalls = 0;
+let htmlProxyFirstBody;
+await claimArc1ConsumerPacket(packetRaw, stableAttemptId, env, {
+  clock,
+  fetch: async (url, options) => {
+    htmlProxyCalls += 1;
+    if (htmlProxyCalls === 1) {
+      htmlProxyFirstBody = options.body;
+      const response = new Response("<html>temporary proxy failure</html>", {
+        status: 503,
+        headers: { "Content-Type": "text/html", "Content-Length": "36" },
+      });
+      Object.defineProperty(response, "url", { value: url });
+      return response;
+    }
+    assert.equal(options.body, htmlProxyFirstBody,
+      "A proxy-generated non-JSON 5xx must still receive one byte-identical bounded retry.");
+    const request = JSON.parse(options.body);
+    return jsonResponse(url, 200, {
+      schema: "arc-intake-arc1-consumer-claim-v1", status: "CLAIMED", delivery_id: deliveryId,
+      packet_sha256: sha256(packetRaw), consumer_attempt_id: request.consumer_attempt_id, claim_token: claimToken,
+      claimed_at: new Date(nowMs - 1_000).toISOString(), claim_expires_at: new Date(nowMs + 20 * 60_000).toISOString(),
+      idempotent_replay: true,
+    });
+  },
+});
+assert.equal(htmlProxyCalls, 2);
+
 for (const [name, fetchImpl, expected] of [
   ["redirect", async () => jsonResponse("https://attacker.example/claim", 200, {}), /response URL changed/],
   ["oversized", async (url) => jsonResponse(url, 200, {}, { declaredLength: 16_385 }), /declared response exceeds limit/],
+  ["media", async (url) => {
+    const response = new Response("{}", { status: 200, headers: { "Content-Type": "text/plain", "Content-Length": "2" } });
+    Object.defineProperty(response, "url", { value: url });
+    return response;
+  }, /response media type/],
   ["malformed", async (url) => {
-    const response = new Response("not json", { status: 200, headers: { "Content-Length": "8" } });
+    const response = new Response("not json", { status: 200, headers: { "Content-Type": "application/json", "Content-Length": "8" } });
     Object.defineProperty(response, "url", { value: url });
     return response;
   }, /malformed JSON response/],

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import {
   ARC1_GENERATION_CONTRACT_SHA256,
@@ -18,6 +19,10 @@ const [
   arc1FunctionAssetPublisherSource,
   arc1FunctionAckSource,
   arc1ConsumerSource,
+  arc1ConsumerRuntimeSource,
+  arc1ConsumerBundle,
+  arc1ConsumerManifestSource,
+  arc1ConsumerDeploymentContract,
   arc1PaymentLinkSource,
   arc1InjectSource,
   arc1PrivateCheckoutSource,
@@ -36,6 +41,10 @@ const [
   "../zapier/arc1_publish_function_assets.js",
   "../zapier/arc1_ack_function_intake.js",
   "../scripts/arc1_consumer_contract.mjs",
+  "../scripts/arc1_consumer_runtime.mjs",
+  "../zapier/arc1_consumer_runtime.js",
+  "../zapier/arc1_consumer_runtime.manifest.json",
+  "../zapier/arc1-consumer-runtime-deployment.md",
   "../zapier/arc1_verify_payment_link.js",
   "../zapier/arc1_inject.js",
   "../zapier/arc1_private_checkout_link.js",
@@ -87,7 +96,11 @@ for (const name of [
     "ARC_INTAKE_ARC1_PACKET_SECRET", "ARC_INTAKE_ARC1_CONSUMER_BEARER",
     "ARC_INTAKE_ARC1_CONSUMER_RECEIPT_SECRET", "ARC_INTAKE_ARC1_DURABLE_RESULT_SECRET",
     "ARC_INTAKE_ARC1_CONSUMER_CLAIM_ENABLED", "ARC_INTAKE_ARC1_CONSUMER_COMPLETION_ENABLED",
+    "ARC_INTAKE_ARC1_CONSUMER_RUNTIME_ENABLED", "ARC_INTAKE_ARC1_CONSUMER_PRIVATE_STATE_ENABLED",
+    "ARC_INTAKE_ARC1_PROVIDER_WORK_ENABLED", "ARC_INTAKE_ARC1_HISTORY_REDACTION_ATTESTED",
+    "ARC_INTAKE_ARC1_INPUTDATA_SECRET_COMPATIBILITY_ENABLED",
     "ARC_INTAKE_ARC1_LEGACY_MIGRATION_ENABLED", "ARC_INTAKE_ARC1_CONSUMER_TIMEOUT_MS",
+    "ARC_INTAKE_ARC1_CONSUMER_PRIVATE_STATE_TIMEOUT_MS",
     "ARC1_ASSET_RECEIPT_SECRET", "ARC1_ASSET_PUBLICATION_RECEIPT_SECRET"
 ]) assert.ok(contract.secrets.required_runtime_names.includes(name), `${name} must remain runtime-only`);
 assert.equal(contract.secrets.customer_authorization.source, "netlify-official-deploy-and-claim");
@@ -100,11 +113,13 @@ assert.deepEqual(contract.arc1.ordered_steps, [
   "arc-site/intake-arc1-adapter:verify-envelope-assets-and-create-only-claim",
   "arc-site/intake-arc1-adapter:return-exact-signed-acknowledgement",
   "arc-site/intake-arc1-adapter:retryable-catch-raw-hook-dispatch",
-  "scripts/arc1_consumer_contract.mjs#VERIFY_PACKET_AND_ATOMIC_CLAIM",
+  "zapier/arc1_consumer_runtime.js#CLAIM",
+  "private-state/create-or-exact-and-authoritative-readback",
+  "zapier/arc1_consumer_runtime.js#AUTHORIZE",
   "zapier/arc1_verify_function_intake.js#DOWNSTREAM_REVERIFY",
   "zapier/arc1_retrieve_function_assets.js#DOWNSTREAM_RETRIEVE",
-  "private-state/arc1-create-or-exact-durable-work-record",
-  "scripts/arc1_consumer_contract.mjs#SIGNED_DURABLE_RESULT_AND_COMPLETE",
+  "private-state/commit-immutable-result-and-authoritative-readback",
+  "zapier/arc1_consumer_runtime.js#COMPLETE",
   "zapier/arc1_verify_payment_link.js",
   "zapier/arc1_publish_function_assets.js",
   "zapier/arc1_inject.js",
@@ -259,6 +274,47 @@ assert.deepEqual(contract.arc1.function_intake_bridge, {
     signed_asset_receipt_required_before_claim_and_ack: true,
     raw_pii_allowed: false
   },
+  downstream_consumer_runtime: {
+    source: "scripts/arc1_consumer_runtime.mjs",
+    core: "scripts/arc1_consumer_contract.mjs",
+    bundle: "zapier/arc1_consumer_runtime.js",
+    manifest: "zapier/arc1_consumer_runtime.manifest.json",
+    deployment_contract: "zapier/arc1-consumer-runtime-deployment.md",
+    test: "tests/arc1_consumer_runtime_bundle_contract.mjs",
+    cross_repository_test: "tests/arc1_site_packet_runtime_contract.mjs",
+    pinned_arc_site_commit: "163f6e2a4c769c779fa23e5c3df1c1008e819a2f",
+    phases: ["CLAIM", "AUTHORIZE", "COMPLETE"],
+    generated_bundle_reproducible: true,
+    actual_bundle_executed_in_tests: true,
+    actual_site_packet_executed_through_bundle: true,
+    private_state_contains_direct_customer_content: false,
+    raw_packet_or_claim_token_log_allowed: false,
+    raw_private_state_output_private_only: true,
+    encrypted_host_secret_injection_required: true,
+    ordinary_input_data_secret_mapping_allowed: false,
+    provider_input_output_history_redaction_verified: false,
+    private_state_provider_configured: false,
+    private_state_create_or_exact_readback_verified: false,
+    private_state_commit_readback_verified: false,
+    private_state_operation_timeout_default_ms: 5000,
+    private_state_operation_timeout_maximum_ms: 5000,
+    private_state_timeout_capped_by_claim_deadline: true,
+    private_state_abort_signal_propagated: true,
+    hung_create_releases_provider_work: false,
+    hung_commit_posts_completion: false,
+    crash_replay_exact_state_tested: true,
+    locally_signed_receipt_is_persistence_proof: false,
+    provider_mutation_configured: false,
+    live_end_to_end_verified: false,
+    activation_allowed: false,
+    activation_flags_default: {
+      ARC_INTAKE_ARC1_CONSUMER_RUNTIME_ENABLED: false,
+      ARC_INTAKE_ARC1_CONSUMER_PRIVATE_STATE_ENABLED: false,
+      ARC_INTAKE_ARC1_PROVIDER_WORK_ENABLED: false,
+      ARC_INTAKE_ARC1_HISTORY_REDACTION_ATTESTED: false,
+      ARC_INTAKE_ARC1_INPUTDATA_SECRET_COMPATIBILITY_ENABLED: false
+    }
+  },
   zapier_provider_constraints: {
     official_catch_hook_custom_response_supported: false,
     direct_catch_hook_endpoint_allowed: false,
@@ -317,7 +373,9 @@ assert.deepEqual(contract.arc1.function_intake_bridge, {
   remaining_external_wiring: [
     "first-party-adapter-disabled-deployment-and-runtime-attestation-proof",
     "bounded-24-hour-adapter-attestation-rotation-proof",
-    "downstream-consumer-create-only-dedupe-and-cas-proof",
+    "downstream-private-state-create-or-exact-and-authoritative-readback-proof",
+    "downstream-private-state-result-commit-and-authoritative-readback-proof",
+    "encrypted-host-secret-injection-and-provider-history-redaction-proof",
     "private-secret-broker-or-zapier-private-integration-proof",
     "catch-raw-hook-exact-200-and-header-envelope-mapping-behind-adapter",
     "signed-downstream-completion-receipt-and-ambiguous-hook-retry-reconciliation",
@@ -334,6 +392,22 @@ assert.match(arc1ConsumerSource, /arc-intake-arc1-downstream-packet-v2/);
 assert.match(arc1ConsumerSource, /arc-intake-arc1-consumer-completion-v1/);
 assert.match(arc1ConsumerSource, /ARC1_CONSUMER_DURABILITY_REQUIRED/);
 assert.doesNotMatch(arc1ConsumerSource, /console\.(?:log|error|warn)/);
+assert.match(arc1ConsumerRuntimeSource, /runArc1PrivateStateConsumerJob/);
+assert.match(arc1ConsumerRuntimeSource, /ARC1_CONSUMER_HISTORY_REDACTION_NOT_ATTESTED/);
+assert.match(arc1ConsumerRuntimeSource, /CREATE_OR_EXACT/);
+assert.match(arc1ConsumerBundle, /return await runArc1ConsumerCodeStep/);
+assert.doesNotMatch(arc1ConsumerBundle, /console\.(?:log|error|warn|info|debug)/);
+const arc1ConsumerManifest = JSON.parse(arc1ConsumerManifestSource);
+assert.equal(arc1ConsumerManifest.bundle_sha256, createHash("sha256").update(arc1ConsumerBundle).digest("hex"));
+assert.equal(arc1ConsumerManifest.execution.private_history_redaction_required, true);
+assert.equal(arc1ConsumerManifest.execution.encrypted_host_secret_injection_required, true);
+assert.equal(arc1ConsumerManifest.execution.local_hmac_receipt_alone_proves_persistence, false);
+assert.equal(arc1ConsumerManifest.execution.private_state_operation_timeout_maximum_ms, 5000);
+assert.equal(arc1ConsumerManifest.execution.private_state_timeout_capped_by_claim_deadline, true);
+assert.equal(arc1ConsumerManifest.execution.private_state_abort_signal_propagated, true);
+assert.equal(Object.values(arc1ConsumerManifest.activation_flags).every(value => value === false), true);
+assert.match(arc1ConsumerDeploymentContract, /activation prohibited; provider capabilities unverified/i);
+assert.match(arc1ConsumerDeploymentContract, /authoritative provider write and readback is not durability/i);
 assert.match(arc1FunctionAssetPublisherSource, /arc1-public-asset-publication-receipt-v1/);
 assert.doesNotMatch(arc1FunctionAssetPublisherSource, /console\.(?:log|error|warn)/);
 assert.equal(contract.arc1.authoritative_intake.client_submission_id_authoritative, false);

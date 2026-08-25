@@ -85,12 +85,15 @@ export function canonicalJson(value) {
   throw new TypeError("ARC1_CONSUMER_INVALID: plain JSON values required");
 }
 
-const sha256 = (value) => createHash("sha256").update(value).digest("hex");
-const hmac = (secret, value) => createHmac("sha256", secret).update(value).digest("hex");
-const safeEqualHex = (left, right) => {
+export const arc1ConsumerSha256Hex = (value) => createHash("sha256").update(value).digest("hex");
+export const arc1ConsumerHmacHex = (secret, value) => createHmac("sha256", secret).update(value).digest("hex");
+export const arc1ConsumerSafeEqualHex = (left, right) => {
   if (typeof left !== "string" || typeof right !== "string" || !SHA256_PATTERN.test(left) || !SHA256_PATTERN.test(right)) return false;
   return timingSafeEqual(Buffer.from(left, "hex"), Buffer.from(right, "hex"));
 };
+const sha256 = arc1ConsumerSha256Hex;
+const hmac = arc1ConsumerHmacHex;
+const safeEqualHex = arc1ConsumerSafeEqualHex;
 const requireSha = (value, label) => {
   if (typeof value !== "string" || !SHA256_PATTERN.test(value)) throw new TypeError(`ARC1_CONSUMER_INVALID: ${label}`);
   return value;
@@ -250,7 +253,7 @@ export function verifyArc1MutationFence(fenceRaw, fenceHmacSha256, expected, env
   return Object.freeze(fence);
 }
 
-async function readBoundedResponse(response, controller, deadlineMs, maximumBytes) {
+async function readBoundedResponse(response, controller, deadlineMs, maximumBytes, { parseJson = true } = {}) {
   const declared = response.headers?.get?.("content-length");
   if (declared !== null && declared !== undefined && declared !== "") {
     const length = Number(declared);
@@ -289,6 +292,7 @@ async function readBoundedResponse(response, controller, deadlineMs, maximumByte
   let raw;
   try { raw = new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks, total)); }
   catch { throw new Error("ARC1_CONSUMER_RESPONSE_INVALID: response encoding"); }
+  if (!parseJson) return { raw };
   let parsed;
   try { parsed = JSON.parse(raw); } catch { throw new Error("ARC1_CONSUMER_RESPONSE_INVALID: malformed JSON response"); }
   if (!isPlainObject(parsed)) throw new Error("ARC1_CONSUMER_RESPONSE_INVALID: response object");
@@ -318,14 +322,29 @@ async function postCanonicalWithReplay(url, raw, headers, resolved, fetchImpl) {
       if (!response || typeof response.status !== "number" || response.url !== url) {
         throw new Error("ARC1_CONSUMER_RESPONSE_INVALID: response URL changed");
       }
-      const body = await readBoundedResponse(response, controller, requestDeadline, ARC1_CONSUMER_MAX_RESPONSE_BYTES);
-      if (response.status === 200) return body.parsed;
-      if (response.status === 409) throw new Error("ARC1_CONSUMER_CONFLICT");
-      if (![408, 425, 429, 500, 502, 503, 504].includes(response.status)) {
+      const retryableStatus = [408, 425, 429, 500, 502, 503, 504].includes(response.status);
+      if (retryableStatus) {
+        // A trusted network/proxy failure can legitimately be HTML or empty.
+        // Bound/cancel it under the same deadline, then preserve the exact
+        // request bytes for the one retry. Never treat that body as authority.
+        try {
+          await readBoundedResponse(response, controller, requestDeadline, ARC1_CONSUMER_MAX_RESPONSE_BYTES,
+            { parseJson: false });
+          lastError = new Error(`ARC1_CONSUMER_RETRYABLE: HTTP ${response.status}`);
+        } catch (error) {
+          lastError = error;
+        }
+        if (response.status === 425) retryBackoffMs = 50;
+      } else {
+        const responseMediaType = response.headers?.get?.("content-type")?.trim().toLowerCase();
+        if (!["application/json", "application/json; charset=utf-8"].includes(responseMediaType)) {
+          throw new Error("ARC1_CONSUMER_RESPONSE_INVALID: response media type");
+        }
+        const body = await readBoundedResponse(response, controller, requestDeadline, ARC1_CONSUMER_MAX_RESPONSE_BYTES);
+        if (response.status === 200) return body.parsed;
+        if (response.status === 409) throw new Error("ARC1_CONSUMER_CONFLICT");
         throw new Error(`ARC1_CONSUMER_RESPONSE_INVALID: HTTP ${response.status}`);
       }
-      if (response.status === 425) retryBackoffMs = 50;
-      lastError = new Error(`ARC1_CONSUMER_RETRYABLE: HTTP ${response.status}`);
     } catch (error) {
       if (error?.message === "ARC1_CONSUMER_CONFLICT" ||
           String(error?.message || "").startsWith("ARC1_CONSUMER_RESPONSE_INVALID:")) throw error;
@@ -355,12 +374,15 @@ function validateClaimResponse(response, verified, consumerAttemptId, requestSha
       expires.milliseconds > verified.expires.milliseconds) {
     throw new Error("ARC1_CONSUMER_RESPONSE_INVALID: claim deadline");
   }
-  const responseRaw = canonicalJson(response);
+  // The authority changes only this transport replay marker after a lost
+  // response. Normalize it so crash recovery reproduces the exact same
+  // durable fence/state bytes for the same claim identity.
+  const responseIdentityRaw = canonicalJson({ ...response, idempotent_replay: false });
   const fence = {
     schema: ARC1_CONSUMER_FENCE_SCHEMA, delivery_id: response.delivery_id, packet_sha256: response.packet_sha256,
     consumer_attempt_id: consumerAttemptId, claim_token_sha256: sha256(response.claim_token), claimed_at: response.claimed_at,
     claim_expires_at: response.claim_expires_at, ingress_state_digest_sha256: verified.packet.ingress_state_digest_sha256,
-    claim_request_sha256: requestSha256, claim_response_sha256: sha256(responseRaw),
+    claim_request_sha256: requestSha256, claim_response_sha256: sha256(responseIdentityRaw),
     mutation_idempotency_key: deriveMutationIdempotencyKey(verified.packetSha256, consumerAttemptId, resolved.receiptSecret),
   };
   if (!exactKeys(fence, FENCE_FIELDS)) throw new Error("ARC1_CONSUMER_INVALID: internal fence contract");

@@ -45,6 +45,16 @@ while a competing attempt receives a conflict and must stop. Every mutation rece
 fence and one stable idempotency key. A claim that expires becomes `REVIEW_REQUIRED`; this release
 never reassigns it because all downstream providers do not yet implement generation fencing.
 
+The same gate rebuild-checks and executes the actual generated
+`zapier/arc1_consumer_runtime.js` artifact, not just the abstract module. Its three runnable phases
+are `CLAIM`, `AUTHORIZE`, and `COMPLETE`: claim produces a PII-free private-state create intent;
+authorize releases the mutation fence only after a signed create-or-exact receipt; and complete
+accepts only a signed immutable-result commit receipt. The importable
+`scripts/arc1_consumer_runtime.mjs` also runs those phases around provider-neutral private-state and
+mutation adapters. CI pins ARC site commit
+`163f6e2a4c769c779fa23e5c3df1c1008e819a2f` and drives a packet produced by that actual site code
+through the generated bundle and back through the site's claim/completion authority.
+
 The adapter remains nonterminal after a Catch Hook HTTP 200. It may remove its recovery record only
 after the consumer has durably committed a provider-neutral work record, verified its separate
 durable-result HMAC, and posted the exact signed completion receipt. Each claim or completion POST
@@ -57,9 +67,27 @@ required runtime settings are
 `ARC_INTAKE_ARC1_CONSUMER_TIMEOUT_MS`. Both
 `ARC_INTAKE_ARC1_CONSUMER_CLAIM_ENABLED` and
 `ARC_INTAKE_ARC1_CONSUMER_COMPLETION_ENABLED` must equal lowercase `true`; otherwise no network or
-work callback is allowed. These are local contract tests only. The switches stay off until the
-private state provider, secret broker, deployed endpoints, stale-claim alert, and disabled sandbox
-workflow pass end to end. The one-time `ARC_INTAKE_ARC1_LEGACY_MIGRATION_ENABLED` maintenance flag
+work callback is allowed. The runnable layer additionally requires exact `true` for
+`ARC_INTAKE_ARC1_CONSUMER_RUNTIME_ENABLED`,
+`ARC_INTAKE_ARC1_CONSUMER_PRIVATE_STATE_ENABLED`, `ARC_INTAKE_ARC1_PROVIDER_WORK_ENABLED`, and
+`ARC_INTAKE_ARC1_HISTORY_REDACTION_ATTESTED`. They default to off. Runtime secrets and activation
+controls must come from an encrypted host environment/private integration. Ordinary `inputData`
+secret mapping is ignored unless the host—not the mapped input—sets the explicitly reviewed
+`ARC_INTAKE_ARC1_INPUTDATA_SECRET_COMPATIBILITY_ENABLED=true` compatibility control.
+
+This bundle is **not Zapier-ready or provider-verified**. The `CLAIM` output's
+`private_state_json` contains a capability token and is private-only; only `log_safe_json` may enter
+ordinary logs. A locally HMAC-signed create/commit receipt does not prove durability. The private
+state adapter must first perform authoritative persistence and readback, bind the returned provider
+version/receipt digest, and only then sign the corresponding receipt. Create and commit adapters
+receive an `AbortSignal` and are capped at five seconds or the remaining claim lifetime, whichever
+is smaller; a hung create cannot release provider work and a hung commit cannot post completion.
+Activation remains prohibited until raw packet/private-state input and output history redaction,
+encrypted secret injection, those
+provider readbacks, and the disabled provider E2E are evidenced. These are local contract tests
+only. The switches stay off until the private state provider, secret broker, deployed endpoints,
+stale-claim alert, and disabled sandbox workflow pass end to end. The one-time
+`ARC_INTAKE_ARC1_LEGACY_MIGRATION_ENABLED` maintenance flag
 also stays off except while an authorized operator drains its signed cursor to `MIGRATION_COMPLETE`
 with zero invalid records, verifies legacy hook acceptances are review-indexed, and turns it off again.
 

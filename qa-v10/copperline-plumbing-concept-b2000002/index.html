@@ -5,14 +5,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Copperline Plumbing Concept | Water Heater Service</title>
-  <meta name="description" content="Copperline Plumbing Concept is a fictional ARC quality-assurance concept demonstrating a premium plumbing and water heaters website for Quality Assurance Market.">
+  <meta name="description" content="Copperline Plumbing Concept is a fictional ARC quality-assurance concept demonstrating a premium plumbing and water heaters website for Minneapolis, Minnesota.">
   <meta name="theme-color" content="#f8fafc">
   <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
   <meta name="arc-site-mode" content="preview">
   <meta name="arc-template-version" content="10.0">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta property="og:title" content="Copperline Plumbing Concept | Water Heater Service">
-  <meta property="og:description" content="Copperline Plumbing Concept is a fictional ARC quality-assurance concept demonstrating a premium plumbing and water heaters website for Quality Assurance Market.">
+  <meta property="og:description" content="Copperline Plumbing Concept is a fictional ARC quality-assurance concept demonstrating a premium plumbing and water heaters website for Minneapolis, Minnesota.">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Copperline Plumbing Concept">
   <meta name="twitter:card" content="summary_large_image">
@@ -44,7 +44,12 @@
       --radius-sm:12px;
       --shadow:0 28px 70px color-mix(in srgb,var(--ink) 12%,transparent);
       --shadow-soft:0 14px 38px color-mix(in srgb,var(--ink) 7%,transparent);
-      --ease:cubic-bezier(.22,.75,.18,1)
+      --ease:cubic-bezier(.22,.75,.18,1);
+      --arc-profile-signature:"general / service";
+      --arc-visual-word:"SERVICE";
+      --arc-visual-radius:50%;
+      --arc-visual-turn:0deg;
+      --arc-profile-pattern:linear-gradient(transparent,transparent)
     }
     *{box-sizing:border-box}
     html{scroll-behavior:smooth;background:var(--bg)}
@@ -511,6 +516,7 @@
       grid-template-rows:auto 1fr auto;
       padding:clamp(25px,3.8vw,46px);
       background:
+        var(--arc-profile-pattern),
         linear-gradient(135deg,color-mix(in srgb,var(--brand) 15%,transparent),transparent 48%),
         radial-gradient(circle at 82% 22%,color-mix(in srgb,var(--accent) 20%,transparent),transparent 31%),
         linear-gradient(160deg,var(--paper),color-mix(in srgb,var(--surface) 62%,var(--bg)))
@@ -526,6 +532,17 @@
       border-radius:50%;
       box-shadow:0 0 0 34px color-mix(in srgb,var(--brand) 5%,transparent),0 0 0 74px color-mix(in srgb,var(--accent) 4%,transparent)
     }
+    .hero-fallback:after{
+      content:var(--arc-visual-word);
+      position:absolute;
+      z-index:0;
+      right:-.06em;
+      bottom:.06em;
+      color:color-mix(in srgb,var(--brand) 8%,transparent);
+      font:900 clamp(72px,10vw,142px)/.78 var(--display);
+      letter-spacing:-.1em;
+      pointer-events:none
+    }
     .hero-fallback>*{position:relative;z-index:1}
     .hero-visual.has-media .hero-fallback{display:none}
     .fallback-top{
@@ -540,6 +557,14 @@
       color:var(--muted);
       font-size:10px;
       font-weight:800;
+      letter-spacing:.14em;
+      text-transform:uppercase
+    }
+    .fallback-top:after{
+      content:var(--arc-profile-signature);
+      color:color-mix(in srgb,var(--brand) 72%,var(--muted));
+      font-size:9px;
+      font-weight:850;
       letter-spacing:.14em;
       text-transform:uppercase
     }
@@ -775,12 +800,13 @@
       border:1px solid var(--line);
       border-radius:var(--radius);
       background:
+        var(--arc-profile-pattern),
         linear-gradient(145deg,color-mix(in srgb,var(--brand) 12%,var(--paper)),var(--paper) 55%,color-mix(in srgb,var(--accent) 10%,var(--paper)));
       box-shadow:var(--shadow-soft)
     }
     .about-media.arc-local-visual:before,
     .about-media:empty:before{
-      content:attr(data-monogram);
+      content:var(--arc-visual-word,attr(data-monogram));
       position:absolute;
       right:-.04em;
       bottom:-.17em;
@@ -970,16 +996,19 @@
     .gallery-grid>.arc-local-visual{
       isolation:isolate;
       background:
+        var(--arc-profile-pattern),
         radial-gradient(circle at 78% 24%,color-mix(in srgb,var(--accent) 34%,transparent),transparent 27%),
         linear-gradient(135deg,color-mix(in srgb,var(--brand) 30%,#101114),#101114 58%,color-mix(in srgb,var(--accent) 18%,#101114))
     }
     .gallery-grid>.arc-local-visual:nth-child(2){
       background:
+        var(--arc-profile-pattern),
         radial-gradient(circle at 28% 72%,color-mix(in srgb,var(--brand) 32%,transparent),transparent 31%),
         linear-gradient(155deg,#15161a,color-mix(in srgb,var(--accent) 18%,#0d0e10))
     }
     .gallery-grid>.arc-local-visual:nth-child(3){
       background:
+        var(--arc-profile-pattern),
         linear-gradient(115deg,transparent 0 42%,color-mix(in srgb,var(--brand) 24%,transparent) 42% 58%,transparent 58%),
         radial-gradient(circle at 70% 30%,color-mix(in srgb,var(--accent) 22%,transparent),transparent 34%),
         #111216
@@ -993,9 +1022,21 @@
       top:50%;
       left:50%;
       border:1px solid rgba(255,255,255,.2);
-      border-radius:50%;
-      transform:translate(-50%,-50%);
+      border-radius:var(--arc-visual-radius);
+      transform:translate(-50%,-50%) rotate(var(--arc-visual-turn));
       box-shadow:0 0 0 26px rgba(255,255,255,.025),0 0 0 58px rgba(255,255,255,.018)
+    }
+    .gallery-grid>.arc-local-visual:after{
+      content:var(--arc-visual-word);
+      z-index:2;
+      display:flex;
+      align-items:flex-end;
+      justify-content:flex-end;
+      padding:clamp(18px,3vw,34px);
+      color:rgba(255,255,255,.075);
+      background:linear-gradient(180deg,transparent 54%,rgba(0,0,0,.54));
+      font:900 clamp(52px,8vw,112px)/.78 var(--display);
+      letter-spacing:-.08em
     }
 
     .proof-grid{
@@ -1439,6 +1480,177 @@
     .media-disclosure{display:none!important}
 
     /*
+     * Semantic local art direction. Each supported profile receives a stable
+     * category signature without remote assets or imagery that could be
+     * mistaken for completed client work.
+     */
+    body[data-arc-expected-media-profile="roofing"]{
+      --arc-profile-signature:"roofing / weather";
+      --arc-visual-word:"ROOF";
+      --arc-visual-radius:8%;
+      --arc-visual-turn:45deg;
+      --arc-profile-pattern:
+        repeating-linear-gradient(135deg,transparent 0 48px,color-mix(in srgb,var(--brand) 10%,transparent) 49px 51px,transparent 52px 96px)
+    }
+    body[data-arc-expected-media-profile="hvac"]{
+      --arc-profile-signature:"hvac / airflow";
+      --arc-visual-word:"AIR";
+      --arc-visual-radius:50%;
+      --arc-visual-turn:0deg;
+      --arc-profile-pattern:
+        repeating-radial-gradient(circle at 24% 76%,transparent 0 28px,color-mix(in srgb,var(--brand) 9%,transparent) 29px 31px,transparent 32px 62px)
+    }
+    body[data-arc-expected-media-profile="remodeling"]{
+      --arc-profile-signature:"remodeling / space";
+      --arc-visual-word:"SPACE";
+      --arc-visual-radius:3%;
+      --arc-visual-turn:0deg;
+      --arc-profile-pattern:
+        linear-gradient(90deg,color-mix(in srgb,var(--brand) 8%,transparent) 1px,transparent 1px) 0 0/52px 52px,
+        linear-gradient(color-mix(in srgb,var(--brand) 8%,transparent) 1px,transparent 1px) 0 0/52px 52px
+    }
+    body[data-arc-expected-media-profile="landscaping"]{
+      --arc-profile-signature:"landscape / season";
+      --arc-visual-word:"GROW";
+      --arc-visual-radius:62% 38% 58% 42%;
+      --arc-visual-turn:-18deg;
+      --arc-profile-pattern:
+        radial-gradient(ellipse at 12% 88%,color-mix(in srgb,var(--brand) 10%,transparent) 0 18%,transparent 19%),
+        radial-gradient(ellipse at 84% 16%,color-mix(in srgb,var(--accent) 8%,transparent) 0 14%,transparent 15%)
+    }
+    body[data-arc-expected-media-profile="auto_detailing"]{
+      --arc-profile-signature:"detailing / finish";
+      --arc-visual-word:"FINISH";
+      --arc-visual-radius:999px 12px;
+      --arc-visual-turn:-14deg;
+      --arc-profile-pattern:
+        repeating-linear-gradient(158deg,transparent 0 72px,color-mix(in srgb,var(--accent) 11%,transparent) 73px 75px,transparent 76px 144px)
+    }
+    body[data-arc-expected-media-profile="dental"]{
+      --arc-profile-signature:"dental / calm";
+      --arc-visual-word:"SMILE";
+      --arc-visual-radius:48% 48% 34% 34%;
+      --arc-visual-turn:0deg;
+      --arc-profile-pattern:
+        radial-gradient(ellipse at 20% 18%,transparent 0 34px,color-mix(in srgb,var(--brand) 9%,transparent) 35px 37px,transparent 38px),
+        radial-gradient(ellipse at 82% 84%,transparent 0 52px,color-mix(in srgb,var(--accent) 7%,transparent) 53px 55px,transparent 56px)
+    }
+    body[data-arc-expected-media-profile="plumbing"]{
+      --arc-profile-signature:"plumbing / flow";
+      --arc-visual-word:"FLOW";
+      --arc-visual-radius:999px;
+      --arc-visual-turn:90deg;
+      --arc-profile-pattern:
+        linear-gradient(90deg,transparent 47%,color-mix(in srgb,var(--brand) 9%,transparent) 48% 52%,transparent 53%) 0 0/84px 84px,
+        linear-gradient(transparent 47%,color-mix(in srgb,var(--accent) 7%,transparent) 48% 52%,transparent 53%) 42px 42px/84px 84px
+    }
+    body[data-arc-expected-media-profile="home_services"]{
+      --arc-profile-signature:"contractor / build";
+      --arc-visual-word:"BUILD";
+      --arc-visual-radius:2%;
+      --arc-visual-turn:0deg;
+      --arc-profile-pattern:
+        linear-gradient(90deg,color-mix(in srgb,var(--brand) 9%,transparent) 1px,transparent 1px) 0 0/34px 34px,
+        linear-gradient(color-mix(in srgb,var(--brand) 9%,transparent) 1px,transparent 1px) 0 0/34px 34px,
+        linear-gradient(135deg,transparent 49%,color-mix(in srgb,var(--accent) 6%,transparent) 50%,transparent 51%)
+    }
+    body[data-arc-expected-media-profile="medical_spa"]{
+      --arc-profile-signature:"aesthetics / restraint";
+      --arc-visual-word:"ASTER";
+      --arc-visual-radius:56% 44% 62% 38%;
+      --arc-visual-turn:18deg;
+      --arc-profile-pattern:
+        conic-gradient(from 28deg at 78% 22%,transparent 0 28%,color-mix(in srgb,var(--accent) 8%,transparent) 29% 38%,transparent 39% 100%)
+    }
+    body[data-arc-expected-media-profile="healthcare"]{
+      --arc-profile-signature:"healthcare / access";
+      --arc-visual-word:"CARE";
+      --arc-visual-radius:18%;
+      --arc-visual-turn:0deg;
+      --arc-profile-pattern:
+        linear-gradient(90deg,transparent 42%,color-mix(in srgb,var(--brand) 7%,transparent) 43% 57%,transparent 58%) 0 0/72px 72px,
+        linear-gradient(transparent 42%,color-mix(in srgb,var(--brand) 7%,transparent) 43% 57%,transparent 58%) 0 0/72px 72px
+    }
+    body[data-arc-expected-media-profile="restaurant"]{
+      --arc-profile-signature:"restaurant / gathering";
+      --arc-visual-word:"TABLE";
+      --arc-visual-radius:50%;
+      --arc-visual-turn:0deg;
+      --arc-profile-pattern:
+        repeating-radial-gradient(circle at 82% 24%,transparent 0 38px,color-mix(in srgb,var(--accent) 9%,transparent) 39px 41px,transparent 42px 76px)
+    }
+    body[data-arc-expected-media-profile="real_estate"]{
+      --arc-profile-signature:"real estate / place";
+      --arc-visual-word:"MOVE";
+      --arc-visual-radius:1%;
+      --arc-visual-turn:0deg;
+      --arc-profile-pattern:
+        linear-gradient(90deg,transparent 0 22%,color-mix(in srgb,var(--brand) 8%,transparent) 23% 24%,transparent 25% 74%,color-mix(in srgb,var(--brand) 8%,transparent) 75% 76%,transparent 77%),
+        linear-gradient(transparent 0 64%,color-mix(in srgb,var(--accent) 7%,transparent) 65% 66%,transparent 67%)
+    }
+    body[data-arc-expected-media-profile="fitness"]{
+      --arc-profile-signature:"fitness / tempo";
+      --arc-visual-word:"TRAIN";
+      --arc-visual-radius:4%;
+      --arc-visual-turn:-22deg;
+      --arc-profile-pattern:
+        repeating-linear-gradient(118deg,transparent 0 42px,color-mix(in srgb,var(--accent) 10%,transparent) 43px 49px,transparent 50px 94px)
+    }
+    body[data-arc-expected-media-profile="legal"]{
+      --arc-profile-signature:"legal / counsel";
+      --arc-visual-word:"COUNSEL";
+      --arc-visual-radius:999px 999px 4px 4px;
+      --arc-visual-turn:0deg;
+      --arc-profile-pattern:
+        repeating-linear-gradient(90deg,transparent 0 58px,color-mix(in srgb,var(--brand) 8%,transparent) 59px 63px,transparent 64px 122px)
+    }
+    body[data-arc-expected-media-profile="finance"]{
+      --arc-profile-signature:"finance / decision";
+      --arc-visual-word:"PLAN";
+      --arc-visual-radius:4%;
+      --arc-visual-turn:-8deg;
+      --arc-profile-pattern:
+        linear-gradient(90deg,color-mix(in srgb,var(--brand) 7%,transparent) 1px,transparent 1px) 0 0/46px 46px,
+        linear-gradient(color-mix(in srgb,var(--brand) 7%,transparent) 1px,transparent 1px) 0 0/46px 46px,
+        linear-gradient(154deg,transparent 46%,color-mix(in srgb,var(--accent) 8%,transparent) 47% 49%,transparent 50%)
+    }
+    body[data-arc-expected-media-profile="web_design"]{
+      --arc-profile-signature:"web design / system";
+      --arc-visual-word:"WEB";
+      --arc-visual-radius:12px;
+      --arc-visual-turn:0deg;
+      --arc-profile-pattern:
+        linear-gradient(90deg,color-mix(in srgb,var(--brand) 8%,transparent) 1px,transparent 1px) 0 0/86px 62px,
+        linear-gradient(color-mix(in srgb,var(--accent) 6%,transparent) 1px,transparent 1px) 0 0/86px 62px
+    }
+    body[data-arc-expected-media-profile="technology"]{
+      --arc-profile-signature:"technology / architecture";
+      --arc-visual-word:"SYSTEM";
+      --arc-visual-radius:22%;
+      --arc-visual-turn:45deg;
+      --arc-profile-pattern:
+        radial-gradient(circle,color-mix(in srgb,var(--brand) 12%,transparent) 0 2px,transparent 3px) 0 0/36px 36px,
+        linear-gradient(135deg,transparent 48%,color-mix(in srgb,var(--accent) 6%,transparent) 49% 51%,transparent 52%)
+    }
+    body[data-arc-expected-media-profile="beauty"]{
+      --arc-profile-signature:"beauty / expression";
+      --arc-visual-word:"SABLE";
+      --arc-visual-radius:68% 32% 60% 40%;
+      --arc-visual-turn:16deg;
+      --arc-profile-pattern:
+        conic-gradient(from 220deg at 18% 82%,transparent 0 38%,color-mix(in srgb,var(--accent) 9%,transparent) 39% 48%,transparent 49% 100%)
+    }
+    body[data-arc-expected-media-profile="general"]{
+      --arc-profile-signature:"general / local";
+      --arc-visual-word:"SERVICE";
+      --arc-visual-radius:16%;
+      --arc-visual-turn:0deg;
+      --arc-profile-pattern:
+        linear-gradient(90deg,color-mix(in srgb,var(--brand) 7%,transparent) 1px,transparent 1px) 0 0/72px 72px,
+        linear-gradient(color-mix(in srgb,var(--accent) 6%,transparent) 1px,transparent 1px) 36px 36px/72px 72px
+    }
+
+    /*
      * One safe master template, four distinct industry directions.
      * The content contract stays fixed while composition changes by category.
      */
@@ -1632,7 +1844,7 @@
     })();
   </script>
 </head>
-<body data-arc-expected-media-profile="plumbing" data-style="premium" data-industry="Plumbing and Water Heaters" data-arc-site-mode="preview" data-arc-media-provider="local-css">
+<body data-arc-expected-media-profile="plumbing" data-style="bold" data-industry="Plumbing and Water Heaters" data-arc-site-mode="preview" data-arc-media-provider="local-css">
   <a class="skip" href="#content">Skip to content</a>
   <div class="progress" aria-hidden="true"><span></span></div>
 
@@ -1642,7 +1854,7 @@
         <span class="brand-logo"></span>
         <span class="brand-text">
           <span class="brand-name">Copperline Plumbing Concept</span>
-          <span class="brand-location">Quality Assurance Market</span>
+          <span class="brand-location">Minneapolis, Minnesota</span>
         </span>
       </a>
       <nav class="nav-links" aria-label="Main menu">
@@ -1653,7 +1865,7 @@
         <a href="#contact">Contact</a>
       </nav>
       <div class="nav-action">
-        <a class="btn btn-primary btn-small" href="#contact">Request an introduction <span aria-hidden="true">→</span></a>
+        <a class="btn btn-primary btn-small" href="#contact">Request plumbing help <span aria-hidden="true">→</span></a>
       </div>
       <button class="menu" type="button" aria-label="Toggle menu" aria-expanded="false"></button>
     </div>
@@ -1663,21 +1875,21 @@
     <section class="hero" id="top">
       <div class="wrap hero-grid">
         <div class="hero-copy-column">
-          <p class="eyebrow">Quality Assurance Market • Plumbing and Water Heaters</p>
-          <h1>Plumbing and Water Heaters, presented with clarity.</h1>
-          <p class="hero-copy">A fictional ARC quality-assurance concept for plumbing and water heaters, built to verify semantic media, responsive composition, and an honest conversion path.</p>
+          <p class="eyebrow">Minneapolis, Minnesota • Plumbing and Water Heaters</p>
+          <h1>Solve the water problem without the guesswork.</h1>
+          <p class="hero-copy">Describe what is happening, understand the likely service path, and prepare the details a plumbing team needs before dispatch.</p>
           <div class="hero-actions">
-            <a class="btn btn-primary" href="#contact">Request an introduction <span aria-hidden="true">→</span></a>
-            <a class="btn btn-secondary" href="#services">Explore services</a>
+            <a class="btn btn-primary" href="#contact">Request plumbing help <span aria-hidden="true">→</span></a>
+            <a class="btn btn-secondary" href="#services">Find the right service</a>
           </div>
-          <div class="trust-line"><span>Fictional ARC QA concept</span><span>No invented customer claims</span></div>
+          <div class="trust-line"><span>Problem-first service paths</span><span>No response-time promise without confirmation</span></div>
         </div>
 
         <div class="hero-visual">
           <div class="hero-media"></div>
           <div class="hero-photo-caption">
             <small>Plumbing and Water Heaters</small>
-            <strong>Water Heater Service, clearly framed</strong>
+            <strong>From symptom to sensible next step</strong>
           </div>
           <div class="hero-fallback" data-arc-media-provider="local-css">
             <div class="fallback-top">
@@ -1686,11 +1898,11 @@
             </div>
             <div class="fallback-main">
               <small>Plumbing and Water Heaters</small>
-              <h2>Water Heater Service, clearly framed</h2>
+              <h2>From symptom to sensible next step</h2>
             </div>
             <div class="fallback-bottom">
-              <div class="chips"><span>Water Heater Service</span><span>Plumbing and Water Heaters Planning</span><span>Plumbing and Water Heaters Support</span></div>
-              <div class="hero-proof">Clear scope • Honest proof • Responsive experience</div>
+              <div class="chips"><span>Water Heater Service</span><span>Leaks and Fixtures</span><span>Drain Diagnostics</span></div>
+              <div class="hero-proof">Issue triage • Scope clarity • Arrival prep</div>
             </div>
           </div>
         </div>
@@ -1698,17 +1910,17 @@
     </section>
 
     <div class="ticker" role="region" aria-label="Highlights">
-      <div class="ticker-track"><span>Water Heater Service</span><span>Plumbing and Water Heaters Planning</span><span>Plumbing and Water Heaters Support</span><span>Customer Guidance</span></div>
+      <div class="ticker-track"><span>Water Heater Service</span><span>Leaks and Fixtures</span><span>Drain Diagnostics</span><span>Plumbing Updates</span></div>
     </div>
 
     <section class="services" id="services">
       <div class="wrap">
         <p class="eyebrow">Services</p>
         <div class="section-head">
-          <h2>Plumbing and Water Heaters services made easier to understand</h2>
-          <p>A focused service structure for prospective customers evaluating plumbing and water heaters.</p>
+          <h2>Plumbing help organized by what you notice</h2>
+          <p>A practical service menu for hot-water problems, visible leaks, slow drains, and planned fixture work.</p>
         </div>
-        <div class="service-grid"><article><h3>Water Heater Service</h3><p>A clear introduction to water heater service with the next step stated plainly.</p></article><article><h3>Plumbing and Water Heaters Planning</h3><p>Organize priorities, timing, and practical requirements before work begins.</p></article><article><h3>Plumbing and Water Heaters Support</h3><p>Explain what customers can expect before, during, and after the service.</p></article><article><h3>Customer Guidance</h3><p>Answer common questions without inventing outcomes, ratings, licenses, or guarantees.</p></article></div>
+        <div class="service-grid"><article><h3>Water Heater Service</h3><p>Describe hot-water symptoms and system details so the appropriate visit can be discussed.</p></article><article><h3>Leaks and Fixtures</h3><p>Identify the visible location, recent changes, and access considerations before service.</p></article><article><h3>Drain Diagnostics</h3><p>Outline where drainage is slow or blocked without assuming the cause in advance.</p></article><article><h3>Plumbing Updates</h3><p>Plan fixture, supply, or utility changes around the property and intended use.</p></article></div>
       </div>
     </section>
 
@@ -1716,10 +1928,10 @@
       <div class="wrap">
         <p class="eyebrow">Why choose us</p>
         <div class="section-head">
-          <h2>Why Copperline Plumbing Concept feels different</h2>
-          <p>A clear, premium customer journey built around useful information and an easy next step.</p>
+          <h2>Useful plumbing intake starts with the symptom</h2>
+          <p>The page helps a homeowner communicate the issue clearly while leaving diagnosis, timing, and price to verified service details.</p>
         </div>
-        <div class="why-grid"><article><h3>Readable scope</h3><p>Services and next steps are easy to scan on desktop and mobile.</p></article><article><h3>Honest evidence</h3><p>The concept does not publish unsupported reviews, results, or credentials.</p></article><article><h3>Useful sequence</h3><p>The customer journey explains what happens before a commitment.</p></article><article><h3>Visible action</h3><p>A single primary action stays clear throughout the experience.</p></article></div>
+        <div class="why-grid"><article><h3>Symptom-led navigation</h3><p>Visitors can begin with hot water, leaks, drainage, or planned updates instead of trade jargon.</p></article><article><h3>Arrival-ready details</h3><p>The intake prompts for access, system type, location, and timing that can shape the visit.</p></article><article><h3>No invented urgency</h3><p>The concept does not promise arrival windows, availability, or repair outcomes.</p></article><article><h3>Direct mobile action</h3><p>A homeowner can reach the request path quickly when standing near the problem.</p></article></div>
       </div>
     </section>
 
@@ -1728,9 +1940,9 @@
         <div class="about-media" data-monogram="Copperline Plumbing Concept" data-arc-media-provider="local-css"></div>
         <div class="about-copy">
           <p class="eyebrow">Inside Copperline Plumbing Concept</p>
-          <h2>Copperline Plumbing Concept is a semantic media test</h2>
-          <div class="about-body"><p>This fictional concept verifies that ARC selects the plumbing media profile and a suitable composition without presenting stock imagery as client work.</p></div>
-          <div class="about-quote">Specific visuals. Verifiable claims. One clear next step.</div>
+          <h2>A service page built for the moment something stops working</h2>
+          <div class="about-body"><p>This fictional plumbing concept combines crisp utility cues, strong hierarchy, and homeowner-friendly triage without inventing availability, credentials, service counts, or repair guarantees.</p></div>
+          <div class="about-quote">Name the symptom. Prepare the access. Confirm the scope.</div>
           <div class="stats"></div>
         </div>
       </div>
@@ -1740,10 +1952,10 @@
       <div class="wrap">
         <p class="eyebrow">How it works</p>
         <div class="section-head">
-          <h2>A straightforward plumbing and water heaters journey</h2>
-          <p>Every stage explains what happens next, reducing uncertainty before the first conversation.</p>
+          <h2>A clearer route from leak to visit</h2>
+          <p>Each step gathers practical context without pretending a public form can diagnose a plumbing system.</p>
         </div>
-        <div class="process-list"><article><span>01</span><h3>Share the need</h3><p>Describe the situation, priorities, and desired timing.</p></article><article><span>02</span><h3>Review the fit</h3><p>A real provider would confirm service area, scope, and required information.</p></article><article><span>03</span><h3>Compare the path</h3><p>Discuss practical options and the tradeoffs that matter.</p></article><article><span>04</span><h3>Confirm next steps</h3><p>Agree on scope, timing, access, and communication before work begins.</p></article></div>
+        <div class="process-list"><article><span>01</span><h3>Describe the symptom</h3><p>Share what you see, hear, smell, or notice about water use and drainage.</p></article><article><span>02</span><h3>Locate the system</h3><p>Identify the fixture, room, equipment type, and any known access constraints.</p></article><article><span>03</span><h3>Review the service path</h3><p>A real plumbing team would confirm fit, urgency, and the appropriate kind of visit.</p></article><article><span>04</span><h3>Prepare the property</h3><p>Confirm access, pets, parking, shutoff knowledge, and who can meet the technician.</p></article></div>
       </div>
     </section>
 
@@ -1751,8 +1963,8 @@
       <div class="wrap">
         <p class="eyebrow">Work</p>
         <div class="section-head">
-          <h2>A visual system matched to the work</h2>
-          <p>Licensed stock imagery is selected from the plumbing media profile for this fictional concept.</p>
+          <h2>A visual system built around flow and access</h2>
+          <p>Pipe-like lines and technical rhythm communicate the category while remaining clearly generated local art direction.</p>
         </div>
         <div class="gallery-grid" data-arc-media-provider="local-css"></div>
       </div>
@@ -1762,10 +1974,10 @@
       <div class="wrap">
         <p class="eyebrow">Client proof</p>
         <div class="section-head">
-          <h2>Trust without manufactured testimonials</h2>
-          <p>This QA concept uses verifiable service commitments instead of fictional ratings, reviews, or results.</p>
+          <h2>What a dependable plumbing decision needs</h2>
+          <p>The strongest proof here is operational clarity; provider credentials and customer feedback remain reserved for supplied evidence.</p>
         </div>
-        <div class="proof-grid"><article><h3>Clear scope</h3><p>The page explains the service, the next step, and what information a customer should prepare.</p></article><article><h3>Honest proof</h3><p>No customer quote, rating, certification, or performance number appears without source material.</p></article><article><h3>Conversion-ready</h3><p>Primary actions remain visible and usable across desktop and mobile layouts.</p></article></div>
+        <div class="proof-grid"><article><h3>Issue-specific intake</h3><p>The request separates active symptoms from planned property improvements.</p></article><article><h3>Scope checkpoints</h3><p>Visitors can see where diagnosis ends and an approved repair scope would begin.</p></article><article><h3>Evidence held back</h3><p>No credential, response window, warranty, or customer story appears without client documentation.</p></article></div>
       </div>
     </section>
 
@@ -1774,9 +1986,9 @@
         <div class="faq-copy">
           <p class="eyebrow">FAQ</p>
           <h2>Plumbing and Water Heaters questions, answered</h2>
-          <p>Concise answers help prospective customers decide whether to start a conversation.</p>
+          <p>Direct answers help homeowners describe the issue while avoiding unsupported diagnosis or urgency promises.</p>
         </div>
-        <div class="faq-list"><details><summary>What should a customer share first?</summary><p>The need, location, timing, and any constraints make the first response more useful.</p></details><details><summary>Are the images client work?</summary><p>No. Licensed stock imagery is used only as visual direction in this fictional QA concept.</p></details><details><summary>Are the results and reviews real?</summary><p>No unsupported result, rating, review, license, or guarantee is published here.</p></details><details><summary>What happens after the request?</summary><p>A real provider would verify fit and explain the appropriate next step.</p></details></div>
+        <div class="faq-list"><details><summary>What details help with a water heater issue?</summary><p>Share the system type if known, the symptom, when it began, and where the equipment is located.</p></details><details><summary>Should I include photos?</summary><p>A real provider may request useful photos through an approved channel after initial contact.</p></details><details><summary>Can the page diagnose the cause?</summary><p>No. Similar symptoms can have different causes, so diagnosis belongs to an appropriate on-site review.</p></details><details><summary>Does this concept promise emergency availability?</summary><p>No availability or response-time claim is made in this fictional ARC concept.</p></details></div>
       </div>
     </section>
 
@@ -1786,11 +1998,11 @@
           <div class="contact-grid">
             <div>
               <p class="eyebrow">Next step</p>
-              <h2>Start a clear plumbing and water heaters conversation</h2>
-              <div class="contact-body">Share the need and timing. A real provider would confirm fit before recommending a service path.</div>
-              <div class="contact-actions"><form name="plumbing-lead" method="POST" data-netlify="true" netlify-honeypot="bot-field" action="/?submitted=1"><input type="hidden" name="form-name" value="plumbing-lead"><p hidden><label>Leave blank<input name="bot-field"></label></p><label>Name<input type="text" name="name" autocomplete="name" required></label><label>Email<input type="email" name="email" autocomplete="email" required></label><label>Phone<input type="tel" name="phone" autocomplete="tel"></label><label>Project details<textarea name="project_details" required></textarea></label><p class="form-status" role="note">By submitting this form, you agree that this business may contact you about your request. Do not include sensitive personal, medical, legal, or financial information.</p><button type="submit">Request an introduction</button></form></div>
+              <h2>Tell us what the water is doing</h2>
+              <div class="contact-body">Share the symptom, property location, equipment or fixture involved, and preferred timing. A real provider would confirm fit and availability.</div>
+              <div class="contact-actions"><form name="plumbing-lead" method="POST" data-netlify="true" netlify-honeypot="bot-field" action="/?submitted=1"><input type="hidden" name="form-name" value="plumbing-lead"><p hidden><label>Leave blank<input name="bot-field"></label></p><label>Name<input type="text" name="name" autocomplete="name" required></label><label>Email<input type="email" name="email" autocomplete="email" required></label><label>Phone<input type="tel" name="phone" autocomplete="tel"></label><label>Project details<textarea name="project_details" required></textarea></label><p class="form-status" role="note">By submitting this form, you agree that this business may contact you about your request. Do not include sensitive personal, medical, legal, or financial information.</p><button type="submit">Request plumbing help</button></form></div>
             </div>
-            <div class="contact-details"><p><strong>Concept location:</strong> Quality Assurance Market</p><p>Final contact details are added only after client verification.</p></div>
+            <div class="contact-details"><p><strong>Concept location:</strong> Minneapolis, Minnesota</p><p>Final contact details are added only after client verification.</p></div>
           </div>
         </div>
       </div>
@@ -1801,13 +2013,13 @@
     <div class="wrap footer-row">
       <div class="footer-copy">
         <strong>Copperline Plumbing Concept</strong>
-        <span>Fictional plumbing and water heaters concept built to test the ARC v10 system.</span><br>
+        <span>Fictional plumbing concept with availability, credentials, and outcomes intentionally withheld.</span><br>
         <span>© <span id="year"></span> All rights reserved.</span>
       </div>
       <div class="footer-links"><a href="#services">Services</a><a href="#about">About</a><a href="#process">Process</a><a href="#faq">FAQ</a><a href="#contact">Contact</a></div>
     </div>
   </footer>
-  <a class="btn btn-primary mobile-cta" href="#contact">Request an introduction <span aria-hidden="true">→</span></a>
+  <a class="btn btn-primary mobile-cta" href="#contact">Request plumbing help <span aria-hidden="true">→</span></a>
 
   <script>
     (() => {

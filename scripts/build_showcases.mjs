@@ -11,17 +11,20 @@ const showcases = [
   {
     profile: "roofing",
     name: "Ironwood Roofing Concept",
-    sourceFile: "qa-v10/ironwood-roofing-concept-a1000001/index.html"
+    sourceFile: "qa-v10/ironwood-roofing-concept-a1000001/index.html",
+    sourceProvenanceCopy: "The local art direction reflects the roofing category without presenting concept imagery as completed client work."
   },
   {
     profile: "dental",
     name: "Cedar Dental Concept",
-    sourceFile: "qa-v10/cedar-dental-concept-b2000001/index.html"
+    sourceFile: "qa-v10/cedar-dental-concept-b2000001/index.html",
+    sourceProvenanceCopy: "Clean curves, measured spacing, and warm clinical color suggest dental care without presenting concept art as patient work."
   },
   {
     profile: "finance",
     name: "Clearwater Finance Concept",
-    sourceFile: "qa-v10/clearwater-finance-concept-b2000010/index.html"
+    sourceFile: "qa-v10/clearwater-finance-concept-b2000010/index.html",
+    sourceProvenanceCopy: "Grid, ledger, and directional motifs evoke financial planning without presenting simulated account data or results."
   }
 ];
 
@@ -72,6 +75,7 @@ const replaceExactlyOnce = (html, pattern, replacement, label) => {
   if (matches.length !== 1) throw new Error(`ARC_SHOWCASE_INVALID: expected exactly one ${label}; found ${matches.length}`);
   return html.replace(pattern, replacement);
 };
+const escapeRegExp = value => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const manifest = [];
 for (const showcase of showcases) {
@@ -132,7 +136,12 @@ for (const showcase of showcases) {
     '<div class="showcase-form-disabled" role="note">Lead collection is intentionally disabled in this fictional design concept.</div>',
     "customer lead form"
   );
-  if (!/stock imagery/i.test(html)) throw new Error(`ARC_SHOWCASE_INVALID: ${showcase.profile} source lacks reviewed image-provenance copy`);
+  html = replaceExactlyOnce(
+    html,
+    new RegExp(escapeRegExp(showcase.sourceProvenanceCopy), "i"),
+    "Original ARC-generated concept imagery is used to demonstrate this design direction; it is not client work.",
+    "reviewed image-provenance copy"
+  );
   html = html
     .replace(
       /Licensed stock imagery is selected from the [^<]+ media profile for this fictional concept\./gi,
@@ -146,7 +155,7 @@ for (const showcase of showcases) {
       /No\. Licensed stock imagery is used only as visual direction in this fictional QA concept\./gi,
       "No. Original ARC-generated concept imagery is used only as visual direction in this fictional QA concept."
     );
-  if (/stock imagery/i.test(html) || !/Original ARC-generated concept imagery/i.test(html)) {
+  if (/(?:stock imagery|stock photographs|local art direction reflects|concept art as patient work|simulated account data)/i.test(html) || !/Original ARC-generated concept imagery/i.test(html)) {
     throw new Error(`ARC_SHOWCASE_INVALID: ${showcase.profile} retained inaccurate stock-image provenance copy`);
   }
   html = replaceExactlyOnce(
@@ -223,7 +232,9 @@ for (const showcase of showcases) {
   await mkdir(path.dirname(path.join(root, file)), { recursive: true });
   await writeFile(path.join(root, file), html);
   manifest.push({
-    ...showcase,
+    profile: showcase.profile,
+    name: showcase.name,
+    sourceFile: showcase.sourceFile,
     file,
     heroAsset: {
       file: heroAsset.file,

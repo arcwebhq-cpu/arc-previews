@@ -112,7 +112,7 @@ const rejectedContent = [
   ["wrong lead autocomplete", { CONTACT_ACTION_HTML: fixture.content.CONTACT_ACTION_HTML.replace('name="email" autocomplete="email"', 'name="email" autocomplete="off"') }, /lead identity controls require exact autocomplete hints/],
   ["thin service section", { SERVICES_HTML: '<article><h3>Roof Replacement</h3><p>A clear and carefully explained roofing service.</p></article>' }, /ARC_CONTENT_QUALITY_INVALID/],
   ["CTA mismatch", { CONTACT_ACTION_HTML: fixture.content.CONTACT_ACTION_HTML.replace('>Request a roof assessment</button>', '>Send request</button>') }, /lead form submit text must exactly match PRIMARY_CTA_LABEL/],
-  ["unsupported rating claim", { PROOF_HTML: fixture.content.PROOF_HTML.replace('No customer quote, rating, certification, or performance number appears without source material.', 'Rated 4.9/5 by 600 customers across the region.') }, /ARC_CLAIM_EVIDENCE_REQUIRED/],
+  ["unsupported rating claim", { ABOUT_BODY: fixture.content.ABOUT_BODY + '<p>Rated 4.9/5 by 600 customers across the region.</p>' }, /ARC_CLAIM_EVIDENCE_REQUIRED/],
   ["unfinished copy", { ABOUT_BODY: '<p>Lorem ipsum placeholder copy remains visible even though this paragraph contains enough words to pass a simple word-count check for the section.</p>' }, /placeholder or unfinished copy is visible/]
 ];
 for (const [label, mutation, expression] of rejectedContent) {

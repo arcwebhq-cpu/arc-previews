@@ -10,6 +10,8 @@ const packageJson = JSON.parse(await readFile(path.join(projectRoot, "package.js
 
 assert.match(workflow, /repository:\s*arcwebhq-cpu\/arc-site\s*\n\s*ref:\s*163f6e2a4c769c779fa23e5c3df1c1008e819a2f\s*\n\s*path:\s*\.arc-site-contract/,
   "CI must execute against the reviewed ARC1 v2 site producer authority.");
+assert.match(workflow, /run:\s*npm ci --prefix \.arc-site-contract\s*$/m,
+  "CI must install the pinned ARC site contract's exact dependencies before importing its runtime modules.");
 assert.match(packageJson.scripts["test:arc1-consumer"], /tests\/arc1_site_packet_runtime_contract\.mjs/,
   "The quality gate must execute a real pinned site packet through the generated runtime bundle.");
 

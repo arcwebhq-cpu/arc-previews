@@ -26,6 +26,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Install pinned ARC site contract dependencies
+        run: npm ci --prefix .arc-site-contract
       - run: npx playwright install --with-deps chromium
       - run: npm test
         env:

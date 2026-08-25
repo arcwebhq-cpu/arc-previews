@@ -11,6 +11,11 @@ const expectedShowcases = new Map([
   ["dental", "showcases/dental/index.html"],
   ["finance", "showcases/finance/index.html"]
 ]);
+const expectedShowcaseAssets = new Map([
+  ["roofing", Object.freeze({ file: "showcases/assets/3f8f6dcbc44f0bb37c1dccfad999f20a8a80213486c3c31dc438e89d1be887cb.webp", sha256: "3f8f6dcbc44f0bb37c1dccfad999f20a8a80213486c3c31dc438e89d1be887cb", width: 1122, height: 1402, ownership: "arc-generated-project-bound", provider: "arc-generated" })],
+  ["dental", Object.freeze({ file: "showcases/assets/1db7b49151bb0a391d616b8658ab15cdd1d6949426d4e8c96eb12787fb553ce7.webp", sha256: "1db7b49151bb0a391d616b8658ab15cdd1d6949426d4e8c96eb12787fb553ce7", width: 1122, height: 1402, ownership: "arc-generated-project-bound", provider: "arc-generated" })],
+  ["finance", Object.freeze({ file: "showcases/assets/c99014acba5ec713042002cda67c4efbbf7c0ecffcb4f6044b3a76134496aa5c.webp", sha256: "c99014acba5ec713042002cda67c4efbbf7c0ecffcb4f6044b3a76134496aa5c", width: 1122, height: 1402, ownership: "arc-generated-project-bound", provider: "arc-generated" })]
+]);
 const pagesIndex = `<!doctype html>
 <html lang="en">
 <head>
@@ -42,8 +47,11 @@ const sha256 = value => createHash("sha256").update(value, typeof value === "str
 const privateCheckoutPattern=/buy\.stripe\.com|\bplink_[a-z0-9]+|client_reference_id|arc-checkout-config|v3_[a-z0-9_-]{135}|arc-checkout-offer-snapshot-v1|arc1-checkout-recipient-reservation-v1|arc1-preview-readiness-(?:core|observation)-v1|arc-private-checkout-(?:policy|link-intent|link-receipt|link-reverse)-v1|checkout_(?:binding|offer|recipient|readiness)|link_receipt_(?:private|hmac|sha256)/i;
 const normalizePublicSurface=value=>{let current=String(value??"");for(let pass=0;pass<5;pass+=1){let next=current.replace(/&#(\d+);?/g,(_,code)=>String.fromCodePoint(Number(code))).replace(/&#x([0-9a-f]+);?/gi,(_,code)=>String.fromCodePoint(Number.parseInt(code,16))).replace(/&(amp|period|colon|sol|percnt|num|tab|newline|commat|lowbar);/gi,(_,name)=>({amp:"&",period:".",colon:":",sol:"/",percnt:"%",num:"#",tab:"\t",newline:"\n",commat:"@",lowbar:"_"})[name.toLowerCase()]).replace(/\/\*[\s\S]*?\*\//g,"").replace(/\\x([0-9a-f]{2})/gi,(_,hex)=>String.fromCodePoint(Number.parseInt(hex,16))).replace(/\\u\{([0-9a-f]{1,6})\}/gi,(_,hex)=>String.fromCodePoint(Number.parseInt(hex,16))).replace(/\\u([0-9a-f]{4})/gi,(_,hex)=>String.fromCodePoint(Number.parseInt(hex,16))).replace(/\\([0-9a-f]{1,6})\s?/gi,(_,hex)=>String.fromCodePoint(Number.parseInt(hex,16))).replace(/[\u3002\uff0e\uff61]/g,".").replace(/(?:%[0-9a-f]{2})+/gi,encoded=>{try{return decodeURIComponent(encoded);}catch{return encoded.replace(/%([0-9a-f]{2})/gi,(_,hex)=>String.fromCharCode(Number.parseInt(hex,16)));}});if(next===current)break;current=next;}return current.normalize("NFKC").toLowerCase();};
 function assertNoPrivateCheckoutSurface(html,label){const raw=String(html??""),decoded=normalizePublicSurface(raw),compact=decoded.replace(/[\s\u0000-\u001f\u007f]+/g,"");if(/&(?!(?:amp|quot|apos|lt|gt);)[a-z][a-z0-9]+;/i.test(raw)||privateCheckoutPattern.test(decoded)||privateCheckoutPattern.test(compact)||/<[A-Za-z][^>]*\son[a-z0-9_-]+\s*=/i.test(raw))throw new Error(`ARC_PAGES_INVALID: ${label} contains private checkout capability/evidence`);for(const match of raw.matchAll(/\b(?:href|xlink:href|action|formaction|src|srcset|poster|data|content)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/gi)){const attr=match[1]??match[2]??match[3]??"",normalized=normalizePublicSurface(attr);let parsed;try{parsed=new URL(normalized,"https://arc.invalid/");}catch{}const host=parsed?.hostname?.toLowerCase()||"";if(/%(?![0-9a-f]{2})/i.test(attr)||/&(?!(?:amp|quot|apos|lt|gt);)[a-z][a-z0-9]+;?/i.test(attr)||/\p{Default_Ignorable_Code_Point}/u.test(normalized)||host==="buy.stripe.com"||host.endsWith(".buy.stripe.com")||new Set(["javascript:","vbscript:"]).has(parsed?.protocol)||/^(?:javascript|vbscript):/i.test(normalized)||privateCheckoutPattern.test(normalized)||privateCheckoutPattern.test(normalized.replace(/[\s\u0000-\u001f\u007f]+/g,"")))throw new Error(`ARC_PAGES_INVALID: ${label} contains private checkout capability/evidence`);}}
-const trustedScriptHashes=["55335153318fa5a489d033599208d42c1c3c8b25f4a07f6e0a4f17fb5be60937","596ddd07b7b1525a0c2ec32411fa73e34121f8c320687a7249b9f793d8cf2870","98cbb58e3ec829ddaec61983333a8bb500b91558625a346350bfc8fe4842b860"].sort();
-function assertTrustedScripts(html,label){const scripts=html.match(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi)||[],hashes=scripts.map(sha256).sort();if((html.match(/<script\b/gi)||[]).length!==scripts.length||(html.match(/<\/script\b/gi)||[]).length!==scripts.length||hashes.length!==3||JSON.stringify(hashes)!==JSON.stringify(trustedScriptHashes)||sha256(hashes.join("\n"))!=="8ff6073533b7b631ab6657461d3631a2f00ca4a70ed0b79c2c016647948aae7b")throw new Error(`ARC_PAGES_INVALID: ${label} reviewed script manifest changed`);}
+const trustedScriptManifests=Object.freeze({
+  customer:Object.freeze({ hashes:["55335153318fa5a489d033599208d42c1c3c8b25f4a07f6e0a4f17fb5be60937","596ddd07b7b1525a0c2ec32411fa73e34121f8c320687a7249b9f793d8cf2870","98cbb58e3ec829ddaec61983333a8bb500b91558625a346350bfc8fe4842b860"].sort(), manifest:"8ff6073533b7b631ab6657461d3631a2f00ca4a70ed0b79c2c016647948aae7b" }),
+  showcase:Object.freeze({ hashes:["1c1fd564bd8722132dfb2473f862a68369fff343a58ab8519196225a538de62b","55335153318fa5a489d033599208d42c1c3c8b25f4a07f6e0a4f17fb5be60937","596ddd07b7b1525a0c2ec32411fa73e34121f8c320687a7249b9f793d8cf2870"].sort(), manifest:"7d0ff7ea015b764d5bc06972614fb43cc07489bff90e28dddd87ad9ca081f0af" })
+});
+function assertTrustedScripts(html,label,kind="customer"){const expected=trustedScriptManifests[kind];const scripts=html.match(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi)||[],hashes=scripts.map(sha256).sort();if(!expected||(html.match(/<script\b/gi)||[]).length!==scripts.length||(html.match(/<\/script\b/gi)||[]).length!==scripts.length||hashes.length!==3||JSON.stringify(hashes)!==JSON.stringify(expected.hashes)||sha256(hashes.join("\n"))!==expected.manifest)throw new Error(`ARC_PAGES_INVALID: ${label} reviewed script manifest changed`);}
 function assertNoUnsafeExecutableSurface(html,label){const raw=String(html??""),nonScript=raw.replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi,""),decodedNonScript=normalizePublicSurface(nonScript);if(/&(?!(?:amp|quot|apos|lt|gt);)[a-z][a-z0-9]+;/i.test(nonScript)||/\p{Default_Ignorable_Code_Point}/u.test(decodedNonScript)||/<[A-Za-z][^>]*(?:\s|\/)on[a-z0-9_-]+\s*=/i.test(raw)||/<style\b[^>]*>[\s\S]*?\\[\s\S]*?<\/style\s*>/i.test(decodedNonScript)||/\bstyle\s*=\s*(?:"[^"]*\\|'[^']*\\)/i.test(decodedNonScript))throw new Error(`ARC_PAGES_INVALID: ${label} contains an unreviewed executable/encoded surface`);}
 
 function attribute(tag, name) {
@@ -91,7 +99,7 @@ function assertV10(html, label) {
 function validateShowcase(html, profile, relative) {
   assertNoPrivateCheckoutSurface(html,relative);
   assertNoUnsafeExecutableSurface(html,relative);
-  assertTrustedScripts(html,relative);
+  assertTrustedScripts(html,relative,"showcase");
   assertV10(html, relative);
   assertPrivateRobots(html, relative);
   assertNoEmail(html, relative);
@@ -107,6 +115,25 @@ function validateShowcase(html, profile, relative) {
   }
   if (/<form\b|\bdata-netlify\b|\bnetlify-honeypot\b|\bdata-arc-checkout\b|buy\.stripe\.com|\bplink_[A-Za-z0-9]+|client_reference_id|arc-checkout-config|v3_[A-Za-z0-9_-]{135}/i.test(html)) {
     throw new Error(`ARC_PAGES_INVALID: ${relative} contains an active form or checkout`);
+  }
+  const nonScriptHtml = html.replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, "");
+  const expectedAsset = expectedShowcaseAssets.get(profile);
+  const photoTags = (nonScriptHtml.match(/<img\b[^>]*>/gi) || [])
+    .filter(tag => attribute(tag, "data-arc-showcase-photo") === profile);
+  const expectedSource = `../assets/${path.basename(expectedAsset?.file || "")}`;
+  if (
+    !expectedAsset ||
+    photoTags.length !== 1 ||
+    (nonScriptHtml.match(/<img\b/gi) || []).length !== 1 ||
+    attribute(photoTags[0], "data-arc-owned-asset") !== "true" ||
+    attribute(photoTags[0], "data-arc-media-provider") !== expectedAsset.provider ||
+    attribute(photoTags[0], "src") !== expectedSource ||
+    attribute(photoTags[0], "width") !== String(expectedAsset.width) ||
+    attribute(photoTags[0], "height") !== String(expectedAsset.height) ||
+    !/fictional ARC design concept/i.test(attribute(photoTags[0], "alt")) ||
+    /<(?:picture|source|video|svg)\b/i.test(nonScriptHtml)
+  ) {
+    throw new Error(`ARC_PAGES_INVALID: ${relative} must use one profile-matched ARC-owned content-addressed photo`);
   }
 }
 
@@ -235,23 +262,71 @@ export async function buildPagesArtifact({ root = moduleRoot, output = path.join
   if (!Array.isArray(manifest) || manifest.length !== expectedShowcases.size) {
     throw new Error("ARC_PAGES_INVALID: showcase manifest must contain exactly three entries");
   }
+  const provenance = JSON.parse(await readRegularFile(sourceRoot, "showcases/assets/provenance.json"));
+  const provenanceConstraints = ["fictional ARC design concept", "no real client or business", "no logos", "no embedded text", "no customer claims"];
+  if (
+    provenance?.version !== "arc-showcase-asset-provenance-v1" ||
+    provenance?.generated_on !== "2026-08-24" ||
+    provenance?.generator !== "OpenAI built-in image generator" ||
+    JSON.stringify(provenance?.constraints) !== JSON.stringify(provenanceConstraints) ||
+    !Array.isArray(provenance?.assets) ||
+    provenance.assets.length !== expectedShowcaseAssets.size
+  ) throw new Error("ARC_PAGES_INVALID: showcase asset provenance is incomplete");
+  const provenanceByProfile = new Map(provenance.assets.map(item => [item?.profile, item]));
   const seenProfiles = new Set();
   validatePagesIndex(pagesIndex);
   const artifactFiles = [{ relative: "index.html", content: pagesIndex }];
   for (const item of manifest) {
     const profile = String(item?.profile ?? "");
     const relative = slashPath(item?.file);
-    if (seenProfiles.has(profile) || expectedShowcases.get(profile) !== relative) {
+    const expectedAsset = expectedShowcaseAssets.get(profile);
+    const manifestAsset = item?.heroAsset;
+    const provenanceAsset = provenanceByProfile.get(profile);
+    if (
+      seenProfiles.has(profile) ||
+      expectedShowcases.get(profile) !== relative ||
+      !expectedAsset ||
+      !manifestAsset ||
+      manifestAsset.file !== expectedAsset.file ||
+      manifestAsset.sha256 !== expectedAsset.sha256 ||
+      manifestAsset.width !== expectedAsset.width ||
+      manifestAsset.height !== expectedAsset.height ||
+      manifestAsset.ownership !== expectedAsset.ownership ||
+      manifestAsset.provider !== expectedAsset.provider ||
+      Object.keys(manifestAsset).sort().join(",") !== "file,height,ownership,provider,sha256,width" ||
+      !provenanceAsset ||
+      provenanceAsset.file !== path.basename(expectedAsset.file) ||
+      provenanceAsset.sha256 !== expectedAsset.sha256 ||
+      !/^exec-[a-f0-9-]{36}$/.test(provenanceAsset.source_generation_id || "") ||
+      typeof provenanceAsset.prompt_summary !== "string" ||
+      provenanceAsset.prompt_summary.length < 40 ||
+      provenanceAsset.prompt_summary.length > 300
+    ) {
       throw new Error("ARC_PAGES_INVALID: showcase manifest escaped the fixed public allowlist");
     }
     seenProfiles.add(profile);
     const html = await readRegularFile(sourceRoot, relative);
     validateShowcase(html, profile, relative);
+    const heroBytes = await readRegularBytes(sourceRoot, expectedAsset.file);
+    if (
+      heroBytes.length < 1 ||
+      heroBytes.length > 1_250_000 ||
+      sha256(heroBytes) !== expectedAsset.sha256 ||
+      heroBytes.subarray(0, 4).toString("ascii") !== "RIFF" ||
+      heroBytes.subarray(8, 12).toString("ascii") !== "WEBP"
+    ) throw new Error(`ARC_PAGES_INVALID: ${expectedAsset.file} asset size, digest, or signature mismatch`);
+    artifactFiles.push({ relative: expectedAsset.file, content: heroBytes });
     artifactFiles.push({ relative, content: html });
   }
   if (seenProfiles.size !== expectedShowcases.size) {
     throw new Error("ARC_PAGES_INVALID: one or more fixed showcases are missing");
   }
+  const showcaseAssetEntries = await readdir(path.join(sourceRoot, "showcases/assets"), { withFileTypes: true });
+  const expectedShowcaseAssetFiles = ["provenance.json", ...[...expectedShowcaseAssets.values()].map(item => path.basename(item.file))].sort();
+  if (
+    showcaseAssetEntries.some(item => !item.isFile() || item.isSymbolicLink()) ||
+    showcaseAssetEntries.map(item => item.name).sort().join("\n") !== expectedShowcaseAssetFiles.join("\n")
+  ) throw new Error("ARC_PAGES_INVALID: showcases/assets contains extra, missing, or non-regular files");
 
   const customerPreviews = [];
   const entries = await readdir(sourceRoot, { withFileTypes: true });

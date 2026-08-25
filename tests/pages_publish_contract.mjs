@@ -43,13 +43,16 @@ async function listFiles(root, current = root) {
 
 const root = await mkdtemp(path.join(os.tmpdir(), "arc-pages-contract-"));
 try {
-  const manifest = [
-    { profile: "roofing", file: "showcases/roofing/index.html" },
-    { profile: "dental", file: "showcases/dental/index.html" },
-    { profile: "finance", file: "showcases/finance/index.html" }
-  ];
+  const manifest = JSON.parse(await readFile(path.join(projectRoot, "showcases/manifest.json"), "utf8"));
   await put(root, "showcases/manifest.json", `${JSON.stringify(manifest)}\n`);
-  for (const item of manifest) await put(root,item.file,await readFile(path.join(projectRoot,item.file),"utf8"));
+  await put(root, "showcases/assets/provenance.json", await readFile(path.join(projectRoot, "showcases/assets/provenance.json"), "utf8"));
+  for (const item of manifest) {
+    await put(root,item.file,await readFile(path.join(projectRoot,item.file),"utf8"));
+    const heroBytes = await readFile(path.join(projectRoot,item.heroAsset.file));
+    const heroDestination = path.join(root, ...item.heroAsset.file.split("/"));
+    await mkdir(path.dirname(heroDestination), { recursive: true });
+    await writeFile(heroDestination, heroBytes);
+  }
   const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
   const assetSha = createHash("sha256").update(png).digest("hex");
   const assetRelative = `${customerFolder}/assets/${assetSha}.png`;
@@ -75,6 +78,9 @@ try {
     "index.html",
     assetRelative,
     `${customerFolder}/index.html`,
+    "showcases/assets/1db7b49151bb0a391d616b8658ab15cdd1d6949426d4e8c96eb12787fb553ce7.webp",
+    "showcases/assets/3f8f6dcbc44f0bb37c1dccfad999f20a8a80213486c3c31dc438e89d1be887cb.webp",
+    "showcases/assets/c99014acba5ec713042002cda67c4efbbf7c0ecffcb4f6044b3a76134496aa5c.webp",
     "showcases/dental/index.html",
     "showcases/finance/index.html",
     "showcases/roofing/index.html"
@@ -187,6 +193,31 @@ try {
     /active form or checkout/
   );
   await put(root, unsafeShowcase, safeShowcase);
+
+  const showcaseHero = manifest[0].heroAsset.file;
+  const safeShowcaseHero = await readFile(path.join(root, ...showcaseHero.split("/")));
+  const tamperedShowcaseHero = Buffer.from(safeShowcaseHero);
+  tamperedShowcaseHero[20] ^= 1;
+  await writeFile(path.join(root, ...showcaseHero.split("/")), tamperedShowcaseHero);
+  await assert.rejects(
+    buildPagesArtifact({ root, output }),
+    /asset size, digest, or signature mismatch/
+  );
+  await writeFile(path.join(root, ...showcaseHero.split("/")), safeShowcaseHero);
+
+  const extraShowcaseHero = path.join(root, "showcases/assets", `${"f".repeat(64)}.webp`);
+  await writeFile(extraShowcaseHero, safeShowcaseHero);
+  await assert.rejects(
+    buildPagesArtifact({ root, output }),
+    /showcases\/assets contains extra, missing, or non-regular files/
+  );
+  await rm(extraShowcaseHero);
+
+  const provenancePath = path.join(root, "showcases/assets/provenance.json");
+  const safeProvenance = await readFile(provenancePath, "utf8");
+  await writeFile(provenancePath, safeProvenance.replace("OpenAI built-in image generator", "unreviewed generator"), "utf8");
+  await assert.rejects(buildPagesArtifact({ root, output }), /showcase asset provenance is incomplete/);
+  await writeFile(provenancePath, safeProvenance, "utf8");
 
   await put(root, "showcases/manifest.json", `${JSON.stringify([...manifest, { profile: "extra", file: "showcases/extra/index.html" }])}\n`);
   await assert.rejects(

@@ -3,18 +3,42 @@
     "profile": "roofing",
     "name": "Ironwood Roofing Concept",
     "sourceFile": "qa-v10/ironwood-roofing-concept-a1000001/index.html",
-    "file": "showcases/roofing/index.html"
+    "file": "showcases/roofing/index.html",
+    "heroAsset": {
+      "file": "showcases/assets/3f8f6dcbc44f0bb37c1dccfad999f20a8a80213486c3c31dc438e89d1be887cb.webp",
+      "sha256": "3f8f6dcbc44f0bb37c1dccfad999f20a8a80213486c3c31dc438e89d1be887cb",
+      "width": 1122,
+      "height": 1402,
+      "ownership": "arc-generated-project-bound",
+      "provider": "arc-generated"
+    }
   },
   {
     "profile": "dental",
     "name": "Cedar Dental Concept",
     "sourceFile": "qa-v10/cedar-dental-concept-b2000001/index.html",
-    "file": "showcases/dental/index.html"
+    "file": "showcases/dental/index.html",
+    "heroAsset": {
+      "file": "showcases/assets/1db7b49151bb0a391d616b8658ab15cdd1d6949426d4e8c96eb12787fb553ce7.webp",
+      "sha256": "1db7b49151bb0a391d616b8658ab15cdd1d6949426d4e8c96eb12787fb553ce7",
+      "width": 1122,
+      "height": 1402,
+      "ownership": "arc-generated-project-bound",
+      "provider": "arc-generated"
+    }
   },
   {
     "profile": "finance",
     "name": "Clearwater Finance Concept",
     "sourceFile": "qa-v10/clearwater-finance-concept-b2000010/index.html",
-    "file": "showcases/finance/index.html"
+    "file": "showcases/finance/index.html",
+    "heroAsset": {
+      "file": "showcases/assets/c99014acba5ec713042002cda67c4efbbf7c0ecffcb4f6044b3a76134496aa5c.webp",
+      "sha256": "c99014acba5ec713042002cda67c4efbbf7c0ecffcb4f6044b3a76134496aa5c",
+      "width": 1122,
+      "height": 1402,
+      "ownership": "arc-generated-project-bound",
+      "provider": "arc-generated"
+    }
   }
 ]

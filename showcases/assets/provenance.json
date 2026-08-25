@@ -1,0 +1,35 @@
+{
+  "version": "arc-showcase-asset-provenance-v1",
+  "generated_on": "2026-08-24",
+  "generator": "OpenAI built-in image generator",
+  "constraints": [
+    "fictional ARC design concept",
+    "no real client or business",
+    "no logos",
+    "no embedded text",
+    "no customer claims"
+  ],
+  "assets": [
+    {
+      "profile": "roofing",
+      "file": "3f8f6dcbc44f0bb37c1dccfad999f20a8a80213486c3c31dc438e89d1be887cb.webp",
+      "sha256": "3f8f6dcbc44f0bb37c1dccfad999f20a8a80213486c3c31dc438e89d1be887cb",
+      "source_generation_id": "exec-b8222fe6-9fde-4d0e-b245-678c0343a733",
+      "prompt_summary": "Photorealistic Pacific Northwest residential roofer working on a roof; premium editorial composition; fictional and free of logos or text."
+    },
+    {
+      "profile": "dental",
+      "file": "1db7b49151bb0a391d616b8658ab15cdd1d6949426d4e8c96eb12787fb553ce7.webp",
+      "sha256": "1db7b49151bb0a391d616b8658ab15cdd1d6949426d4e8c96eb12787fb553ce7",
+      "source_generation_id": "exec-70e4bf69-5406-4896-b46d-3abd89f97590",
+      "prompt_summary": "Photorealistic modern dental treatment room with a clinician and chair; calm premium composition; fictional and free of logos or text."
+    },
+    {
+      "profile": "finance",
+      "file": "c99014acba5ec713042002cda67c4efbbf7c0ecffcb4f6044b3a76134496aa5c.webp",
+      "sha256": "c99014acba5ec713042002cda67c4efbbf7c0ecffcb4f6044b3a76134496aa5c",
+      "source_generation_id": "exec-bc7b315e-65a1-4ee7-a5bf-3872d93a56dc",
+      "prompt_summary": "Photorealistic financial professional reviewing a planning chart in a warm office; premium editorial composition; fictional and free of logos or text."
+    }
+  ]
+}

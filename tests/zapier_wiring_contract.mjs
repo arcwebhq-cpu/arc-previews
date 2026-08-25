@@ -19,7 +19,8 @@ const [
   emailGateSource,
   legacyPublishSource,
   legacyMergeSource,
-  legacyControlSource
+  legacyControlSource,
+  activationRunbook
 ] = await Promise.all([
   "../zapier/arc1_verify_intake_and_assets.js",
   "../zapier/arc1_verify_function_intake.js",
@@ -35,7 +36,8 @@ const [
   "../zapier/arc2_delivery_email_gate.js",
   "../zapier/arc2_publish_delivery_pr.js",
   "../zapier/arc2_merge_delivery_pr.js",
-  "../zapier/arc2_verify_customer_control.js"
+  "../zapier/arc2_verify_customer_control.js",
+  "../zapier/activation-runbook.md"
 ].map(read));
 
 assert.equal(contract.schema, "arc-zapier-wiring-contract-v2");
@@ -70,7 +72,10 @@ for (const name of [
   "ARC_INBOX_RECEIPT_EVIDENCE_SECRET", "ARC_CLAIM_STATE_EVIDENCE_SECRET",
     "NETLIFY_OAUTH_CLIENT_ID", "NETLIFY_OAUTH_CLIENT_SECRET"
     , "ARC_INTAKE_ARC1_DESTINATION_BEARER", "ARC_INTAKE_ARC1_EVIDENCE_SECRET", "ARC_INTAKE_ARC1_ACK_SECRET",
-    "ARC_INTAKE_ASSET_RETRIEVAL_SECRET", "ARC1_ASSET_RECEIPT_SECRET", "ARC1_ASSET_PUBLICATION_RECEIPT_SECRET"
+    "ARC_INTAKE_ARC1_STATE_SECRET", "ARC_INTAKE_ARC1_ADAPTER_PROOF_SECRET", "ARC_INTAKE_ARC1_ADAPTER_ENABLED",
+    "ARC_INTAKE_ARC1_DOWNSTREAM_ENABLED", "ARC_INTAKE_ARC1_ENDPOINT", "ARC_INTAKE_ARC1_DOWNSTREAM_ENDPOINT",
+    "ARC_INTAKE_ARC1_DOWNSTREAM_BEARER", "ARC_INTAKE_ARC1_DISPATCH_SECRET", "ARC_INTAKE_ASSET_RETRIEVAL_SECRET",
+    "ARC1_ASSET_RECEIPT_SECRET", "ARC1_ASSET_PUBLICATION_RECEIPT_SECRET"
 ]) assert.ok(contract.secrets.required_runtime_names.includes(name), `${name} must remain runtime-only`);
 assert.equal(contract.secrets.customer_authorization.source, "netlify-official-deploy-and-claim");
 assert.equal(contract.secrets.customer_authorization.customer_authorization_code_expected, false);
@@ -79,11 +84,12 @@ assert.equal(contract.secrets.customer_authorization.oauth_client_id_and_secret_
 assert.equal(contract.secrets.customer_authorization.claim_webhook_is_unsigned_hint_requiring_netlify_reverification, true);
 
 assert.deepEqual(contract.arc1.ordered_steps, [
-  "zapier/arc1_verify_function_intake.js",
-  "zapier/arc1_retrieve_function_assets.js",
-  "private-state/arc1-function-ingress-create-only-claim",
-  "zapier/arc1_ack_function_intake.js",
-  "webhooks/respond-with-exact-signed-acknowledgement",
+  "arc-site/intake-arc1-adapter:verify-envelope-assets-and-create-only-claim",
+  "arc-site/intake-arc1-adapter:return-exact-signed-acknowledgement",
+  "arc-site/intake-arc1-adapter:retryable-catch-raw-hook-dispatch",
+  "zapier/arc1_verify_function_intake.js#DOWNSTREAM_REVERIFY",
+  "zapier/arc1_retrieve_function_assets.js#DOWNSTREAM_RETRIEVE",
+  "private-state/arc1-downstream-create-only-dedupe-claim",
   "zapier/arc1_verify_payment_link.js",
   "private-state/arc1-atomic-intake-claim",
   "zapier/arc1_publish_function_assets.js",
@@ -125,6 +131,12 @@ assert.deepEqual(contract.arc1.function_intake_bridge.generator_projection, {
   recursive_entity_and_url_decode_privacy_scan_before_arc2_signature: true
 });
 assert.equal(contract.arc1.authoritative_intake.source, "authenticated-netlify-api");
+assert.match(activationRunbook, /normal Catch Hook cannot be the ARC1 destination/);
+assert.match(activationRunbook, /Pointing\s+`ARC_INTAKE_ARC1_ENDPOINT` directly at a Zapier hook/);
+assert.match(activationRunbook, /first-party adapter is code-complete only/i);
+assert.match(activationRunbook, /actual downstream bearer.not the producer-to-adapter bearer/is);
+assert.match(activationRunbook, /HTTP 200 only as `HOOK_ACCEPTED`/);
+assert.match(activationRunbook, /all three are OFF/);
 assert.deepEqual(contract.arc1.authoritative_intake, {
   legacy_adapter_only: true,
   production_source_allowed: false,
@@ -173,33 +185,58 @@ assert.deepEqual(contract.arc1.function_intake_bridge, {
   },
   delivery_authentication: ["exact-destination-bearer", "canonical-envelope-hmac-sha256"],
   ingress_claim: {
-    provider: "Zapier Tables",
-    mode: "atomic-create-only-or-exact-replay",
-    record_key: "ingress_state_key",
+    producer_provider: "Netlify Blobs first-party adapter",
+    producer_mode: "atomic-create-only-and-CAS-or-exact-replay",
+    producer_record_key: "HMAC(delivery_id)",
+    producer_contains_raw_customer_content: false,
+    producer_retains_pseudonymous_source_pointer: true,
+    consumer_provider: null,
+    consumer_dedupe_verified: false,
     ack_before_claim_allowed: false,
     required_fields: ["ingress_state_key", "ingress_state_digest_sha256", "bridge_delivery_id", "bridge_evidence_sha256", "asset_receipt_sha256", "created_at", "status"]
   },
   acknowledgement: {
-    producer: "zapier/arc1_ack_function_intake.js",
+    producer: "arc-site-launch/netlify/lib/intake-arc1-adapter-core.mjs",
+    cross_repository_equivalent: "zapier/arc1_ack_function_intake.js",
+    cross_repository_byte_equivalence_tested: true,
+    deployed_round_trip_verified: false,
     schema: "arc-intake-arc1-consumer-ack-v1",
     exact_webhook_response_required: true,
     durable_claim_required_before_ack: true,
     signed_asset_receipt_required_before_claim_and_ack: true,
     raw_pii_allowed: false
   },
-  retry_and_alert_authority: "arc-site-private-blob-delivery-state",
+  zapier_provider_constraints: {
+    official_catch_hook_custom_response_supported: false,
+    direct_catch_hook_endpoint_allowed: false,
+    durable_synchronous_ack_adapter_or_two_phase_callback_required: true,
+    first_party_adapter_repo_implemented: true,
+    first_party_adapter_deployed_and_attested: false,
+    first_party_blob_create_only_and_cas_tested: true,
+    standard_tables_atomic_create_only_or_cas_verified: false,
+    find_then_create_or_find_then_update_allowed: false,
+    code_step_input_secret_storage_verified: false,
+    private_secret_broker_or_private_integration_verified: false,
+    catch_hook_http_200_means_ingress_only: true,
+    adapter_packet_single_signature_verified: false,
+    downstream_consumer_dedupe_verified: false,
+    signed_downstream_completion_receipt_verified: false,
+    reviewed_at: "2026-08-24"
+  },
+  retry_and_alert_authority: "arc-site-private-blob-producer-and-adapter-state",
   inline_asset_private_retrieval_supported: true,
   asset_folder_private_retrieval_supported: false,
   folder_link_policy: {
     accepted: false,
-    reject_step: "zapier/arc1_verify_function_intake.js",
+    reject_step: "arc-site-launch/netlify/lib/intake-arc1-adapter-core.mjs",
     rejection_before_private_retrieval: true,
     rejection_before_durable_ingress_claim: true,
     rejection_before_acknowledgement: true,
     state_mutation_allowed: false,
     reason: "private-provider-per-file-expansion-is-not-implemented"
   },
-  private_asset_consumer: "zapier/arc1_retrieve_function_assets.js",
+  pre_ack_private_asset_consumer: "arc-site-launch/netlify/lib/intake-arc1-adapter-core.mjs",
+  downstream_private_asset_revalidator: "zapier/arc1_retrieve_function_assets.js",
   public_asset_publisher: "zapier/arc1_publish_function_assets.js",
   public_asset_publication: {
     automation_enabled: false,
@@ -222,8 +259,13 @@ assert.deepEqual(contract.arc1.function_intake_bridge, {
   cross_repository_commit_pin_required_before_activation: true,
   public_intake_activation_allowed: false,
   remaining_external_wiring: [
-    "private-zapier-catch-hook-and-header-mapping", "create-only-ingress-table-action",
-    "exact-ack-webhook-response-action", "content-addressed-private-asset-retrieval-wiring-proof",
+    "first-party-adapter-disabled-deployment-and-runtime-attestation-proof",
+    "bounded-24-hour-adapter-attestation-rotation-proof",
+    "downstream-consumer-create-only-dedupe-and-cas-proof",
+    "private-secret-broker-or-zapier-private-integration-proof",
+    "catch-raw-hook-exact-200-and-header-envelope-mapping-behind-adapter",
+    "signed-downstream-completion-receipt-and-ambiguous-hook-retry-reconciliation",
+    "exact-signed-acknowledgement-round-trip-proof", "content-addressed-private-asset-retrieval-wiring-proof",
     "content-addressed-public-asset-publication-wiring-proof", "arc1-publication-receipt-to-arc2-private-input-mapping-proof",
     "adult-reviewed-git-history-asset-retention-and-purge-protocol",
     "failure-alert-recipient-proof", "end-to-end-disabled-synthetic-test"

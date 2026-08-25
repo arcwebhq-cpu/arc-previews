@@ -57,15 +57,34 @@ if (!Array.isArray(grants) || grants.length > 3 || canonicalJson(grants) !== cle
 if (grants.some(grant => grant?.kind === "FOLDER_LINK" || grant?.role === "asset_folder_link")) {
   throw new Error("ARC1_ASSET_UNSUPPORTED: folder links require a private provider adapter");
 }
+const requestedOperationTimeout = clean(inputData.provider_operation_timeout_ms);
+const operationTimeoutMs = requestedOperationTimeout ? Number(requestedOperationTimeout) : 25000;
+if (!Number.isSafeInteger(operationTimeoutMs) || operationTimeoutMs < 100 || operationTimeoutMs > 25000) {
+  throw new Error("ARC1_ASSET_INVALID: provider operation timeout");
+}
+const operationDeadline = Date.now() + operationTimeoutMs;
+const providerTimeout = () => new Error("ARC1_ASSET_INVALID: provider operation timeout");
 
-const readBounded = async (response, expectedSize) => {
+const readBounded = async (response, expectedSize, controller) => {
   const reader = response.body?.getReader?.();
   if (!reader) throw new Error("ARC1_ASSET_INVALID: streaming response required");
+  const cancelOnAbort = () => {
+    try { void reader.cancel().catch(() => {}); } catch {}
+  };
+  controller.signal.addEventListener("abort", cancelOnAbort, { once: true });
   const chunks = [];
   let total = 0;
   try {
     while (true) {
+      if (controller.signal.aborted || Date.now() >= operationDeadline) {
+        if (!controller.signal.aborted) controller.abort();
+        throw providerTimeout();
+      }
       const { done, value } = await reader.read();
+      if (controller.signal.aborted || Date.now() >= operationDeadline) {
+        if (!controller.signal.aborted) controller.abort();
+        throw providerTimeout();
+      }
       if (done) break;
       if (!(value instanceof Uint8Array)) throw new Error("ARC1_ASSET_INVALID: response body");
       total += value.byteLength;
@@ -75,7 +94,10 @@ const readBounded = async (response, expectedSize) => {
       }
       chunks.push(Buffer.from(value.buffer, value.byteOffset, value.byteLength));
     }
-  } finally { try { reader.releaseLock(); } catch {} }
+  } finally {
+    controller.signal.removeEventListener("abort", cancelOnAbort);
+    try { reader.releaseLock(); } catch {}
+  }
   if (total !== expectedSize) throw new Error("ARC1_ASSET_INVALID: response size mismatch");
   return Buffer.concat(chunks, total);
 };
@@ -299,22 +321,35 @@ for (const grant of grants) {
     schema: "arc-intake-private-asset-request-v1", asset_id: grant.asset_id,
     delivery_id: deliveryId, evidence_sha256: evidenceSha256
   });
-  const response = await fetch(endpoint.toString(), {
-    method: "POST", redirect: "error", signal: AbortSignal.timeout(10000),
-    headers: { Authorization: `Bearer ${bearer}`, "Content-Type": "application/json; charset=utf-8" },
-    body: requestBody
-  });
-  const declared = response.headers?.get?.("content-length");
-  if (!response || response.status !== 200 || response.url !== endpoint.toString() ||
-      (declared && (!/^\d{1,8}$/.test(declared) || Number(declared) !== grant.size)) ||
-      clean(response.headers?.get?.("content-type")).toLowerCase() !== grant.content_type ||
-      clean(response.headers?.get?.("x-arc-asset-id")) !== grant.asset_id ||
-      clean(response.headers?.get?.("x-arc-asset-kind")) !== grant.kind ||
-      clean(response.headers?.get?.("x-arc-asset-role")) !== grant.role ||
-      clean(response.headers?.get?.("x-arc-asset-sha256")) !== grant.sha256) {
-    throw new Error("ARC1_ASSET_INVALID: retrieval response binding");
+  const remaining = operationDeadline - Date.now();
+  if (remaining <= 0) throw providerTimeout();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), Math.max(1, Math.min(10000, remaining)));
+  let bytes;
+  try {
+    const response = await fetch(endpoint.toString(), {
+      method: "POST", redirect: "error", signal: controller.signal,
+      headers: { Authorization: `Bearer ${bearer}`, "Content-Type": "application/json; charset=utf-8" },
+      body: requestBody
+    });
+    if (controller.signal.aborted || Date.now() >= operationDeadline) throw providerTimeout();
+    const declared = response.headers?.get?.("content-length");
+    if (!response || response.status !== 200 || response.url !== endpoint.toString() ||
+        (declared && (!/^\d{1,8}$/.test(declared) || Number(declared) !== grant.size)) ||
+        clean(response.headers?.get?.("content-type")).toLowerCase() !== grant.content_type ||
+        clean(response.headers?.get?.("x-arc-asset-id")) !== grant.asset_id ||
+        clean(response.headers?.get?.("x-arc-asset-kind")) !== grant.kind ||
+        clean(response.headers?.get?.("x-arc-asset-role")) !== grant.role ||
+        clean(response.headers?.get?.("x-arc-asset-sha256")) !== grant.sha256) {
+      throw new Error("ARC1_ASSET_INVALID: retrieval response binding");
+    }
+    bytes = await readBounded(response, grant.size, controller);
+  } catch (error) {
+    if (controller.signal.aborted || error?.name === "AbortError") throw providerTimeout();
+    throw error;
+  } finally {
+    clearTimeout(timer);
   }
-  const bytes = await readBounded(response, grant.size);
   if (await sha256Bytes(bytes) !== grant.sha256) throw new Error("ARC1_ASSET_INVALID: digest mismatch");
   const magic = grant.content_type === "image/png" ? bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10])) :
     grant.content_type === "image/jpeg" ? bytes.length >= 3 && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255 :

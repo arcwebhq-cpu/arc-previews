@@ -353,6 +353,8 @@ assert.equal(
 assert.match(workflow, /deploy-pages:[\s\S]*if: github\.event_name == 'push' && github\.ref == 'refs\/heads\/main'[\s\S]*needs: preview-quality/);
 assert.match(workflow, /run: npm run build:pages/);
 assert.match(workflow, /uses: actions\/upload-pages-artifact@[^\s]+[^\n]*\n[\s\S]*path: \.pages-dist/);
+assert.match(workflow, /uses: actions\/upload-pages-artifact@[^\s]+[^\n]*\n[\s\S]{0,160}include-hidden-files:\s*true/,
+  "Pages upload must include .nojekyll so GitHub Pages cannot discard the hidden control file");
 assert.match(workflow, /uses: actions\/deploy-pages@[^\s]+/);
 assert.doesNotMatch(workflow, /uses: actions\/upload-pages-artifact@[^\s]+[^\n]*\n[\s\S]{0,120}path:\s*["']?\.["']?\s*$/m);
 

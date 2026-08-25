@@ -274,6 +274,26 @@ export function validateGeneratedFormContract(markup) {
   const control = name => namedControls.find(item => item.name === name);
   const type = name => clean(control(name)?.attributes.get("type")).toLowerCase();
   const required = name => control(name)?.attributes.has("required");
+  const labels = formBlock.match(/<label\b[^>]*>[\s\S]*?<\/label>/gi) || [];
+  const visibleLabelNames = [honeypotName, "name", "email", "phone", "project_details"];
+  const labelText = label => label
+    .replace(/<(?:input|textarea|select)\b[^>]*>[\s\S]*?<\/(?:textarea|select)>/gi, " ")
+    .replace(/<input\b[^>]*>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&(?:nbsp|amp|lt|gt|quot|apos|#39);/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  for (const name of visibleLabelNames) {
+    const matching = labels.filter(label => new RegExp(`\\bname=["']${name}["']`, "i").test(label));
+    if (matching.length !== 1 || !labelText(matching[0])) {
+      throw new Error("ARC_CONTENT_UNSAFE: every lead form control requires one visible text label");
+    }
+  }
+  if (clean(control("name")?.attributes.get("autocomplete")) !== "name" ||
+      clean(control("email")?.attributes.get("autocomplete")) !== "email" ||
+      clean(control("phone")?.attributes.get("autocomplete")) !== "tel") {
+    throw new Error("ARC_CONTENT_UNSAFE: lead identity controls require exact autocomplete hints");
+  }
   const submitButtons = formBlock.match(/<button\b[^>]*type="submit"[^>]*>/gi) || [];
   if (control(honeypotName)?.tagName !== "input" || !new Set(["", "text"]).has(type(honeypotName)) ||
       control("name")?.tagName !== "input" || type("name") !== "text" || !required("name") ||

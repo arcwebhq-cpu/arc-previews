@@ -161,6 +161,48 @@ const requiredKeys = [
   "PROCESS_HEADING","PROCESS_INTRO","PROCESS_HTML","PROOF_HEADING","PROOF_INTRO","PROOF_HTML","GALLERY_HEADING","GALLERY_INTRO","GALLERY_HTML","FAQ_HEADING","FAQ_INTRO",
   "FAQ_HTML","CONTACT_HEADING","CONTACT_BODY","CONTACT_ACTION_HTML","CONTACT_DETAILS_HTML","FOOTER_TAGLINE","FOOTER_LINKS_HTML"
 ];
+const contentText=value=>clean(value).replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi," ").replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi," ").replace(/<[^>]+>/g," ").replace(/&(?:nbsp|amp|lt|gt|quot|apos|#39);/gi," ").replace(/&#(?:x[0-9a-f]+|\d+);?/gi," ").replace(/\s+/g," ").trim();
+const contentNormalized=value=>contentText(value).normalize("NFKC").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+const contentWords=value=>{const text=contentText(value);return text?text.split(/\s+/).length:0;};
+const contentBlocks=(markup,tag)=>String(markup??"").match(new RegExp(`<${tag}\\b[^>]*>[\\s\\S]*?<\\/${tag}>`,"gi"))||[];
+const inspectContentBlocks=(markup,tag,minimum,maximum,label)=>{
+  const blocks=contentBlocks(markup,tag),titles=[],bodies=[],errors=[];
+  if(blocks.length<minimum||blocks.length>maximum)errors.push(`${label} requires ${minimum}-${maximum} ${tag} blocks`);
+  for(const block of blocks){
+    const title=contentText(block.match(/<(?:h3|summary)\b[^>]*>[\s\S]*?<\/(?:h3|summary)>/i)?.[0]||"");
+    const body=contentText(block.replace(/<(?:h3|summary)\b[^>]*>[\s\S]*?<\/(?:h3|summary)>/i,""));
+    if(contentWords(title)<1||contentWords(title)>12)errors.push(`${label} has an empty or oversized title`);
+    if(contentWords(body)<5)errors.push(`${label} has thin body copy`);
+    titles.push(contentNormalized(title));bodies.push(contentNormalized(body));
+  }
+  if(new Set(titles.filter(Boolean)).size!==titles.filter(Boolean).length)errors.push(`${label} repeats a title`);
+  if(new Set(bodies.filter(Boolean)).size!==bodies.filter(Boolean).length)errors.push(`${label} repeats body copy`);
+  return errors;
+};
+const assertPremiumGeneratedContent=content=>{
+  const errors=[];
+  const important=["SEO_TITLE","SEO_DESCRIPTION","BUSINESS_NAME","HEADLINE","SUBHEADLINE","INDUSTRY_LABEL","LOCATION","VISUAL_HEADLINE","HIGHEST_PROFIT_SERVICE","SERVICES_HEADING","SERVICES_INTRO","WHY_HEADING","WHY_INTRO","ABOUT_TITLE","ABOUT_BODY","PROCESS_HEADING","PROCESS_INTRO","PROOF_HEADING","PROOF_INTRO","FAQ_HEADING","FAQ_INTRO","CONTACT_HEADING","CONTACT_BODY","FOOTER_TAGLINE"];
+  for(const key of important)if(!contentText(content[key]))errors.push(`${key} is empty`);
+  const minimumWords={HEADLINE:4,SUBHEADLINE:10,SERVICES_INTRO:7,WHY_INTRO:7,ABOUT_BODY:20,PROCESS_INTRO:7,PROOF_INTRO:7,FAQ_INTRO:6,CONTACT_BODY:8};
+  for(const [key,minimum] of Object.entries(minimumWords))if(contentWords(content[key])<minimum)errors.push(`${key} needs at least ${minimum} words`);
+  errors.push(...inspectContentBlocks(content.SERVICES_HTML,"article",3,6,"SERVICES_HTML"),...inspectContentBlocks(content.DIFFERENTIATORS_HTML,"article",3,6,"DIFFERENTIATORS_HTML"),...inspectContentBlocks(content.PROCESS_HTML,"article",3,6,"PROCESS_HTML"),...inspectContentBlocks(content.PROOF_HTML,"article",2,6,"PROOF_HTML"),...inspectContentBlocks(content.FAQ_HTML,"details",3,8,"FAQ_HTML"));
+  const trust=contentBlocks(content.TRUST_LINE_HTML,"span").length,chips=contentBlocks(content.HERO_CHIPS_HTML,"span").length,ticker=contentBlocks(content.TICKER_HTML,"span").length;
+  if(trust<2||trust>4)errors.push("TRUST_LINE_HTML requires 2-4 trust items");
+  if(chips<2||chips>4)errors.push("HERO_CHIPS_HTML requires 2-4 service chips");
+  if(ticker<3||ticker>8)errors.push("TICKER_HTML requires 3-8 service items");
+  const primaryService=contentNormalized(content.HIGHEST_PROFIT_SERVICE);
+  if(!primaryService||!contentNormalized(content.SERVICES_HTML).includes(primaryService))errors.push("HIGHEST_PROFIT_SERVICE must appear in SERVICES_HTML");
+  const form=contentBlocks(content.CONTACT_ACTION_HTML,"form")[0]||"";
+  if(form){const submit=contentText(form.match(/<button\b[^>]*type=["']submit["'][^>]*>[\s\S]*?<\/button>/i)?.[0]||"");if(contentNormalized(submit)!==contentNormalized(content.PRIMARY_CTA_LABEL))errors.push("lead form submit text must exactly match PRIMARY_CTA_LABEL");}
+  const publicCopyParts=Object.entries(content).filter(([key])=>!/(?:_COLOR|_HREF)$/.test(key)&&!["LOGO_HTML","HERO_MEDIA_HTML","ABOUT_MEDIA_HTML","GALLERY_HTML"].includes(key)).map(([,value])=>contentText(value));
+  const publicCopy=publicCopyParts.join("\n");
+  if(/\b(?:lorem ipsum|placeholder copy|insert (?:copy|text|content) here|your business name|business name here|tbd|todo|coming soon)\b/i.test(publicCopy))errors.push("placeholder or unfinished copy is visible");
+  if(errors.length)throw new Error(`ARC_CONTENT_QUALITY_INVALID: ${[...new Set(errors)].join("; ")}`);
+  const risks=[["rating",/(?:\b[1-5](?:\.\d)?\s*(?:\/\s*5|stars?)\b|[★☆]{3,})/i],["ranking",/(?:#\s*1\b|\bnumber\s+one\b|\btop[-\s]?rated\b|\baward[-\s]?winning\b)/i],["volume",/\b[1-9]\d*(?:,\d{3})*(?:\.\d+)?\+?\s+(?:years?|clients?|customers?|patients?|projects?|homes?|jobs?|reviews?|cases?|businesses?)\b/i],["percentage",/\b\d+(?:\.\d+)?\s*%/i],["availability",/\b24\s*\/\s*7\b/i],["credential",/\b(?:licensed\s+(?:and|&)\s+insured|licensed\s+(?:contractor|professional|provider|technician|plumber|electrician)|certified\s+(?:professional|provider|technician|specialist)|accredited\s+(?:business|practice|provider)|fully bonded)\b/i],["guarantee",/\b(?:satisfaction guaranteed|money[-\s]?back guarantee|lifetime warranty|guaranteed results?)\b/i],["numeric result",/\b(?:saved|increased|grew|reduced|improved|generated|delivered)\s+(?:by\s+)?\$?\d[\d,.]*/i]];
+  const breaches=[];
+  for(const part of publicCopyParts)for(const segment of part.split(/(?<=[.!?])\s+|[\r\n]+/).map(clean).filter(Boolean))for(const [kind,pattern] of risks)if(pattern.test(segment))breaches.push(kind);
+  if(breaches.length)throw new Error(`ARC_CLAIM_EVIDENCE_REQUIRED: ${[...new Set(breaches)].join(",")}`);
+};
 const slugify = value => clean(value)
   .toLowerCase()
   .normalize("NFKD")
@@ -329,6 +371,16 @@ const validateGeneratedFormContract=markup=>{
   const control=name=>namedControls.find(item=>item.name===name);
   const type=name=>clean(control(name)?.attributes.get("type")).toLowerCase();
   const required=name=>control(name)?.attributes.has("required");
+  const labels=formBlock.match(/<label\b[^>]*>[\s\S]*?<\/label>/gi)||[];
+  const visibleLabelNames=[honeypotName,"name","email","phone","project_details"];
+  const labelText=label=>label.replace(/<(?:input|textarea|select)\b[^>]*>[\s\S]*?<\/(?:textarea|select)>/gi," ").replace(/<input\b[^>]*>/gi," ").replace(/<[^>]+>/g," ").replace(/&(?:nbsp|amp|lt|gt|quot|apos|#39);/gi," ").replace(/\s+/g," ").trim();
+  for(const name of visibleLabelNames){
+    const matching=labels.filter(label=>new RegExp(`\\bname=["']${name}["']`,"i").test(label));
+    if(matching.length!==1||!labelText(matching[0]))throw new Error("ARC_CONTENT_UNSAFE: every lead form control requires one visible text label");
+  }
+  if(clean(control("name")?.attributes.get("autocomplete"))!=="name"||clean(control("email")?.attributes.get("autocomplete"))!=="email"||clean(control("phone")?.attributes.get("autocomplete"))!=="tel"){
+    throw new Error("ARC_CONTENT_UNSAFE: lead identity controls require exact autocomplete hints");
+  }
   const submitButtons=formBlock.match(/<button\b[^>]*type="submit"[^>]*>/gi)||[];
   if(control(honeypotName)?.tagName!=="input"||!new Set(["","text"]).has(type(honeypotName))||
     control("name")?.tagName!=="input"||type("name")!=="text"||!required("name")||
@@ -705,6 +757,7 @@ for (const key of requiredKeys) {
     renderValues[key] = escapeHtmlValue(clean(generated[key]));
   }
 }
+assertPremiumGeneratedContent(renderValues);
 const paymentLinkEvidenceSecret=clean(inputData.payment_link_evidence_secret);
 if(evidenceEncoder.encode(paymentLinkEvidenceSecret).length<32||evidenceEncoder.encode(paymentLinkEvidenceSecret).length>256){
   throw new Error("ARC_PAYMENT_LINK_INVALID: payment-link evidence secret must be 32–256 UTF-8 bytes");

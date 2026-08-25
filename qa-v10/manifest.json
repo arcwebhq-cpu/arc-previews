@@ -6,7 +6,7 @@
     "isLaunch": true,
     "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/ironwood-roofing-concept-a1000001/",
     "expectedMediaProfile": "roofing",
-    "validationChecks": 42
+    "validationChecks": 44
   },
   {
     "folder": "blue-peak-heating-air-concept-a1000002",
@@ -15,7 +15,7 @@
     "isLaunch": true,
     "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/blue-peak-heating-air-concept-a1000002/",
     "expectedMediaProfile": "hvac",
-    "validationChecks": 42
+    "validationChecks": 44
   },
   {
     "folder": "atelier-house-remodeling-concept-a1000003",
@@ -24,7 +24,7 @@
     "isLaunch": true,
     "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/atelier-house-remodeling-concept-a1000003/",
     "expectedMediaProfile": "remodeling",
-    "validationChecks": 42
+    "validationChecks": 44
   },
   {
     "folder": "wildfern-landscape-concept-a1000004",
@@ -33,7 +33,7 @@
     "isLaunch": true,
     "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/wildfern-landscape-concept-a1000004/",
     "expectedMediaProfile": "landscaping",
-    "validationChecks": 42
+    "validationChecks": 44
   },
   {
     "folder": "obsidian-auto-studio-concept-a1000005",
@@ -42,7 +42,7 @@
     "isLaunch": true,
     "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/obsidian-auto-studio-concept-a1000005/",
     "expectedMediaProfile": "auto_detailing",
-    "validationChecks": 42
+    "validationChecks": 44
   },
   {
     "folder": "cedar-dental-concept-b2000001",
@@ -51,7 +51,7 @@
     "isLaunch": false,
     "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/cedar-dental-concept-b2000001/",
     "expectedMediaProfile": "dental",
-    "validationChecks": 42
+    "validationChecks": 44
   },
   {
     "folder": "copperline-plumbing-concept-b2000002",
@@ -60,7 +60,7 @@
     "isLaunch": false,
     "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/copperline-plumbing-concept-b2000002/",
     "expectedMediaProfile": "plumbing",
-    "validationChecks": 42
+    "validationChecks": 44
   },
   {
     "folder": "northstar-contractor-concept-b2000003",
@@ -69,7 +69,7 @@
     "isLaunch": false,
     "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/northstar-contractor-concept-b2000003/",
     "expectedMediaProfile": "home_services",
-    "validationChecks": 42
+    "validationChecks": 44
   },
   {
     "folder": "aster-medical-spa-concept-b2000004",
@@ -78,7 +78,7 @@
     "isLaunch": false,
     "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/aster-medical-spa-concept-b2000004/",
     "expectedMediaProfile": "medical_spa",
-    "validationChecks": 42
+    "validationChecks": 44
   },
   {
     "folder": "harbor-health-clinic-concept-b2000005",
@@ -87,7 +87,7 @@
     "isLaunch": false,
     "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/harbor-health-clinic-concept-b2000005/",
     "expectedMediaProfile": "healthcare",
-    "validationChecks": 42
+    "validationChecks": 44
   },
   {
     "folder": "juniper-table-concept-b2000006",
@@ -96,7 +96,7 @@
     "isLaunch": false,
     "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/juniper-table-concept-b2000006/",
     "expectedMediaProfile": "restaurant",
-    "validationChecks": 42
+    "validationChecks": 44
   },
   {
     "folder": "stonebridge-realty-concept-b2000007",
@@ -105,7 +105,7 @@
     "isLaunch": false,
     "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/stonebridge-realty-concept-b2000007/",
     "expectedMediaProfile": "real_estate",
-    "validationChecks": 42
+    "validationChecks": 44
   },
   {
     "folder": "foundry-fitness-concept-b2000008",
@@ -114,7 +114,7 @@
     "isLaunch": false,
     "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/foundry-fitness-concept-b2000008/",
     "expectedMediaProfile": "fitness",
-    "validationChecks": 42
+    "validationChecks": 44
   },
   {
     "folder": "northline-law-concept-b2000009",
@@ -123,7 +123,7 @@
     "isLaunch": false,
     "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/northline-law-concept-b2000009/",
     "expectedMediaProfile": "legal",
-    "validationChecks": 42
+    "validationChecks": 44
   },
   {
     "folder": "clearwater-finance-concept-b2000010",
@@ -132,7 +132,7 @@
     "isLaunch": false,
     "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/clearwater-finance-concept-b2000010/",
     "expectedMediaProfile": "finance",
-    "validationChecks": 42
+    "validationChecks": 44
   },
   {
     "folder": "arc-digital-studio-concept-b2000011",
@@ -141,7 +141,7 @@
     "isLaunch": false,
     "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/arc-digital-studio-concept-b2000011/",
     "expectedMediaProfile": "web_design",
-    "validationChecks": 42
+    "validationChecks": 44
   },
   {
     "folder": "signal-technology-concept-b2000012",
@@ -150,7 +150,7 @@
     "isLaunch": false,
     "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/signal-technology-concept-b2000012/",
     "expectedMediaProfile": "technology",
-    "validationChecks": 42
+    "validationChecks": 44
   },
   {
     "folder": "sable-beauty-concept-b2000013",
@@ -159,7 +159,7 @@
     "isLaunch": false,
     "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/sable-beauty-concept-b2000013/",
     "expectedMediaProfile": "beauty",
-    "validationChecks": 42
+    "validationChecks": 44
   },
   {
     "folder": "main-street-business-concept-b2000014",
@@ -168,6 +168,6 @@
     "isLaunch": false,
     "previewUrl": "https://arcwebhq-cpu.github.io/arc-previews/main-street-business-concept-b2000014/",
     "expectedMediaProfile": "general",
-    "validationChecks": 42
+    "validationChecks": 44
   }
 ]

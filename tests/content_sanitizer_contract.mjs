@@ -107,7 +107,13 @@ const rejectedContent = [
   ["mismatched honeypot route", { CONTACT_ACTION_HTML: fixture.content.CONTACT_ACTION_HTML.replace('netlify-honeypot="bot-field"', 'netlify-honeypot="wrong-field"') }, /exact Netlify form attributes/],
   ["DOM-clobbering form control", { CONTACT_ACTION_HTML: fixture.content.CONTACT_ACTION_HTML.replace('name="phone"', 'name="children"') }, /supported lead schema/],
   ["CSS color breakout", { PRIMARY_COLOR: "#000000;} .arc-preview-toolbar{display:none" }, /six-digit hex color/],
-  ["protected class", { TRUST_LINE_HTML: '<span class="arc-preview-toolbar">Trusted</span>' }, /generated class is not allowlisted/]
+  ["protected class", { TRUST_LINE_HTML: '<span class="arc-preview-toolbar">Trusted</span>' }, /generated class is not allowlisted/],
+  ["unlabeled lead field", { CONTACT_ACTION_HTML: fixture.content.CONTACT_ACTION_HTML.replace('<label>Name<input type="text" name="name" autocomplete="name" required></label>', '<input type="text" name="name" autocomplete="name" required>') }, /every lead form control requires one visible text label/],
+  ["wrong lead autocomplete", { CONTACT_ACTION_HTML: fixture.content.CONTACT_ACTION_HTML.replace('name="email" autocomplete="email"', 'name="email" autocomplete="off"') }, /lead identity controls require exact autocomplete hints/],
+  ["thin service section", { SERVICES_HTML: '<article><h3>Roof Replacement</h3><p>A clear and carefully explained roofing service.</p></article>' }, /ARC_CONTENT_QUALITY_INVALID/],
+  ["CTA mismatch", { CONTACT_ACTION_HTML: fixture.content.CONTACT_ACTION_HTML.replace('>Request a roof assessment</button>', '>Send request</button>') }, /lead form submit text must exactly match PRIMARY_CTA_LABEL/],
+  ["unsupported rating claim", { PROOF_HTML: fixture.content.PROOF_HTML.replace('No customer quote, rating, certification, or performance number appears without source material.', 'Rated 4.9/5 by 600 customers across the region.') }, /ARC_CLAIM_EVIDENCE_REQUIRED/],
+  ["unfinished copy", { ABOUT_BODY: '<p>Lorem ipsum placeholder copy remains visible even though this paragraph contains enough words to pass a simple word-count check for the section.</p>' }, /placeholder or unfinished copy is visible/]
 ];
 for (const [label, mutation, expression] of rejectedContent) {
   const content = { ...fixture.content, ...mutation };

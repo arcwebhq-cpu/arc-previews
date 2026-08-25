@@ -18,11 +18,13 @@ Netlify claims, or Apollo while any item below is unresolved.
    ingress, returns the exact signed ACK, and queues a bounded downstream hook
    dispatch. It is not deployed, runtime-attested, or provider-tested. All of
    its activation flags remain OFF and ARC public readiness remains false.
-3. **Downstream dedupe and completion are not proven.** Adapter state can prove
-   producer-side claim and Catch Raw Hook ingress. The Zap cannot yet atomically
-   claim that Blob record, the adapter packet is not signed as one unit, and a
-   Hook HTTP 200 arrives before Zap tasks run. A consumer-side create-only/CAS
-   claim plus signed completion callback/reconciliation is still required.
+3. **Downstream dedupe and completion are code-complete only.** The adapter now
+   signs one canonical v2 packet, exposes default-OFF atomic claim and signed
+   completion endpoints, and retains recovery state after Hook HTTP 200 until
+   completion. `scripts/arc1_consumer_contract.mjs` verifies that packet, claims
+   before invoking work, fences each provider workflow attempt, and completes
+   only from separately signed durable-result evidence. None of this is
+   deployed, mapped to a private Zap/state provider, or provider-tested yet.
 4. **The secret boundary is not proven.** The committed Code steps receive
    secrets through `inputData`. Do not paste production secrets into ordinary
    Zap fields. Use a reviewed private integration/authentication connection or
@@ -57,6 +59,7 @@ Choose and verify these before mapping steps:
 - an alert consumer with lease, bounded retry, delivered receipt,
   acknowledgement, and escalation;
 - an explicit scheduled caller for ARC1 recovery and the operations audit;
+- a one-time authorized operator run of the bounded ARC1 v1 record migration;
 - the authoritative Stripe reversal binding/recheck producer.
 
 No provider credential may be stored in Git, a public URL, a customer email, or
@@ -70,7 +73,9 @@ Build with the Zap unpublished and every provider action in test/sandbox mode.
    Keep `ARC_INTAKE_ARC1_ADAPTER_ENABLED`,
    `ARC_INTAKE_ARC1_BRIDGE_ENABLED`, `ARC_INTAKE_ARC1_DISPATCH_ENABLED`,
    `ARC_INTAKE_ARC1_DOWNSTREAM_ENABLED`, and
-   `ARC_INTAKE_ASSET_RETRIEVAL_ENABLED` absent or `false`.
+   `ARC_INTAKE_ASSET_RETRIEVAL_ENABLED` absent or `false`. Keep
+   `ARC_INTAKE_ARC1_CONSUMER_CLAIM_ENABLED` and
+   `ARC_INTAKE_ARC1_CONSUMER_COMPLETION_ENABLED` off too.
 2. Configure `ARC_INTAKE_ARC1_ENDPOINT` as the exact same-deploy
    `/internal/intake/arc1/adapter` URL. Configure
    `ARC_INTAKE_ARC1_DOWNSTREAM_ENDPOINT` as one exact unpublished Catch Raw Hook
@@ -84,35 +89,52 @@ Build with the Zap unpublished and every provider action in test/sandbox mode.
    digest in `X-ARC-Bridge-Contract`, and the canonical adapter packet as its
    body. Map that actual downstream bearer—not the producer-to-adapter bearer—
    into `arc1_verify_function_intake.js`.
-5. Treat exact HTTP 200 only as `HOOK_ACCEPTED`. Prove duplicate and ambiguous
-   hook requests against a consumer-visible create-only/CAS dedupe claim before
-   any preview, GitHub, Stripe, email, or Netlify mutation. Add a signed
-   completion callback/receipt so task failure after Hook 200 remains retryable.
+5. Treat exact HTTP 200 only as `HOOK_ACCEPTED`. Pass the untouched canonical
+   packet plus one stable, unique provider workflow-attempt ID to
+   `scripts/arc1_consumer_contract.mjs`. It must verify the packet HMAC and live
+   deadline and receive `CLAIMED` before any asset, generation, preview, GitHub,
+   Stripe, email, or Netlify mutation. The same attempt may exact-replay an
+   ambiguous response; a different attempt must stop on conflict. Never derive
+   the attempt only from the delivery ID, and never log the packet or claim
+   token.
 6. Run downstream `arc1_verify_function_intake.js` and
    `arc1_retrieve_function_assets.js` as defense-in-depth. Prove exact content
    type, byte count, SHA-256, no redirect, and bounded decode
    for every retrieved private asset.
-7. An exact producer replay may reuse the same first-party claim and
+7. Create or exact-replay the private durable work record under the mutation
+   fence/idempotency key. Only its separately HMAC-signed durable-state receipt
+   may be hashed into the completion request. Post the byte-stable signed
+   completion before treating the first-party adapter as terminal. An expired
+   claim becomes `REVIEW_REQUIRED`; do not reassign it automatically.
+8. An exact producer replay may reuse the same first-party claim and
    acknowledgement. A changed
    replay must stop before acknowledgement or downstream work.
-8. Exercise the adapter recovery endpoint through every authenticated
+9. Exercise the adapter recovery endpoint through every authenticated
    `next_cursor` until `RECOVERY_COMPLETE`; verify five attempts, CAS leases,
    preserved backoff, quarantine, source failure, dead letter, and alert state.
    Its adapter attestation lasts at most 24 hours, so prove a safe rotation
    procedure rather than installing a static value.
-9. Run `arc1_verify_payment_link.js` read-only against the correct ARC Stripe
+10. Before any intake activation, keep
+    `ARC_INTAKE_ARC1_LEGACY_MIGRATION_ENABLED` off except during one authorized
+    maintenance window. Call `/internal/intake/arc1/adapter/migrate-legacy`
+    through every signed `next_cursor` until `MIGRATION_COMPLETE`; require the
+    cumulative `invalid` count to equal zero and verify every legacy v1
+    `HOOK_ACCEPTED` record became `REVIEW_REQUIRED` with its review index. Turn
+    the migration flag back off before continuing. Never silently treat an old
+    hook acceptance as consumer completion.
+11. Run `arc1_verify_payment_link.js` read-only against the correct ARC Stripe
    test account. Require the account hash, active tax settings and expected
    registration, exact one-time Price, destination address, terms snapshot, and
    redirect URL.
-10. Atomically claim the downstream intake and enforce approved rolling/day limits.
-11. Publish content-addressed assets, inject the preview, run the validator,
+12. Enforce approved rolling/day limits from the durable work record.
+13. Publish content-addressed assets, inject the preview, run the validator,
    publish a PR, wait for the exact required check, and squash merge only that
    immutable head.
-12. Re-read GitHub Pages bytes. Reserve the preview outbox before any email.
-13. Run the private checkout PREPARE/AUTHORIZE/CREATE/PERSIST/ACTIVATE/FINALIZE
+14. Re-read GitHub Pages bytes. Reserve the preview outbox before any email.
+15. Run the private checkout PREPARE/AUTHORIZE/CREATE/PERSIST/ACTIVATE/FINALIZE
     phases with compare-and-set transitions. Keep the Link private and bounded
     to one completed session.
-14. Send the preview email through the branded transactional provider using the
+16. Send the preview email through the branded transactional provider using the
     durable outbox key as idempotency. Persist provider receipt evidence; do not
     treat a Zap step success as delivery.
 
@@ -148,7 +170,12 @@ Build with the Zap unpublished and every provider action in test/sandbox mode.
 - ARC1 delivery uses five bounded attempts with 1 minute, 5 minute, 30 minute,
   and 2 hour retry spacing. The producer recovery and first-party adapter
   recovery endpoints must each be called through their signed cursors until
-  terminal. Adapter `HOOK_ACCEPTED` is not downstream completion.
+  terminal. Adapter `HOOK_ACCEPTED` is not downstream completion; only the
+  exact signed consumer completion receipt can authorize pending-index cleanup.
+- A consumer claim is one non-renewable lease for one provider workflow
+  attempt. Exact same-attempt replay is allowed. A competing attempt conflicts,
+  and an expired claim becomes terminal `REVIEW_REQUIRED`; never start a
+  replacement worker while downstream providers lack universal fencing.
 - A scheduled operations audit must follow every `next_cursor` until
   `AUDIT_COMPLETE`.
 - Do not combine custom error handlers with an assumption that Zapier Autoreplay

@@ -10,6 +10,7 @@
     "build": "npm run sync:media && npm run build:fixtures && npm run build:showcases",
     "audit": "node scripts/audit_previews.mjs",
     "test:arc1-generation": "node tests/arc1_generation_contract.mjs",
+    "test:arc1-consumer": "node tests/arc1_consumer_completion_contract.mjs",
     "test:sanitizer": "node tests/content_sanitizer_contract.mjs",
     "test:premium": "node tests/premium_content_contract.mjs",
     "test:no-egress": "node tests/no_egress_contract.mjs",
@@ -29,7 +30,7 @@
     "test:customer-upload-browser": "node tests/customer_upload_browser_contract.mjs",
     "test:browser": "node tests/preview_quality.mjs",
     "test:images": "ARC_QA_REAL_IMAGES=1 ARC_QA_V10_ONLY=1 ARC_QA_SAVE_SCREENSHOTS=1 node tests/preview_quality.mjs",
-    "test": "npm run build && npm run audit && npm run test:arc1-generation && npm run test:sanitizer && npm run test:premium && npm run test:no-egress && npm run test:arc1-intake-assets && npm run test:arc1-payment-link && npm run test:pipeline && npm run test:arc1-pr-gate && npm run test:arc1-network-response && npm run test:arc2-claim && npm run test:arc2-legacy && npm run test:arc2-lead-route && npm run test:synthetic-e2e && npm run test:wiring && npm run test:pages && npm run test:repository-privacy && npm run test:workflow-supply-chain && npm run test:customer-upload-browser && npm run test:browser"
+    "test": "npm run build && npm run audit && npm run test:arc1-generation && npm run test:arc1-consumer && npm run test:sanitizer && npm run test:premium && npm run test:no-egress && npm run test:arc1-intake-assets && npm run test:arc1-payment-link && npm run test:pipeline && npm run test:arc1-pr-gate && npm run test:arc1-network-response && npm run test:arc2-claim && npm run test:arc2-legacy && npm run test:arc2-lead-route && npm run test:synthetic-e2e && npm run test:wiring && npm run test:pages && npm run test:repository-privacy && npm run test:workflow-supply-chain && npm run test:customer-upload-browser && npm run test:browser"
   },
   "devDependencies": {
     "@sparticuz/chromium": "149.0.0",

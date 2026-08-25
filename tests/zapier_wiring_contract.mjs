@@ -17,6 +17,7 @@ const [
   arc1FunctionAssetSource,
   arc1FunctionAssetPublisherSource,
   arc1FunctionAckSource,
+  arc1ConsumerSource,
   arc1PaymentLinkSource,
   arc1InjectSource,
   arc1PrivateCheckoutSource,
@@ -34,6 +35,7 @@ const [
   "../zapier/arc1_retrieve_function_assets.js",
   "../zapier/arc1_publish_function_assets.js",
   "../zapier/arc1_ack_function_intake.js",
+  "../scripts/arc1_consumer_contract.mjs",
   "../zapier/arc1_verify_payment_link.js",
   "../zapier/arc1_inject.js",
   "../zapier/arc1_private_checkout_link.js",
@@ -82,6 +84,10 @@ for (const name of [
     "ARC_INTAKE_ARC1_STATE_SECRET", "ARC_INTAKE_ARC1_ADAPTER_PROOF_SECRET", "ARC_INTAKE_ARC1_ADAPTER_ENABLED",
     "ARC_INTAKE_ARC1_DOWNSTREAM_ENABLED", "ARC_INTAKE_ARC1_ENDPOINT", "ARC_INTAKE_ARC1_DOWNSTREAM_ENDPOINT",
     "ARC_INTAKE_ARC1_DOWNSTREAM_BEARER", "ARC_INTAKE_ARC1_DISPATCH_SECRET", "ARC_INTAKE_ASSET_RETRIEVAL_SECRET",
+    "ARC_INTAKE_ARC1_PACKET_SECRET", "ARC_INTAKE_ARC1_CONSUMER_BEARER",
+    "ARC_INTAKE_ARC1_CONSUMER_RECEIPT_SECRET", "ARC_INTAKE_ARC1_DURABLE_RESULT_SECRET",
+    "ARC_INTAKE_ARC1_CONSUMER_CLAIM_ENABLED", "ARC_INTAKE_ARC1_CONSUMER_COMPLETION_ENABLED",
+    "ARC_INTAKE_ARC1_LEGACY_MIGRATION_ENABLED", "ARC_INTAKE_ARC1_CONSUMER_TIMEOUT_MS",
     "ARC1_ASSET_RECEIPT_SECRET", "ARC1_ASSET_PUBLICATION_RECEIPT_SECRET"
 ]) assert.ok(contract.secrets.required_runtime_names.includes(name), `${name} must remain runtime-only`);
 assert.equal(contract.secrets.customer_authorization.source, "netlify-official-deploy-and-claim");
@@ -94,11 +100,12 @@ assert.deepEqual(contract.arc1.ordered_steps, [
   "arc-site/intake-arc1-adapter:verify-envelope-assets-and-create-only-claim",
   "arc-site/intake-arc1-adapter:return-exact-signed-acknowledgement",
   "arc-site/intake-arc1-adapter:retryable-catch-raw-hook-dispatch",
+  "scripts/arc1_consumer_contract.mjs#VERIFY_PACKET_AND_ATOMIC_CLAIM",
   "zapier/arc1_verify_function_intake.js#DOWNSTREAM_REVERIFY",
   "zapier/arc1_retrieve_function_assets.js#DOWNSTREAM_RETRIEVE",
-  "private-state/arc1-downstream-create-only-dedupe-claim",
+  "private-state/arc1-create-or-exact-durable-work-record",
+  "scripts/arc1_consumer_contract.mjs#SIGNED_DURABLE_RESULT_AND_COMPLETE",
   "zapier/arc1_verify_payment_link.js",
-  "private-state/arc1-atomic-intake-claim",
   "zapier/arc1_publish_function_assets.js",
   "zapier/arc1_inject.js",
   "arc_step7_validator.js",
@@ -235,7 +242,8 @@ assert.deepEqual(contract.arc1.function_intake_bridge, {
     producer_record_key: "HMAC(delivery_id)",
     producer_contains_raw_customer_content: false,
     producer_retains_pseudonymous_source_pointer: true,
-    consumer_provider: null,
+    consumer_provider: "Netlify Blobs first-party adapter",
+    consumer_contract_tested: true,
     consumer_dedupe_verified: false,
     ack_before_claim_allowed: false,
     required_fields: ["ingress_state_key", "ingress_state_digest_sha256", "bridge_delivery_id", "bridge_evidence_sha256", "asset_receipt_sha256", "created_at", "status"]
@@ -263,10 +271,13 @@ assert.deepEqual(contract.arc1.function_intake_bridge, {
     code_step_input_secret_storage_verified: false,
     private_secret_broker_or_private_integration_verified: false,
     catch_hook_http_200_means_ingress_only: true,
+    adapter_packet_single_signature_contract_tested: true,
     adapter_packet_single_signature_verified: false,
+    downstream_consumer_dedupe_contract_tested: true,
     downstream_consumer_dedupe_verified: false,
+    signed_downstream_completion_receipt_contract_tested: true,
     signed_downstream_completion_receipt_verified: false,
-    reviewed_at: "2026-08-24"
+    reviewed_at: "2026-08-25"
   },
   retry_and_alert_authority: "arc-site-private-blob-producer-and-adapter-state",
   inline_asset_private_retrieval_supported: true,
@@ -319,6 +330,10 @@ assert.deepEqual(contract.arc1.function_intake_bridge, {
 assert.match(arc1FunctionIntakeSource, /arc-intake-arc1-bridge-evidence-v1/);
 assert.match(arc1FunctionIntakeSource, /arc-intake-private-asset-grant-v1/);
 assert.match(arc1FunctionAckSource, /exact durable ingress claim required/);
+assert.match(arc1ConsumerSource, /arc-intake-arc1-downstream-packet-v2/);
+assert.match(arc1ConsumerSource, /arc-intake-arc1-consumer-completion-v1/);
+assert.match(arc1ConsumerSource, /ARC1_CONSUMER_DURABILITY_REQUIRED/);
+assert.doesNotMatch(arc1ConsumerSource, /console\.(?:log|error|warn)/);
 assert.match(arc1FunctionAssetPublisherSource, /arc1-public-asset-publication-receipt-v1/);
 assert.doesNotMatch(arc1FunctionAssetPublisherSource, /console\.(?:log|error|warn)/);
 assert.equal(contract.arc1.authoritative_intake.client_submission_id_authoritative, false);

@@ -36,6 +36,33 @@ provider or model is configured or verified here, no network call is made, and l
 stays blocked until signed provider request/response evidence and the durable provider retry state
 are tested end to end.
 
+`npm run test:arc1-consumer` verifies the default-off ARC1 downstream handoff. The consumer accepts
+only one canonical `arc-intake-arc1-downstream-dispatch-v2` packet whose full contents, endpoints,
+bridge deadline, ingress binding, and HMAC all match. It then obtains an atomic first-party claim
+before invoking any generation or mutation callback. A stable provider workflow-attempt identifier
+is HMAC-derived into `arc1attempt_<40 hex>`: the same attempt can replay an ambiguous response,
+while a competing attempt receives a conflict and must stop. Every mutation receives a signed
+fence and one stable idempotency key. A claim that expires becomes `REVIEW_REQUIRED`; this release
+never reassigns it because all downstream providers do not yet implement generation fencing.
+
+The adapter remains nonterminal after a Catch Hook HTTP 200. It may remove its recovery record only
+after the consumer has durably committed a provider-neutral work record, verified its separate
+durable-result HMAC, and posted the exact signed completion receipt. Each claim or completion POST
+operation uses one shared 100-10,000 ms deadline, at most two byte-identical attempts, exact HTTPS
+URLs, redirect rejection, and a 16 KiB streamed response limit. The single replay waits a bounded
+25 ms (50 ms after HTTP 425) so a claim racing the site's hook-acceptance CAS can settle. The
+required runtime settings are
+`ARC_INTAKE_ARC1_PACKET_SECRET`, `ARC_INTAKE_ARC1_CONSUMER_BEARER`,
+`ARC_INTAKE_ARC1_CONSUMER_RECEIPT_SECRET`, `ARC_INTAKE_ARC1_DURABLE_RESULT_SECRET`, and optional
+`ARC_INTAKE_ARC1_CONSUMER_TIMEOUT_MS`. Both
+`ARC_INTAKE_ARC1_CONSUMER_CLAIM_ENABLED` and
+`ARC_INTAKE_ARC1_CONSUMER_COMPLETION_ENABLED` must equal lowercase `true`; otherwise no network or
+work callback is allowed. These are local contract tests only. The switches stay off until the
+private state provider, secret broker, deployed endpoints, stale-claim alert, and disabled sandbox
+workflow pass end to end. The one-time `ARC_INTAKE_ARC1_LEGACY_MIGRATION_ENABLED` maintenance flag
+also stays off except while an authorized operator drains its signed cursor to `MIGRATION_COMPLETE`
+with zero invalid records, verifies legacy hook acceptances are review-indexed, and turns it off again.
+
 `npm run test:customer-upload-browser` loads an exact content-addressed customer image through the
 production-shaped GitHub Pages URL on desktop and phone, proves the broken-image CSS fallback, and
 aborts every unapproved request. This closes the predeploy image-byte QA gap without contacting the

@@ -246,6 +246,30 @@ const maxAssetBytes = Math.floor(2.5 * 1024 * 1024);
 const maxTotalAssetBytes = Math.floor(7.5 * 1024 * 1024);
 const allowedOrigins = requestedAssets.length ? parseAllowedOrigins(inputData.asset_upload_origin_allowlist_json) : new Set();
 const allowedTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
+const blockedStockHosts = ["123rf.com", "alamy.com", "bigstockphoto.com", "depositphotos.com", "dreamstime.com", "freepik.com",
+  "gettyimages.com", "istockphoto.com", "shutterstock.com", "stock.adobe.com", "vecteezy.com"];
+const watermarkMarker = /(?:^|[^a-z0-9])(?:123rf|alamy|bigstock|depositphotos|dreamstime|freepik|getty(?:images)?|istock(?:photo)?|shutterstock|stock[ _-]?preview|vecteezy|watermark(?:ed)?)(?:[^a-z0-9]|$)/i;
+const assertSourceProvenance = (url, contentType, role) => {
+  const host = url.hostname.toLowerCase();
+  if (blockedStockHosts.some(blocked => host === blocked || host.endsWith(`.${blocked}`))) {
+    throw new Error(`ARC1_ASSET_INVALID: ${role} stock-preview source host rejected`);
+  }
+  let pathname;
+  try { pathname = decodeURIComponent(url.pathname); } catch { throw new Error(`ARC1_ASSET_INVALID: ${role} filename encoding`); }
+  if (/%[0-9a-f]{2}/i.test(pathname) || /[\u0000-\u001f\u007f]/.test(pathname)) {
+    throw new Error(`ARC1_ASSET_INVALID: ${role} filename encoding`);
+  }
+  const filename = pathname.split("/").filter(Boolean).at(-1) || "";
+  if (!filename || filename.length > 180 || watermarkMarker.test(filename.normalize("NFKC"))) {
+    throw new Error(`ARC1_ASSET_INVALID: ${role} stock-preview or watermark filename rejected`);
+  }
+  const extension = filename.toLowerCase().match(/\.([a-z0-9]{2,5})$/)?.[1] || "";
+  if (contentType) {
+    const validExtension = contentType === "image/png" ? extension === "png" :
+      contentType === "image/jpeg" ? ["jpg", "jpeg"].includes(extension) : extension === "webp";
+    if (extension && !validExtension) throw new Error(`ARC1_ASSET_INVALID: ${role} filename extension does not match Content-Type`);
+  }
+};
 const readAscii = (bytes, start, end) => bytes.subarray(start, end).toString("ascii");
 const rejectActiveContent = bytes => {
   const lower = bytes.toString("latin1").toLowerCase();
@@ -253,9 +277,12 @@ const rejectActiveContent = bytes => {
     /<(?:!doctype|html|head|body|svg|script|iframe|object|embed|meta|link)\b/.test(lower) ||
     /<\?(?:xml|php)\b/.test(lower) || /javascript\s*:/.test(lower) || /data\s*:\s*text\/html/.test(lower) ||
     lower.includes("%pdf-") || lower.includes("pk\u0003\u0004") || lower.startsWith("mz") ||
-    lower.includes("gif87a") || lower.includes("gif89a")
+      lower.includes("gif87a") || lower.includes("gif89a")
   ) {
     throw new Error("ARC1_ASSET_INVALID: active-content or polyglot signature detected");
+  }
+  if (watermarkMarker.test(lower)) {
+    throw new Error("ARC1_ASSET_INVALID: deterministic stock-preview or watermark marker detected");
   }
 };
 const validatePng = bytes => {
@@ -304,6 +331,9 @@ const validateWebp = bytes => {
     const paddedLength = length + (length % 2);
     const end = offset + 8 + paddedLength;
     if (end > bytes.length) throw new Error("ARC1_ASSET_INVALID: truncated WEBP data");
+    if (type === "ANIM" || type === "ANMF" || (type === "VP8X" && length === 10 && (bytes[offset + 8] & 2))) {
+      throw new Error("ARC1_ASSET_INVALID: animated WEBP is not allowed");
+    }
     if (["VP8 ", "VP8L", "VP8X"].includes(type)) sawVp8Marker = true;
     if (length % 2 && bytes[end - 1] !== 0) throw new Error("ARC1_ASSET_INVALID: WEBP padding");
     offset = end;
@@ -329,6 +359,7 @@ for (const asset of requestedAssets) {
   ) {
     throw new Error(`ARC1_ASSET_INVALID: ${asset.role} URL is outside the exact HTTPS upload-origin allowlist`);
   }
+  assertSourceProvenance(url, "", asset.role);
   const exactUrl = url.toString();
   const response = await fetch(exactUrl, {
     method: "GET",
@@ -340,6 +371,7 @@ for (const asset of requestedAssets) {
   if (!response.url || response.url !== exactUrl) throw new Error(`ARC1_ASSET_INVALID: ${asset.role} response URL changed`);
   const contentType = clean(response.headers?.get?.("content-type"));
   if (!allowedTypes.has(contentType)) throw new Error(`ARC1_ASSET_INVALID: ${asset.role} Content-Type must be exactly PNG/JPEG/WEBP`);
+  assertSourceProvenance(url, contentType, asset.role);
   const contentEncoding = clean(response.headers?.get?.("content-encoding"));
   if (contentEncoding && contentEncoding.toLowerCase() !== "identity") {
     throw new Error(`ARC1_ASSET_INVALID: ${asset.role} encoded response rejected`);
@@ -424,6 +456,11 @@ return {
   asset_manifest: assetManifest,
   asset_manifest_sha256: assetManifestSha256,
   total_asset_bytes: totalAssetBytes,
+  automated_watermark_screening_status: assetManifest.length ? "PASSED_DETERMINISTIC_INDICATORS_ONLY" : "NOT_REQUIRED",
+  automated_watermark_screening_version: "arc-deterministic-image-screen-v1",
+  visual_review_status: assetManifest.length ? "REQUIRED_BEFORE_PUBLICATION" : "NOT_REQUIRED",
+  pixel_level_watermark_certainty: false,
+  watermark_free_guarantee: false,
   state_key: stateKey,
   state_digest_sha256: stateDigestSha256,
   intake_evidence_private: canonicalEvidence,

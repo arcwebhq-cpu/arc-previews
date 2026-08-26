@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { cp, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
+import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -10,9 +11,23 @@ import {
   createArc1ConsumerStateCreateReceipt,
 } from "../scripts/arc1_consumer_runtime.mjs";
 
-const siteRoot = path.resolve(process.env.ARC_SITE_DIR || "../arc-site");
+const configuredSiteRoot = path.resolve(process.env.ARC_SITE_DIR || "../arc-site");
+const configuredBuildIdentity = await readFile(path.join(configuredSiteRoot, "netlify/lib/activation-build-identity.mjs"), "utf8");
+let activationDeploymentSha = configuredBuildIdentity.match(/"deployment_sha"\s*:\s*"([a-f0-9]{40})"/)?.[1] || "";
+let temporarySiteRoot = "";
+let siteRoot = configuredSiteRoot;
+if (!activationDeploymentSha) {
+  temporarySiteRoot = await mkdtemp(path.join(os.tmpdir(), "arc-site-contract-"));
+  await cp(path.join(configuredSiteRoot, "netlify/lib"), path.join(temporarySiteRoot, "netlify/lib"), { recursive: true });
+  await symlink(path.join(configuredSiteRoot, "node_modules"), path.join(temporarySiteRoot, "node_modules"), "dir");
+  activationDeploymentSha = "9".repeat(40);
+  await writeFile(path.join(temporarySiteRoot, "netlify/lib/activation-build-identity.mjs"),
+    `// Test-only copy; production source remains untouched and default-off.\nexport const ACTIVATION_BUILD_IDENTITY = Object.freeze({\n  "schema": "arc-activation-build-identity-v1",\n  "version": 1,\n  "deployment_sha": "${activationDeploymentSha}"\n});\n`);
+  siteRoot = temporarySiteRoot;
+}
 const siteModule = relative => import(pathToFileURL(path.join(siteRoot, relative)).href);
-const [adapterCore, bridgeCore, submissionCore] = await Promise.all([
+const [activationCore, adapterCore, bridgeCore, submissionCore] = await Promise.all([
+  siteModule("netlify/lib/activation-manifest-core.mjs"),
   siteModule("netlify/lib/intake-arc1-adapter-core.mjs"),
   siteModule("netlify/lib/intake-arc1-bridge-core.mjs"),
   siteModule("netlify/lib/intake-submission-core.mjs"),
@@ -31,6 +46,7 @@ const {
   deliverIntakeToArc1,
 } = bridgeCore;
 const { BUDGET_CONFIRMATION, OFFER_CONTRACT_ID, TERMS_CONFIRMATION, normalizeIntakeForm } = submissionCore;
+const { ACTIVATION_EVIDENCE_BY_STAGE, ACTIVATION_MANIFEST_SCHEMA, ACTIVATION_MANIFEST_VERSION, signActivationManifest } = activationCore;
 
 class FakeStore {
   constructor() { this.values = new Map(); this.sequence = 0; }
@@ -73,7 +89,7 @@ for (const [field, value] of Object.entries({
   lead_form_needed: "Yes",
   lead_notification_email: "cross-repo-owner@example.test",
   primary_style: "Modern",
-  asset_permission: "Confirmed",
+  asset_permission: "Confirmed rights and no visible watermark v1",
   "bot-field": "",
 })) form.append(field, value);
 form.append("goals", "More calls");
@@ -117,6 +133,25 @@ const env = {
   SITE_NAME: "arcsites",
   URL: "https://arcweb.onl",
 };
+const activationManifestSecret = "cross-activation-manifest-secret-unique-0123456789";
+const activationManifest = signActivationManifest({
+  schema: ACTIVATION_MANIFEST_SCHEMA,
+  version: ACTIVATION_MANIFEST_VERSION,
+  stage: "PUBLIC_INTAKE",
+  authority_mode: "ROLLOUT",
+  issued_at: new Date(baseTime.getTime() - 60_000).toISOString(),
+  expires_at: new Date(baseTime.getTime() + 60 * 60_000).toISOString(),
+  deployment_sha: activationDeploymentSha,
+  evidence: ACTIVATION_EVIDENCE_BY_STAGE.PUBLIC_INTAKE.map(kind => ({
+    kind,
+    receipt_ref: `audit:${sha256(`receipt:${kind}`).slice(0, 24)}`,
+    sha256: sha256(`evidence:${kind}`),
+  })),
+}, activationManifestSecret);
+Object.assign(env, {
+  ARC_ACTIVATION_MANIFEST_HMAC_SECRET: activationManifestSecret,
+  ARC_ACTIVATION_MANIFEST: activationManifest,
+});
 const assetEndpoint = "https://arcweb.onl/internal/intake/arc1/assets/retrieve";
 env.ARC_INTAKE_ARC1_ADAPTER_ATTESTATION = createAdapterAttestation({
   schema: "arc-intake-arc1-adapter-attestation-v1",
@@ -254,3 +289,4 @@ assert.equal(validateArc1AdapterRecord(adapterStore.values.get(ingressKey).data)
 assert.equal([...adapterStore.values.keys()].some(key => key.startsWith("pending/")), false);
 
 console.log("ARC1 cross-repo runtime passed: the pinned arc-site producer packet completed through the generated consumer bundle and actual site claim/completion authority.");
+if (temporarySiteRoot) await rm(temporarySiteRoot, { recursive: true, force: true });

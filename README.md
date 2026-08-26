@@ -40,6 +40,11 @@ sanitization, reviewed scripts, local/content-addressed assets, no unapproved eg
 browser behavior, and whole-site tamper detection. `npm run test:v11-suite` runs the renderer,
 production finalizer, and generated ARC1 injector contracts directly.
 
+The local production finalizer treats `assetReview` as structural build/test evidence only: it
+checks review shape and digest coverage, but it does not authenticate the reviewer or authorize a
+publication. Actual publication requires the ARC1 publisher's signed, digest-bound human-review
+receipt, private reviewer-key custody, and reviewer-authority checks.
+
 `npm run test:browser` rebuilds the derived, gitignored `qa-v11` directory and renders all 95 active
 V11 niche pages plus the 15 public V11 showcase pages at desktop and iPhone widths (220 browser
 renders). `npm run test:browser:all-viewports` adds tablet and 320 px phone coverage. V10 is frozen
@@ -117,8 +122,9 @@ merged, and read back from Pages. The current contracts are:
 - ARC2 payment evidence: `arc2-payment-evidence-v4`
 - ARC2 handoff artifact evidence: `arc2-handoff-artifact-evidence-v4`
 
-The read-only Payment Link preflight and ARC2 authenticated Checkout Session retrieval both pin
-Stripe API `2026-07-29.dahlia` and terms version `2026-08-25`. The signed private policy binds one
+The read-only Payment Link preflight and ARC2 authenticated Checkout Session retrieval both require
+mode-matched restricted `rk_` credentials and pin Stripe API `2026-07-29.dahlia` and terms version
+`2026-08-25`. The signed private policy binds one
 approved five-page preview to one private, one-use Payment Link; the preview folder; all five route
 paths and whole-site digest; ARC account hash; Product and Price; $5,000 one-time subtotal;
 exclusive tax behavior; advisor-confirmed Product tax code; expected active tax registrations;
@@ -137,11 +143,25 @@ Payment Link mutation, and real charges off.
 ## ARC2 paid handoff
 
 `checkout.session.completed` and `checkout.session.async_payment_succeeded` are notifications, not
-payment proof. ARC2 retrieves the authenticated configured-mode Session and verifies paid status,
-the exact private V4 reverse reservation, line item, destination tax, address, names, adult
+payment proof. ARC2 retrieves the authenticated configured-mode Session with expanded line-item
+taxes and verifies paid status, the exact private V4 reverse reservation, line item, destination
+tax, Product tax-code readback, address, names, adult
 acknowledgement, retained terms digest, tax-registration snapshot, and immutable five-page source
-before fulfillment may advance. An unpaid `completed` event does not consume the claim, so a later
-asynchronous success remains eligible. Refund or dispute state halts fulfillment.
+before fulfillment may advance. The expanded tax amounts must reconcile to the Session total, and a
+zero-tax result must carry a recognized Stripe `taxability_reason`. The ambiguous `not_collecting`
+reason fails closed for Product and registration review unless the authenticated, advisor-confirmed
+Product code is Stripe Nontaxable; `not_supported` fails closed for provider-support review. A
+`customer_exempt` or `reverse_charge` result also stops automatic fulfillment until separately
+signed exemption or tax-ID evidence is designed and verified. A
+provider reason is evidence of Stripe's calculation, not a legal conclusion about registration
+obligations or taxability. Product objects remain mutable: if the current Product tax code differs
+from the signed creation-time policy or receipt, ARC stops automatic fulfillment with
+`ARC_TAX_REVIEW_REQUIRED` for manual review. That current readback is a drift signal, not immutable
+historical tax evidence. An unpaid `completed` event does not consume the claim,
+so a later asynchronous success remains eligible. Refund or dispute state halts fulfillment.
+The signed V4 payment evidence retains the sorted taxability-reason set and a digest of the exact
+canonical line-item tax amounts/reasons used for reconciliation, so later handoff and delivery
+audits remain bound to the tax breakdown that the resolver evaluated.
 
 The resolver stops at `READY_FOR_CLAIMABLE_DEPLOY`; that state does not mean a site was created,
 deployed, claimed, emailed, or launched. Its signed V4 handoff bundle contains exactly 6–9 files in
@@ -186,10 +206,11 @@ fail-closed and are not part of the Netlify claim flow.
 
 ## Activation status
 
-This repository does **not** establish launch readiness. All live and provider-mutation controls
-remain off, including ARC1 model work, private-state writes, preview email, checkout creation and
-lifecycle changes, live Stripe, ARC2 provider calls, Netlify site/claim issuance, inbox routing,
-and delivery email.
+This repository does **not** establish launch readiness. All ARC repository-controlled automation
+and provider-mutation gates remain off, including ARC1 model work, private-state writes, preview
+email, checkout creation and lifecycle changes, ARC2 provider calls, Netlify site/claim issuance,
+inbox routing, and delivery email. That source state does not disable external Stripe capabilities
+or existing provider objects; those remain separate blockers recorded by the readiness audit.
 
 Activation remains blocked until an adult operator and legal entity are established and the
 following are verified with real provider evidence:

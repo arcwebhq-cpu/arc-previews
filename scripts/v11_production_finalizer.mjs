@@ -1,6 +1,6 @@
 import { createHash, createHmac } from "node:crypto";
 
-import { assertSafeImageAsset } from "./image_asset_contract.mjs";
+import { assertHumanImageReview, assertSafeImageAsset, assertSafeImageSource } from "./image_asset_contract.mjs";
 import {
   V11_PAGES,
   V11_SITE_CONTRACT_VERSION,
@@ -118,18 +118,12 @@ function normalizedAssets(rawAssets) {
     assertSafeImageAsset(bytes, contentType, `v11 ${asset.path}`);
     let sourceUrl = "";
     if (asset.sourceUrl !== undefined) {
-      if (typeof asset.sourceUrl !== "string" || asset.sourceUrl !== asset.sourceUrl.trim()) {
-        invalid(`asset ${index + 1} source URL is invalid`);
-      }
-      let parsed;
-      try { parsed = new URL(asset.sourceUrl); } catch { invalid(`asset ${index + 1} source URL is invalid`); }
-      if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.hash || parsed.toString() !== asset.sourceUrl) {
-        invalid(`asset ${index + 1} source URL is invalid`);
-      }
+      try { assertSafeImageSource(asset.sourceUrl, contentType, `v11 asset ${index + 1}`); }
+      catch (error) { invalid(error?.message || `asset ${index + 1} source URL is invalid`); }
       sourceUrl = asset.sourceUrl;
     }
     aggregateBytes += bytes.length;
-    return { path: asset.path, bytes, sourceUrl };
+    return { path: asset.path, bytes, sourceUrl, contentType, sha256: digest };
   }).sort((left, right) => left.path.localeCompare(right.path));
   if (aggregateBytes > V11_PRODUCTION_SAFE_CAPS.maxAggregateAssetBytes) {
     invalid("aggregate assets exceed 3000000 bytes");
@@ -319,11 +313,21 @@ function assertArtifactCaps(entries, deployArtifactsJson) {
   }
 }
 
+/**
+ * STRUCTURAL_VALIDATION_ONLY_NOT_PUBLICATION_AUTHORITY
+ *
+ * This local finalizer checks the review object's shape and its coverage of the
+ * bundled asset digests. It does not authenticate a reviewer, verify private-key
+ * custody, or authorize publication. The Zapier ARC1 publisher must independently
+ * verify the signed, digest-bound review receipt before any provider write.
+ */
 export function finalizeV11ProductionSite(rendered, options = {}) {
   assertRenderedSite(rendered);
   plainObject(options, "finalizer options");
-  if (Object.keys(options).some(key => key !== "assets")) invalid("finalizer option fields are invalid");
+  if (Object.keys(options).some(key => !["assetReview", "assets"].includes(key))) invalid("finalizer option fields are invalid");
   const assets = normalizedAssets(options.assets ?? []);
+  try { assertHumanImageReview(options.assetReview, assets, "v11 finalizer customer images"); }
+  catch (error) { invalid(error?.message || "customer image review is required"); }
   let pages = rendered.pages.map(page => ({
     key: page.key,
     path: page.path,

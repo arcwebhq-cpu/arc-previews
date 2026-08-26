@@ -200,7 +200,7 @@ const repository = clean(inputData.preview_source_github_repo || inputData.githu
 const branch = clean(inputData.preview_source_github_branch || inputData.github_branch || "main");
 const githubToken = clean(inputData.github_token);
 if (!new RegExp(`^cs_${stripeMode}_[A-Za-z0-9_]+$`).test(sessionId)) throw new Error(`ARC_PAYMENT_INVALID: ${stripeMode} checkout session id`);
-if (!new RegExp(`^(?:sk|rk)_${stripeMode}_[A-Za-z0-9_]{12,}$`).test(stripeApiKey)) throw new Error(`ARC_PAYMENT_INVALID: Stripe ${stripeMode} API key is required`);
+if (!new RegExp(`^rk_${stripeMode}_[A-Za-z0-9_]{12,}$`).test(stripeApiKey)) throw new Error(`ARC_PAYMENT_INVALID: restricted Stripe ${stripeMode} API key is required`);
 if (checkoutBindingSecret.length < 32 || checkoutBindingSecret.length > 256) throw new Error("ARC_PAYMENT_INVALID: checkout binding secret must be 32–256 characters");
 if (handoffArtifactEvidenceSecret.length < 32 || handoffArtifactEvidenceSecret.length > 256) throw new Error("ARC_ARTIFACT_INVALID: handoff artifact evidence secret must be 32–256 characters");
 if (assetPublicationReceiptSecret.length < 32 || assetPublicationReceiptSecret.length > 256 ||
@@ -254,7 +254,7 @@ const recipientFields = ["approval_content_sha256", "checkout_binding_key_id", "
   "deliverable", "lead_notification_email", "lead_route_form_name", "lead_route_mode", "lead_route_recipient_hmac_sha256", "offer_contract_id", "page_count",
   "preview_folder", "preview_paths", "production_content_sha256", "published_preview_bundle_sha256", "scope", "stripe_mode", "version"];
 const receiptFields = ["checkout_policy_sha256", "checkout_reference_sha256", "create_request_sha256", "credential_key_id", "payment_link_id",
-  "payment_link_url_sha256", "provider_intent_sha256", "readback_sha256", "scope", "stripe_account_id_sha256", "stripe_mode", "version"];
+  "payment_link_url_sha256", "provider_intent_sha256", "readback_contract", "readback_sha256", "scope", "stripe_account_id_sha256", "stripe_mode", "version"];
 exactKeys(checkoutPolicy, policyFields, "private checkout policy");
 exactKeys(checkoutRecipient, recipientFields, "private recipient reservation");
 exactKeys(linkReceipt, receiptFields, "private Link receipt");
@@ -317,6 +317,7 @@ if (!/^plink_[A-Za-z0-9]+$/.test(paymentLinkId) || privateLinkReverse.link_id_hm
     linkReceipt.version !== "arc-private-checkout-link-receipt-v1" || linkReceipt.scope !== "validated-one-use-private-payment-link" ||
     linkReceipt.payment_link_id !== paymentLinkId || linkReceipt.checkout_reference_sha256 !== checkoutReferenceSha256 ||
     linkReceipt.checkout_policy_sha256 !== checkoutConfigSnapshotSha256 || linkReceipt.stripe_mode !== stripeMode ||
+    linkReceipt.readback_contract !== "product-tax-code-bound-v1" ||
     linkReceipt.stripe_account_id_sha256 !== checkoutPolicy.stripe_account_id_sha256 || !/^[a-z0-9_-]{2,64}$/.test(linkReceipt.credential_key_id) ||
     !["payment_link_url_sha256", "provider_intent_sha256", "create_request_sha256", "readback_sha256"].every(field => HEX_64_PATTERN.test(linkReceipt[field])) ||
     privateLinkReverse.link_receipt_sha256 !== await sha256Bytes(linkReceiptRaw)) {
@@ -374,18 +375,24 @@ const publicationExpectedSha256 = clean(inputData.asset_publication_receipt_sha2
 const publicationHmacSha256 = clean(inputData.asset_publication_receipt_hmac_sha256).toLowerCase();
 const publication = parseCanonical(publicationRaw, "ARC1 publication receipt", 200, 100_000);
 const publicationFields = ["version", "scope", "bridge_contract_sha256", "delivery_id", "bridge_evidence_sha256", "private_asset_receipt_sha256",
-  "intake_evidence_sha256", "intake_state_digest_sha256", "asset_manifest_sha256", "asset_permission", "repository", "base_branch",
+  "intake_evidence_sha256", "intake_state_digest_sha256", "asset_manifest_sha256", "asset_permission", "asset_visual_review_authority_verified",
+  "asset_visual_review_key_id", "asset_visual_review_reviewer_id_sha256", "asset_visual_review_sha256", "repository", "base_branch",
   "preview_branch", "pages_base_url", "public_folder_prefix", "preview_folder", "entries", "status"];
 const publicationEntryFields = ["asset_id", "content_type", "git_blob_sha1", "public_url", "repository_path", "role", "sha256", "size_bytes"];
 exactKeys(publication, publicationFields, "ARC1 publication receipt");
 if (publication.version !== "arc1-public-asset-publication-receipt-v1" || publication.scope !== "github-content-addressed-preview-assets" ||
-    publication.bridge_contract_sha256 !== "c4ab396bf04464629624dd19a37602755c8d429db0bf729b49bbfdfdba3ae20c" ||
+    publication.bridge_contract_sha256 !== "da1bb4fc84f9871bdec1029d90ff21dfbdabd1e92fe14e838779f06578e426c2" ||
     publication.repository !== "arcwebhq-cpu/arc-previews" || publication.base_branch !== "main" ||
     publication.pages_base_url !== "https://arcwebhq-cpu.github.io/arc-previews" || publication.preview_folder !== previewFolder ||
     publication.public_folder_prefix !== folderPrefix || publication.preview_branch !== `arc-preview/${folderPrefix}` ||
     !Array.isArray(publication.entries) || publication.entries.length > SAFE_CAPS.maxAssetCount ||
-    publication.status !== (publication.entries.length ? "VERIFIED_CONTENT_ADDRESSED" : "NO_PUBLIC_UPLOADS") ||
-    publication.asset_permission !== (publication.entries.length ? "Confirmed" : "") ||
+    publication.status !== (publication.entries.length ? "HUMAN_REVIEWED_CONTENT_ADDRESSED" : "NO_PUBLIC_UPLOADS") ||
+    publication.asset_permission !== (publication.entries.length ? "Confirmed rights and no visible watermark v1" : "") ||
+    (publication.entries.length ?
+      (publication.asset_visual_review_authority_verified !== true || !/^[a-f0-9]{2}$/.test(publication.asset_visual_review_key_id) ||
+        !HEX_64_PATTERN.test(publication.asset_visual_review_reviewer_id_sha256) || !HEX_64_PATTERN.test(publication.asset_visual_review_sha256)) :
+      (publication.asset_visual_review_authority_verified !== false || publication.asset_visual_review_key_id !== "" ||
+        publication.asset_visual_review_reviewer_id_sha256 !== "" || publication.asset_visual_review_sha256 !== "")) ||
     !["delivery_id", "bridge_evidence_sha256", "private_asset_receipt_sha256", "intake_evidence_sha256", "intake_state_digest_sha256", "asset_manifest_sha256"]
       .every(field => HEX_64_PATTERN.test(publication[field])) ||
     !HEX_64_PATTERN.test(publicationExpectedSha256) || publicationExpectedSha256 !== checkoutPolicy.asset_publication_receipt_sha256 ||
@@ -482,7 +489,7 @@ if (!stripeAccount || stripeAccount.object !== "account" || !/^acct_[A-Za-z0-9]+
   throw new Error("ARC_STRIPE_ACCOUNT_INVALID: authenticated Stripe account identity is invalid");
 }
 
-const stripeSessionUrl = `https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(sessionId)}?expand%5B%5D=line_items.data.price.product&expand%5B%5D=payment_intent.latest_charge`;
+const stripeSessionUrl = `https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(sessionId)}?expand%5B%5D=line_items.data.price.product&expand%5B%5D=line_items.data.taxes&expand%5B%5D=payment_intent.latest_charge`;
 const session = await stripeGet(stripeSessionUrl, 2_000_000);
 const paymentIntent = session?.payment_intent;
 const latestCharge = paymentIntent?.latest_charge;
@@ -512,6 +519,7 @@ const lineItems = session.line_items;
 const lineItem = lineItems?.data?.[0];
 const price = lineItem?.price;
 const product = price?.product;
+const productTaxCode = clean(typeof product?.tax_code === "object" ? product.tax_code?.id : product?.tax_code);
 if (!lineItems || lineItems.object !== "list" || lineItems.has_more !== false || !Array.isArray(lineItems.data) || lineItems.data.length !== 1 ||
     lineItem?.object !== "item" || lineItem.quantity !== 1 || lineItem.currency !== "usd" || lineItem.amount_subtotal !== 500000 ||
     lineItem.amount_discount !== 0 || lineItem.amount_tax !== amountTax || lineItem.amount_total !== session.amount_total ||
@@ -519,6 +527,21 @@ if (!lineItems || lineItems.object !== "list" || lineItems.has_more !== false ||
     price.currency !== "usd" || price.unit_amount !== 500000 || price.custom_unit_amount !== null || price.recurring !== null || price.tax_behavior !== "exclusive" ||
     product?.object !== "product" || product.id !== checkoutPolicy.product_id) {
   throw new Error("ARC_PAYMENT_INVALID: expanded line item differs from the exact v4 offer");
+}
+if (productTaxCode !== checkoutPolicy.product_tax_code) {
+  throw new Error("ARC_TAX_REVIEW_REQUIRED: current Checkout Product tax code differs from the signed creation-time policy; manual tax review is required");
+}
+const lineItemTaxes = lineItem.taxes;
+const knownTaxabilityReasons = new Set(["customer_exempt", "not_collecting", "not_subject_to_tax", "not_supported", "portion_product_exempt", "portion_reduced_rated",
+  "portion_standard_rated", "product_exempt", "product_exempt_holiday", "proportionally_rated", "reduced_rated", "reverse_charge", "standard_rated",
+  "taxable_basis_reduced", "zero_rated"]);
+if (!Array.isArray(lineItemTaxes) || lineItemTaxes.length < 1 || lineItemTaxes.length > 32 ||
+    lineItemTaxes.some(tax => !tax || typeof tax !== "object" || Array.isArray(tax) || !Number.isSafeInteger(tax.amount) || tax.amount < 0 ||
+      !knownTaxabilityReasons.has(clean(tax.taxability_reason))) ||
+    lineItemTaxes.reduce((total, tax) => total + tax.amount, 0) !== amountTax ||
+    (amountTax > 0 && !lineItemTaxes.some(tax => tax.amount > 0 && clean(tax.taxability_reason) === "standard_rated")) ||
+    lineItemTaxes.some(tax => tax.amount > 0 && clean(tax.taxability_reason) !== "standard_rated")) {
+  throw new Error("ARC_TAX_INVALID: expanded Stripe line-item tax breakdown is required and must reconcile");
 }
 const customerDetailsEmail = clean(session.customer_details?.email).toLowerCase();
 const customerEmail = clean(session.customer_email).toLowerCase();
@@ -549,6 +572,17 @@ if (!customerAddress || typeof customerAddress !== "object" || Array.isArray(cus
     (customerAddressCountry === "US" && customerAddressState === "WA" && amountTax <= 0)) {
   throw new Error("ARC_TAX_INVALID: verified Stripe destination address and applicable tax are required");
 }
+const taxabilityReasons = [...new Set(lineItemTaxes.map(tax => clean(tax.taxability_reason)))].sort();
+const ratedTaxabilityReasons = new Set(["portion_reduced_rated", "portion_standard_rated", "proportionally_rated", "reduced_rated", "standard_rated", "taxable_basis_reduced"]);
+if (amountTax === 0 && (taxabilityReasons.some(reason => ratedTaxabilityReasons.has(reason)) ||
+    taxabilityReasons.some(reason => ["customer_exempt", "not_supported", "reverse_charge"].includes(reason)) ||
+    (taxabilityReasons.includes("not_collecting") && productTaxCode !== "txcd_00000000"))) {
+  throw new Error("ARC_TAX_REVIEW_REQUIRED: zero tax is unexplained or requires Product, registration, exemption, reverse-charge, or unsupported-tax review");
+}
+const lineItemTaxesSha256 = await sha256Bytes(canonicalJson(lineItemTaxes.map(tax => ({
+  amount_minor_units: tax.amount,
+  taxability_reason: clean(tax.taxability_reason)
+}))));
 const customerAddressSha256 = await sha256Bytes(canonicalJson({
   city: clean(customerAddress.city), country: customerAddressCountry, line1: clean(customerAddress.line1), line2: clean(customerAddress.line2),
   postal_code: clean(customerAddress.postal_code), state: customerAddressState
@@ -592,6 +626,7 @@ const paidLink = await stripeGet(paymentLinkUrl, 1_000_000);
 const paidLinkItems = paidLink?.line_items;
 const paidLinkItem = paidLinkItems?.data?.[0];
 const paidLinkProduct = paidLinkItem?.price?.product;
+const paidLinkProductTaxCode = clean(typeof paidLinkProduct?.tax_code === "object" ? paidLinkProduct.tax_code?.id : paidLinkProduct?.tax_code);
 const expectedAdultField = [{ key: "adultpurchaserack", type: "dropdown", optional: false,
   label: { type: "custom", custom: "I am 18+ and authorized to buy for this business" }, dropdown: { options: [{ label: "I confirm", value: "accepted" }] } }];
 const expectedNameCollection = { business: { enabled: true, optional: false }, individual: { enabled: true, optional: false } };
@@ -608,10 +643,13 @@ if (!paidLink || paidLink.object !== "payment_link" || paidLink.id !== paymentLi
     paidLinkProduct?.id !== checkoutPolicy.product_id) {
   throw new Error("ARC_PAYMENT_INVALID: authenticated paid Payment Link differs from its v4 creation receipt");
 }
-const historicalReadbackSha256 = await sha256Bytes(canonicalJson({ id: paymentLinkId, active: true, livemode: paidLink.livemode,
+if (paidLinkProductTaxCode !== checkoutPolicy.product_tax_code) {
+  throw new Error("ARC_TAX_REVIEW_REQUIRED: current Payment Link Product tax code differs from the signed creation-time policy; manual tax review is required");
+}
+const creationTimeReadbackSha256 = await sha256Bytes(canonicalJson({ id: paymentLinkId, active: true, livemode: paidLink.livemode,
   url_sha256: linkReceipt.payment_link_url_sha256, metadata: expectedLinkMetadata, completed_sessions_limit: 1,
-  price_id: checkoutPolicy.price_id, product_id: checkoutPolicy.product_id }));
-if (historicalReadbackSha256 !== linkReceipt.readback_sha256) throw new Error("ARC_PAYMENT_INVALID: private Payment Link historical readback digest");
+  price_id: checkoutPolicy.price_id, product_id: checkoutPolicy.product_id, product_tax_code: checkoutPolicy.product_tax_code }));
+if (creationTimeReadbackSha256 !== linkReceipt.readback_sha256) throw new Error("ARC_PAYMENT_INVALID: private Payment Link creation-time readback digest");
 
 const rawClientReferenceId = clean(session.client_reference_id);
 const clientReferenceObservation = !rawClientReferenceId ? "ABSENT" : rawClientReferenceId === checkoutReference ? "MATCHED" : "MISMATCH_REVIEW_REQUIRED";
@@ -1003,6 +1041,8 @@ const paymentEvidenceData = {
   currency: "usd",
   subtotal_amount_minor_units: 500000,
   tax_amount_minor_units: amountTax,
+  taxability_reasons: taxabilityReasons,
+  line_item_taxes_sha256: lineItemTaxesSha256,
   amount_total_minor_units: session.amount_total,
   payment_link_id: paymentLinkId,
   payment_intent_id: clean(paymentIntent.id),
@@ -1069,6 +1109,8 @@ return {
   amount_total_minor_units: session.amount_total,
   subtotal_amount_minor_units: 500000,
   tax_amount_minor_units: amountTax,
+  taxability_reasons: taxabilityReasons,
+  line_item_taxes_sha256: lineItemTaxesSha256,
   payment_link_id: paymentLinkId,
   payment_intent_id: clean(paymentIntent.id),
   charge_id: clean(latestCharge.id),

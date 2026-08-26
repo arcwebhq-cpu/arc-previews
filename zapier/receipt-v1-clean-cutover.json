@@ -1,0 +1,83 @@
+{
+  "version": "arc-receipt-v1-clean-cutover-v1",
+  "scope": "frozen-zero-live-customer-receipt-cutover",
+  "frozen_at": "2026-08-26T00:00:00.000Z",
+  "mutable": false,
+  "repository": "arcwebhq-cpu/arc-previews",
+  "inventory": {
+    "customer_image_publication_receipts": 0,
+    "live_private_payment_link_receipts": 0,
+    "in_flight_customer_image_publication_jobs": 0,
+    "in_flight_live_private_payment_link_jobs": 0,
+    "pending_function_intake_evidence": 0,
+    "pending_function_intake_submissions": 0,
+    "provider_zero_state_verified": false,
+    "inventory_is_cryptographic_proof": false,
+    "basis": "operator-declared-zero-customer-and-zero-live-receipt-inventory-at-freeze"
+  },
+  "asset_publication_receipt_v1": {
+    "version": "arc1-public-asset-publication-receipt-v1",
+    "cutover_mode": "clean-cutover-no-dual-read",
+    "legacy_nonempty_status": "VERIFIED_CONTENT_ADDRESSED",
+    "current_nonempty_status": "HUMAN_REVIEWED_CONTENT_ADDRESSED",
+    "legacy_receipts_accepted": false,
+    "legacy_intake_evidence_accepted_by_injector": false,
+    "legacy_asset_permission": "Confirmed",
+    "current_asset_permission": "Confirmed rights and no visible watermark v1",
+    "bridge_contract_version": "arc-intake-to-arc1-contract-v2",
+    "bridge_contract_sha256": "da1bb4fc84f9871bdec1029d90ff21dfbdabd1e92fe14e838779f06578e426c2",
+    "legacy_bridge_contract_accepted": false,
+    "image_review_protocol": "arc1-asset-visual-review-v1",
+    "automated_screening_protocol": "arc-deterministic-image-screen-v1",
+    "animated_webp_accepted": false,
+    "required_authority_gate": "asset_visual_review_authority_verified",
+    "required_new_receipt_fields": [
+      "asset_visual_review_authority_verified",
+      "asset_visual_review_key_id",
+      "asset_visual_review_reviewer_id_sha256",
+      "asset_visual_review_sha256"
+    ],
+    "review_signature_frame": "arc1-asset-visual-review-signature-v1\\n{asset_visual_review_key_id}\\n{canonical_review_json}",
+    "regeneration_required": true
+  },
+  "private_payment_link_receipt_v1": {
+    "version": "arc-private-checkout-link-receipt-v1",
+    "cutover_mode": "clean-cutover-no-dual-read",
+    "legacy_readback_preimage_included_product_tax_code": false,
+    "current_readback_preimage_includes_product_tax_code": true,
+    "required_readback_contract": "product-tax-code-bound-v1",
+    "legacy_receipts_accepted": false,
+    "regeneration_required": true
+  },
+  "arc2_payment_evidence_v4": {
+    "version": "arc2-payment-evidence-v4",
+    "cutover_mode": "clean-cutover-no-dual-read",
+    "required_tax_audit_fields": [
+      "line_item_taxes_sha256",
+      "taxability_reasons"
+    ],
+    "legacy_signed_evidence_without_tax_audit_fields_accepted": false,
+    "regeneration_required": true
+  },
+  "deployment": {
+    "atomic_producer_consumer_deploy_required": true,
+    "drain_or_discard_pre_cutover_queues_required": true,
+    "regenerate_all_receipts_before_activation": true,
+    "rollback_may_reenable_legacy_receipts": false,
+    "provider_authority_verified": false,
+    "provider_authority_enabled": false,
+    "provider_zero_state_verified": false,
+    "private_integration_or_secret_broker_verified": false,
+    "provider_history_redaction_verified": false,
+    "code_step_input_data_secret_custody_allowed": false,
+    "live_activation_allowed": false
+  },
+  "assurance_limits": {
+    "operator_configuration_cryptographically_proves_a_human_reviewed_pixels": false,
+    "review_secret_and_key_custody_verified": false,
+    "private_integration_or_secret_broker_required": true,
+    "review_provider_identity_and_authority_verified": false,
+    "pixel_level_watermark_certainty": false,
+    "watermark_free_guarantee": false
+  }
+}

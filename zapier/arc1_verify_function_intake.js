@@ -41,7 +41,7 @@ const iso = value => {
   return { text, ms };
 };
 
-const BRIDGE_CONTRACT_SHA256 = "c4ab396bf04464629624dd19a37602755c8d429db0bf729b49bbfdfdba3ae20c";
+const BRIDGE_CONTRACT_SHA256 = "da1bb4fc84f9871bdec1029d90ff21dfbdabd1e92fe14e838779f06578e426c2";
 const BRIDGE_SCHEMA = "arc-intake-arc1-bridge-envelope-v1";
 const SOURCE_SCHEMA = "arc-intake-function-submission-v1";
 const CONSUMER_SCHEMA = "arc1-function-intake-adapter-v1";
@@ -157,7 +157,7 @@ for (const grant of evidence.asset_manifest) {
   if (totalAssetBytes > 3020000) throw new Error("ARC1_BRIDGE_ASSET_INVALID: total bytes");
   previousField = grant.role;
 }
-if (evidence.asset_manifest.length > 0 && evidence.data.asset_permission !== "Confirmed") {
+if (evidence.asset_manifest.length > 0 && evidence.data.asset_permission !== "Confirmed rights and no visible watermark v1") {
   throw new Error("ARC1_BRIDGE_ASSET_INVALID: exact permission required");
 }
 if (await sha256Text(canonicalJson({ data: evidence.data, asset_manifest: evidence.asset_manifest })) !== evidence.submission_data_sha256) {

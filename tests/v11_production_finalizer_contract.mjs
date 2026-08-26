@@ -28,6 +28,9 @@ import {
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const template = await readFile(path.join(root, "ARC_MASTER_TEMPLATE_V11.html"), "utf8");
+const finalizerSource = await readFile(path.join(root, "scripts/v11_production_finalizer.mjs"), "utf8");
+assert.match(finalizerSource, /STRUCTURAL_VALIDATION_ONLY_NOT_PUBLICATION_AUTHORITY/,
+  "the local finalizer must state that unsigned structural review data cannot authorize publication");
 const fixture = fixtures[0];
 const evidenceSecret = "v11-artifact-evidence-test-secret-0000000000000000000000000000";
 const issuedAt = "2026-08-25T12:00:00.000Z";
@@ -60,6 +63,35 @@ function boundedJpeg(size, fill) {
   ]);
   assert.ok(size > prefix.length + 2);
   return Buffer.concat([prefix, Buffer.alloc(size - prefix.length - 2, fill), Buffer.from([0xff, 0xd9])], size);
+}
+
+function reviewedAssets(assets) {
+  const contentType = asset => asset.path.endsWith(".png") ? "image/png" : asset.path.endsWith(".jpg") ? "image/jpeg" : "image/webp";
+  return {
+    assets,
+    assetReview: {
+      version: "arc-customer-image-visual-review-v1",
+      scope: "human-visible-watermark-and-rights-review",
+      decision: "APPROVED_FOR_PUBLICATION",
+      reviewer_type: "AUTHORIZED_HUMAN",
+      reviewer_id_sha256: "a".repeat(64),
+      policy_version: "arc-image-provenance-policy-v1",
+      review_method: "HUMAN_VISUAL_INSPECTION_FULL_RESOLUTION",
+      review_validity: "CONTENT_DIGEST_BOUND_NO_EXPIRY",
+      automated_screening: "PASSED_DETERMINISTIC_INDICATORS_ONLY",
+      automated_screening_version: "arc-deterministic-image-screen-v1",
+      pixel_level_watermark_certainty: false,
+      watermark_free_guarantee: false,
+      reviewed_at: "2026-08-25T11:30:00.000Z",
+      rights_basis: "CUSTOMER_CONFIRMED_OWNERSHIP_OR_LICENSE",
+      filename_screening: "PASSED_OR_UNAVAILABLE_FROM_FIRST_PARTY_INTAKE",
+      source_host_screening: "HTTPS_SYNTAX_AND_STOCK_HOST_DENYLIST_SCREENED",
+      visible_watermark_screening: "NO_VISIBLE_WATERMARK_FOUND",
+      stock_preview_screening: "NO_VISIBLE_STOCK_PREVIEW_MARKER_FOUND",
+      assets: assets.map(asset => ({ content_type: contentType(asset), path: asset.path, sha256: asset.path.match(/assets\/([a-f0-9]{64})\./)?.[1] || "" }))
+        .sort((left, right) => left.path.localeCompare(right.path))
+    }
+  };
 }
 
 function withApprovalMutation(rendered, mutate) {
@@ -114,10 +146,10 @@ assert.ok(rendered.pages.some(page => page.html.includes("<aside class=\"arc-pre
 assert.ok(rendered.pages.some(page => page.approvalHtml.includes("&amp;variant=hero")), "approval bytes should retain the escaped receipt URL");
 
 const finalized = finalizeV11ProductionSite(rendered, {
-  assets: [{ path: assetPath, bytes: assetBytes, sourceUrl }]
+  ...reviewedAssets([{ path: assetPath, bytes: assetBytes, sourceUrl }])
 });
 const repeated = finalizeV11ProductionSite(rendered, {
-  assets: [{ path: assetPath, bytes: assetBytes, sourceUrl }]
+  ...reviewedAssets([{ path: assetPath, bytes: assetBytes, sourceUrl }])
 });
 
 assert.deepEqual(finalized.artifacts.map(artifact => artifact.path), [
@@ -149,6 +181,17 @@ assert.equal(finalized.pages.filter(page => page.path !== "contact/index.html").
 assert.ok(finalized.pages.some(page => page.html.includes(`src="/${assetPath}"`)), "uploaded image must become a root-relative asset");
 assert.ok(finalized.pages.some(page => page.html.includes(`srcset="/${assetPath} 1x"`)), "srcset must become root-relative too");
 
+const extensionlessSourceUrl = "https://uploads.example.test/media/opaque-customer-asset";
+const extensionlessRendered = render({
+  ...fixture.content,
+  HERO_MEDIA_HTML: `<img src="${extensionlessSourceUrl}" alt="Customer-supplied roofing project">`
+}, { heroImageUrl: extensionlessSourceUrl });
+const extensionlessFinalized = finalizeV11ProductionSite(extensionlessRendered, reviewedAssets([{
+  path: assetPath, bytes: assetBytes, sourceUrl: extensionlessSourceUrl
+}]));
+assert.ok(extensionlessFinalized.pages.some(page => page.html.includes(`src="/${assetPath}"`)),
+  "A legitimate opaque first-party image URL without an extension must remain supported.");
+
 const productionEntries = finalized.artifactVector.filter(entry => V11_PRODUCTION_HTML_PATHS.includes(entry.path));
 assert.equal(finalized.productionContentSha256, framedDigest(productionEntries), "production digest must frame all five ordered pages");
 assert.equal(finalized.bundleFingerprint, framedDigest(finalized.artifactVector), "bundle fingerprint must frame the exact artifact vector");
@@ -175,7 +218,7 @@ const changedAboutContent = {
   ABOUT_BODY: `${mediaContent.ABOUT_BODY}<p>A secondary-page approval change that must alter the whole-site production digest.</p>`
 };
 const changedAbout = finalizeV11ProductionSite(render(changedAboutContent, { heroImageUrl: sourceUrl }), {
-  assets: [{ path: assetPath, bytes: assetBytes, sourceUrl }]
+  ...reviewedAssets([{ path: assetPath, bytes: assetBytes, sourceUrl }])
 });
 assert.notEqual(changedAbout.productionContentSha256, finalized.productionContentSha256,
   "changing About must change production_content_sha256 even when index.html is unchanged");
@@ -204,7 +247,7 @@ const poisonedPreviewHtml = {
   pages: rendered.pages.map(page => ({ ...page, html: `${page.html}<script>previewOnlyAttack()</script>` }))
 };
 const approvalOnlyFinalized = finalizeV11ProductionSite(poisonedPreviewHtml, {
-  assets: [{ path: assetPath, bytes: assetBytes, sourceUrl }]
+  ...reviewedAssets([{ path: assetPath, bytes: assetBytes, sourceUrl }])
 });
 assert.equal(approvalOnlyFinalized.bundleFingerprint, finalized.bundleFingerprint,
   "production must derive from approvalHtml, never toolbar-bearing preview html");
@@ -297,16 +340,63 @@ assert.throws(() => finalizeV11ProductionSite(noFormFormaction), /formaction ove
 
 assert.throws(() => finalizeV11ProductionSite(rendered), /image sources must use root-relative/i,
   "an unmapped remote receipt URL must fail closed");
+assert.throws(() => finalizeV11ProductionSite(rendered, {
+  assets: [{ path: assetPath, bytes: assetBytes, sourceUrl }]
+}), /IMAGE_REVIEW_REQUIRED/i, "customer images must not finalize without an explicit human visual review");
+const alteredReview = reviewedAssets([{ path: assetPath, bytes: assetBytes, sourceUrl }]);
+alteredReview.assetReview.visible_watermark_screening = "UNKNOWN";
+assert.throws(() => finalizeV11ProductionSite(rendered, alteredReview), /IMAGE_REVIEW_REQUIRED/i,
+  "an ambiguous or altered visual-review decision must fail closed");
+const overclaimingReview = reviewedAssets([{ path: assetPath, bytes: assetBytes, sourceUrl }]);
+overclaimingReview.assetReview.watermark_free_guarantee = true;
+assert.throws(() => finalizeV11ProductionSite(rendered, overclaimingReview), /IMAGE_REVIEW_REQUIRED/i,
+  "a visual review must not claim a watermark-free guarantee that the pipeline cannot establish");
+
+for (const unsafeSourceUrl of [
+  "https://uploads.example.test/customer-watermarked-preview.jpg",
+  "https://uploads.example.test/customer-image.jpg?source=shutterstock-preview",
+  "https://cdn.shutterstock.com/customer-image.jpg"
+]) {
+  const unsafeContent = { ...fixture.content, HERO_MEDIA_HTML: `<img src="${unsafeSourceUrl}" alt="Customer project">` };
+  const unsafeRendered = render(unsafeContent, { heroImageUrl: unsafeSourceUrl });
+  assert.throws(() => finalizeV11ProductionSite(unsafeRendered, reviewedAssets([{
+    path: assetPath, bytes: assetBytes, sourceUrl: unsafeSourceUrl
+  }])), /IMAGE_SOURCE_INVALID/i, `unsafe source provenance must fail closed: ${unsafeSourceUrl}`);
+}
+
+const markerBytes = boundedJpeg(512, 0x41);
+Buffer.from(" watermark ", "ascii").copy(markerBytes, 64);
+assert.throws(() => finalizeV11ProductionSite(render(), reviewedAssets([{
+  path: `assets/${sha256(markerBytes)}.jpg`, bytes: markerBytes
+}])), /stock-preview or watermark marker/i, "deterministic watermark markers in image bytes must fail closed");
+
+const animatedWebp = (() => {
+  const vp8x = Buffer.alloc(18); vp8x.write("VP8X", 0, 4, "ascii"); vp8x.writeUInt32LE(10, 4); vp8x[8] = 2;
+  const anim = Buffer.alloc(14); anim.write("ANIM", 0, 4, "ascii"); anim.writeUInt32LE(6, 4);
+  const frame = Buffer.alloc(24); frame.write("ANMF", 0, 4, "ascii"); frame.writeUInt32LE(16, 4);
+  const body = Buffer.concat([Buffer.from("WEBP", "ascii"), vp8x, anim, frame]);
+  const riff = Buffer.alloc(8); riff.write("RIFF", 0, 4, "ascii"); riff.writeUInt32LE(body.length, 4);
+  return Buffer.concat([riff, body]);
+})();
+const animatedSourceUrl = "https://uploads.example.test/customer-image.webp";
+const animatedRendered = render({ ...fixture.content,
+  HERO_MEDIA_HTML: `<img src="${animatedSourceUrl}" alt="Customer project">`
+}, { heroImageUrl: animatedSourceUrl });
+assert.throws(() => finalizeV11ProductionSite(animatedRendered, reviewedAssets([{
+  path: `assets/${sha256(animatedWebp)}.webp`, bytes: animatedWebp, sourceUrl: animatedSourceUrl
+}])), /animated WebP is not allowed/i,
+"animated WebP must fail because a full-resolution review of one frame cannot cover later frames");
+
 assert.throws(() => finalizeV11ProductionSite(render(), {
-  assets: [{ path: assetPath, bytes: assetBytes }]
+  ...reviewedAssets([{ path: assetPath, bytes: assetBytes }])
 }), /site-wide asset references/i, "an orphan bundled asset must fail closed");
 assert.throws(() => finalizeV11ProductionSite(rendered, {
-  assets: [{ path: `assets/${"0".repeat(64)}.jpg`, bytes: assetBytes, sourceUrl }]
+  ...reviewedAssets([{ path: `assets/${"0".repeat(64)}.jpg`, bytes: assetBytes, sourceUrl }])
 }), /path digest/i);
 
 const relativeAsset = withApprovalMutation(rendered, html => html.replaceAll(sourceUrl.replaceAll("&", "&amp;"), assetPath));
 assert.throws(() => finalizeV11ProductionSite(relativeAsset, {
-  assets: [{ path: assetPath, bytes: assetBytes }]
+  ...reviewedAssets([{ path: assetPath, bytes: assetBytes }])
 }), /non-root/i, "relative local assets are forbidden even when content-addressed");
 
 const malformedAsset = withApprovalMutation(render(), (html, page) => page.key === "process"
@@ -316,17 +406,17 @@ assert.throws(() => finalizeV11ProductionSite(malformedAsset), /non-content-addr
 
 const oversizedAsset = boundedJpeg(V11_PRODUCTION_SAFE_CAPS.maxAssetBytes + 1, 0x51);
 assert.throws(() => finalizeV11ProductionSite(render(), {
-  assets: [{ path: `assets/${sha256(oversizedAsset)}.jpg`, bytes: oversizedAsset }]
+  ...reviewedAssets([{ path: `assets/${sha256(oversizedAsset)}.jpg`, bytes: oversizedAsset }])
 }), /1250000 bytes/i);
 
 const aggregateAssets = [0x61, 0x62, 0x63].map(fill => boundedJpeg(1_000_001, fill));
 assert.throws(() => finalizeV11ProductionSite(render(), {
-  assets: aggregateAssets.map(bytes => ({ path: `assets/${sha256(bytes)}.jpg`, bytes }))
+  ...reviewedAssets(aggregateAssets.map(bytes => ({ path: `assets/${sha256(bytes)}.jpg`, bytes })))
 }), /3000000 bytes/i);
 
 const fourAssets = [0x71, 0x72, 0x73, 0x74].map(fill => boundedJpeg(128, fill));
 assert.throws(() => finalizeV11ProductionSite(render(), {
-  assets: fourAssets.map(bytes => ({ path: `assets/${sha256(bytes)}.jpg`, bytes }))
+  ...reviewedAssets(fourAssets.map(bytes => ({ path: `assets/${sha256(bytes)}.jpg`, bytes })))
 }), /asset count exceeds 3/i);
 
 const oversizedPage = withApprovalMutation(render(), (html, page) => page.key === "services"

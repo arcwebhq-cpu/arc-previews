@@ -32,7 +32,7 @@ const canonicalJson = value => {
 const logicalPagePaths = ['index.html', 'services/index.html', 'about/index.html', 'process/index.html', 'contact/index.html'];
 const artifactPagePaths = ['about/index.html', 'contact/index.html', 'process/index.html', 'services/index.html', 'index.html'];
 
-const contractSha256 = 'c4ab396bf04464629624dd19a37602755c8d429db0bf729b49bbfdfdba3ae20c';
+const contractSha256 = 'da1bb4fc84f9871bdec1029d90ff21dfbdabd1e92fe14e838779f06578e426c2';
 const siteId = '8f9d462c-952f-42fc-a3a0-50a2529e8f5d';
 const submissionId = '11111111-1111-4111-8111-111111111111';
 const bridgeSecret = 'bridge-evidence-secret-unique-0123456789';
@@ -41,6 +41,9 @@ const bearer = 'destination-bearer-unique-0123456789';
 const ackSecret = 'consumer-ack-secret-unique-0123456789';
 const assetReceiptSecret = 'asset-receipt-secret-unique-0123456789';
 const assetPublicationSecret = 'asset-publication-secret-unique-0123456789';
+const assetVisualReviewSecret = 'asset-visual-review-secret-unique-0123456789';
+const assetVisualReviewKeyId = '01';
+const authorizedImageReviewerIdSha256 = sha256('authorized-image-reviewer-test-identity');
 const assetBearer = 'asset-retrieval-bearer-unique-0123456789';
 const assetEndpoint = 'https://arcweb.onl/internal/intake/arc1/assets/retrieve';
 const now = Date.now();
@@ -326,7 +329,26 @@ const withAssetManifest = [{
   schema: 'arc-intake-private-asset-grant-v1', asset_id: 'e'.repeat(64), kind: 'UPLOAD', role: 'logo_file',
   content_type: 'image/png', size: png.length, sha256: sha256(png), retrieval_endpoint_sha256: sha256(assetEndpoint),
 }];
-const withAssetData = { ...data, asset_permission: 'Confirmed' };
+const oldAssetPermissionData = { ...data, asset_permission: 'Confirmed' };
+const oldAssetPermissionEvidence = {
+  ...evidence,
+  data: oldAssetPermissionData,
+  asset_manifest: withAssetManifest,
+  submission_data_sha256: sha256(canonicalJson({ data: oldAssetPermissionData, asset_manifest: withAssetManifest })),
+};
+const oldAssetPermissionRaw = canonicalJson(oldAssetPermissionEvidence);
+const oldAssetPermissionEnvelope = canonicalJson({
+  schema: envelope.schema, evidence: oldAssetPermissionEvidence,
+  hmac_sha256: hmac(bridgeSecret, `arc-intake-arc1-bridge-evidence-v1\n${oldAssetPermissionRaw}`),
+});
+let oldAssetPermissionNetworkCalls = 0;
+await assert.rejects(runVerifier({ ...input, bridge_envelope_json: oldAssetPermissionEnvelope }, async () => {
+  oldAssetPermissionNetworkCalls += 1;
+  throw new Error('Old asset permission must fail before network access.');
+}, Buffer), /exact permission required/);
+assert.equal(oldAssetPermissionNetworkCalls, 0,
+  'The superseded Confirmed asset permission literal must fail closed before network access.');
+const withAssetData = { ...data, asset_permission: 'Confirmed rights and no visible watermark v1' };
 const withAssetEvidence = {
   ...evidence,
   data: withAssetData,
@@ -342,7 +364,7 @@ const verifiedAssetEnvelope = await runVerifier({ ...input, bridge_envelope_json
 assert.equal(verifiedAssetEnvelope.asset_manifest[0].asset_id, 'e'.repeat(64));
 assert.equal(Object.hasOwn(JSON.parse(withAssetEnvelope).evidence, 'assets'), false, 'Bridge evidence must contain no inline asset bytes.');
 const folderLink = 'https://drive.google.com/drive/folders/private?resourcekey=opaque';
-const withFolderData = { ...data, asset_permission: 'Confirmed' };
+const withFolderData = { ...data, asset_permission: 'Confirmed rights and no visible watermark v1' };
 const folderGrant = {
   schema: 'arc-intake-private-asset-grant-v1', asset_id: 'f'.repeat(64), kind: 'FOLDER_LINK', role: 'asset_folder_link',
   content_type: 'text/uri-list', size: Buffer.byteLength(folderLink), sha256: sha256(folderLink), retrieval_endpoint_sha256: sha256(assetEndpoint),
@@ -404,6 +426,13 @@ const retrievedUpload = await runAssetConsumer(assetInput(verifiedAssetEnvelope,
 }, Buffer);
 assert.equal(retrievedUpload.status, 'ARC1_PRIVATE_ASSETS_VERIFIED');
 assert.equal(JSON.parse(retrievedUpload.asset_payloads_private_json)[0].content_base64, png.toString('base64'));
+assert.equal(retrievedUpload.automated_watermark_screening_status, 'PASSED_DETERMINISTIC_INDICATORS_ONLY');
+assert.equal(retrievedUpload.visual_review_status, 'REQUIRED_BEFORE_PUBLICATION');
+assert.equal(retrievedUpload.automated_watermark_screening_version, 'arc-deterministic-image-screen-v1');
+assert.equal(retrievedUpload.pixel_level_watermark_certainty, false);
+assert.equal(retrievedUpload.watermark_free_guarantee, false);
+assert.equal(retrievedUpload.source_host_screening_status, 'FIRST_PARTY_RETRIEVAL_ENDPOINT_VERIFIED');
+assert.equal(retrievedUpload.original_filename_screening_status, 'UNAVAILABLE_REQUIRES_VISUAL_REVIEW');
 const replayedUpload = await runAssetConsumer(assetInput(verifiedAssetEnvelope, withAssetManifest), async () => bodyResponse(png, withAssetManifest[0]), Buffer);
 assert.equal(replayedUpload.asset_receipt_private, retrievedUpload.asset_receipt_private, 'Exact replay must issue an identical asset receipt.');
 assert.equal(uploadRetrievals, 1);
@@ -647,22 +676,50 @@ const intakeClaimFor = verified => ({
   intake_claim_asset_manifest_sha256: verified.asset_manifest_sha256,
   intake_claim_existing_preview_folder: '', intake_claim_created_at: new Date().toISOString(),
 });
-const publicationInput = (verified, retrieved) => ({
-  github_token: 'mock-github-token', github_owner: 'arcwebhq-cpu', github_repo: 'arc-previews', github_base_branch: 'main',
-  pages_base_url: 'https://arcwebhq-cpu.github.io/arc-previews', raw_json: JSON.stringify(fixture.content),
-  intake_evidence_secret: intakeSecret, intake_evidence_private: verified.intake_evidence_private,
-  intake_evidence_hmac_sha256: verified.intake_evidence_hmac_sha256, intake_evidence_sha256: verified.intake_evidence_sha256,
-  asset_receipt_secret: assetReceiptSecret, asset_receipt_private: retrieved.asset_receipt_private,
-  asset_receipt_hmac_sha256: retrieved.asset_receipt_hmac_sha256, asset_receipt_sha256: retrieved.asset_receipt_sha256,
-  asset_payloads_private_json: retrieved.asset_payloads_private_json, asset_publication_receipt_secret: assetPublicationSecret,
-  ingress_state_key: verified.ingress_state_key, ingress_state_digest_sha256: verified.ingress_state_digest_sha256,
-  ingress_claim_mode: 'CREATED', ingress_claim_status: 'CLAIMED', ingress_claim_state_key: verified.ingress_state_key,
-  ingress_claim_state_digest_sha256: verified.ingress_state_digest_sha256,
-  ingress_claim_bridge_delivery_id: verified.bridge_delivery_id,
-  ingress_claim_bridge_evidence_sha256: verified.bridge_evidence_sha256,
-  ingress_claim_asset_receipt_sha256: retrieved.asset_receipt_sha256, ingress_claim_created_at: new Date().toISOString(),
-  ...intakeClaimFor(verified),
-});
+const publicationInput = (verified, retrieved) => {
+  const assetVisualReview = verified.asset_manifest.length ? canonicalJson({
+    version: 'arc1-asset-visual-review-v1', scope: 'human-visible-watermark-and-rights-review',
+    intake_evidence_sha256: verified.intake_evidence_sha256, asset_manifest_sha256: verified.asset_manifest_sha256,
+    preview_folder: `ironwood-roofing-concept-${verified.public_folder_prefix}`, reviewer_type: 'AUTHORIZED_HUMAN',
+    reviewer_id_sha256: authorizedImageReviewerIdSha256, review_key_id: assetVisualReviewKeyId,
+    policy_version: 'arc-image-provenance-policy-v1',
+    review_method: 'HUMAN_VISUAL_INSPECTION_FULL_RESOLUTION', review_validity: 'CONTENT_DIGEST_BOUND_NO_EXPIRY',
+    automated_screening: 'PASSED_DETERMINISTIC_INDICATORS_ONLY', automated_screening_version: 'arc-deterministic-image-screen-v1',
+    pixel_level_watermark_certainty: false, watermark_free_guarantee: false, decision: 'APPROVED_FOR_PUBLICATION',
+    reviewed_at: new Date(now).toISOString(),
+    assets: verified.asset_manifest.map(asset => ({
+      content_type: asset.content_type, filename_screening: 'NOT_AVAILABLE_FROM_FIRST_PARTY_INTAKE',
+      rights_basis: 'CUSTOMER_CONFIRMED_OWNERSHIP_OR_LICENSE', role: asset.role, sha256: asset.sha256,
+      source_host_screening: 'FIRST_PARTY_RETRIEVAL_ENDPOINT_VERIFIED',
+      stock_preview_screening: 'NO_VISIBLE_STOCK_PREVIEW_MARKER_FOUND', visible_watermark_screening: 'NO_VISIBLE_WATERMARK_FOUND',
+    })),
+  }) : '';
+  return {
+    github_token: 'mock-github-token', github_owner: 'arcwebhq-cpu', github_repo: 'arc-previews', github_base_branch: 'main',
+    pages_base_url: 'https://arcwebhq-cpu.github.io/arc-previews', raw_json: JSON.stringify(fixture.content),
+    intake_evidence_secret: intakeSecret, intake_evidence_private: verified.intake_evidence_private,
+    intake_evidence_hmac_sha256: verified.intake_evidence_hmac_sha256, intake_evidence_sha256: verified.intake_evidence_sha256,
+    asset_receipt_secret: assetReceiptSecret, asset_receipt_private: retrieved.asset_receipt_private,
+    asset_receipt_hmac_sha256: retrieved.asset_receipt_hmac_sha256, asset_receipt_sha256: retrieved.asset_receipt_sha256,
+    asset_payloads_private_json: retrieved.asset_payloads_private_json, asset_publication_receipt_secret: assetPublicationSecret,
+    asset_visual_review_authority_verified: 'true', asset_visual_review_key_id: assetVisualReviewKeyId,
+    asset_visual_review_private_secret_broker_verified: 'true',
+    asset_visual_review_provider_history_redaction_verified: 'true',
+    asset_visual_review_secret_delivery_mode: 'PRIVATE_INTEGRATION_REDACTED',
+    authorized_image_reviewer_id_sha256: authorizedImageReviewerIdSha256,
+    asset_visual_review_secret: assetVisualReviewSecret, asset_visual_review_private: assetVisualReview,
+    asset_visual_review_sha256: assetVisualReview ? sha256(assetVisualReview) : '',
+    asset_visual_review_hmac_sha256: assetVisualReview ? hmac(assetVisualReviewSecret,
+      `arc1-asset-visual-review-signature-v1\n${assetVisualReviewKeyId}\n${assetVisualReview}`) : '',
+    ingress_state_key: verified.ingress_state_key, ingress_state_digest_sha256: verified.ingress_state_digest_sha256,
+    ingress_claim_mode: 'CREATED', ingress_claim_status: 'CLAIMED', ingress_claim_state_key: verified.ingress_state_key,
+    ingress_claim_state_digest_sha256: verified.ingress_state_digest_sha256,
+    ingress_claim_bridge_delivery_id: verified.bridge_delivery_id,
+    ingress_claim_bridge_evidence_sha256: verified.bridge_evidence_sha256,
+    ingress_claim_asset_receipt_sha256: retrieved.asset_receipt_sha256, ingress_claim_created_at: new Date().toISOString(),
+    ...intakeClaimFor(verified),
+  };
+};
 // A valid no-upload submission still gets a signed NO_PUBLIC_UPLOADS receipt;
 // that exact empty receipt must survive PR, squash merge, Pages, and email.
 assert.equal(publishedEmptyAssets.status, 'ARC1_FUNCTION_ASSETS_NONE');
@@ -670,6 +727,10 @@ const emptyPublicationReceipt = JSON.parse(publishedEmptyAssets.asset_publicatio
 assert.equal(emptyPublicationReceipt.status, 'NO_PUBLIC_UPLOADS');
 assert.deepEqual(emptyPublicationReceipt.entries, []);
 assert.equal(emptyPublicationReceipt.asset_permission, '');
+assert.equal(emptyPublicationReceipt.asset_visual_review_authority_verified, false);
+assert.equal(emptyPublicationReceipt.asset_visual_review_key_id, '');
+assert.equal(emptyPublicationReceipt.asset_visual_review_reviewer_id_sha256, '');
+assert.equal(emptyPublicationReceipt.asset_visual_review_sha256, '');
 const emptyGitHub = makeGitHubMock();
 const emptyPreview = await runPublisher(emptyPreviewInput, emptyGitHub.fetch, Buffer);
 assert.equal(emptyPreview.asset_publication_receipt_sha256, publishedEmptyAssets.asset_publication_receipt_sha256);
@@ -758,11 +819,19 @@ const webpWithMetadata = (type, data) => {
   chunk.write(type, 0, 4, 'ascii'); chunk.writeUInt32LE(payload.length, 4); payload.copy(chunk, 8);
   const result = Buffer.concat([webp, chunk]); result.writeUInt32LE(result.length - 8, 4); return result;
 };
+const animatedWebp = (() => {
+  const vp8x = Buffer.alloc(18); vp8x.write('VP8X', 0, 4, 'ascii'); vp8x.writeUInt32LE(10, 4); vp8x[8] = 2;
+  const anim = Buffer.alloc(14); anim.write('ANIM', 0, 4, 'ascii'); anim.writeUInt32LE(6, 4);
+  const frame = Buffer.alloc(24); frame.write('ANMF', 0, 4, 'ascii'); frame.writeUInt32LE(16, 4);
+  const body = Buffer.concat([Buffer.from('WEBP', 'ascii'), vp8x, anim, frame]);
+  const riff = Buffer.alloc(8); riff.write('RIFF', 0, 4, 'ascii'); riff.writeUInt32LE(body.length, 4);
+  return Buffer.concat([riff, body]);
+})();
 const assertMetadataRejected = async (bytes, contentType, label,
   expectedError = /embedded (?:JPEG|PNG|WebP) metadata|embedded JPEG metadata or multiple scans/) => {
   const grant = { schema: 'arc-intake-private-asset-grant-v1', asset_id: sha256(`asset-${label}`), kind: 'UPLOAD', role: 'logo_file',
     content_type: contentType, size: bytes.length, sha256: sha256(bytes), retrieval_endpoint_sha256: sha256(assetEndpoint) };
-  const metadataData = { ...data, asset_permission: 'Confirmed' };
+  const metadataData = { ...data, asset_permission: 'Confirmed rights and no visible watermark v1' };
   const metadataEvidence = { ...evidence, delivery_id: sha256(`delivery-${label}`), data: metadataData, asset_manifest: [grant],
     submission_data_sha256: sha256(canonicalJson({ data: metadataData, asset_manifest: [grant] })) };
   const metadataRaw = canonicalJson(metadataEvidence);
@@ -830,6 +899,13 @@ for (const [label, bytes] of [
   ['webp-icc', webpWithMetadata('ICCP', Buffer.from('private profile'))],
   ['webp-unknown-meta', webpWithMetadata('META', Buffer.from('private vendor metadata'))],
 ]) await assertMetadataRejected(bytes, 'image/webp', label);
+await assertMetadataRejected(animatedWebp, 'image/webp', 'webp-animation-flag', /animated WebP is not allowed/);
+await assertMetadataRejected(webpWithMetadata('ANIM', Buffer.alloc(6)), 'image/webp', 'webp-animation-chunk',
+  /animated WebP is not allowed/);
+await assertMetadataRejected(
+  Buffer.concat([jpeg.subarray(0, -2), Buffer.from('shutterstock watermark', 'ascii'), jpeg.subarray(-2)]),
+  'image/jpeg', 'jpeg-deterministic-watermark-marker', /deterministic stock-preview or watermark marker/
+);
 for (const [label, bytes, contentType, error] of [
   ['jpeg-empty-shell', Buffer.from([0xff, 0xd8, 0xff, 0xd9]), 'image/jpeg', /malformed JPEG|incomplete JPEG|missing JPEG scan/],
   ['png-empty-shell', Buffer.concat([png.subarray(0, 8), png.subarray(-12)]), 'image/png', /incomplete PNG|malformed PNG|PNG IHDR/],
@@ -850,7 +926,7 @@ const stuffedGrant = {
   content_type: 'image/jpeg', size: stuffedEntropyJpeg.length, sha256: sha256(stuffedEntropyJpeg),
   retrieval_endpoint_sha256: sha256(assetEndpoint),
 };
-const stuffedData = { ...data, asset_permission: 'Confirmed' };
+const stuffedData = { ...data, asset_permission: 'Confirmed rights and no visible watermark v1' };
 const stuffedEvidence = { ...evidence, delivery_id: sha256('delivery-jpeg-stuffed-entropy'), data: stuffedData,
   asset_manifest: [stuffedGrant], submission_data_sha256: sha256(canonicalJson({ data: stuffedData, asset_manifest: [stuffedGrant] })) };
 const stuffedEvidenceRaw = canonicalJson(stuffedEvidence);
@@ -864,16 +940,62 @@ const stuffedPublished = await runAssetPublisher(publicationInput(stuffedVerifie
 assert.equal(stuffedPublished.status, 'ARC1_FUNCTION_ASSETS_CREATED',
   'A valid JPEG entropy scan containing an FF-stuffed byte must not be parsed as metadata segments.');
 const gitHub = makeGitHubMock();
+for (const [label, mutate] of [
+  ['missing authority gate', value => { delete value.asset_visual_review_authority_verified; }],
+  ['false authority gate', value => { value.asset_visual_review_authority_verified = 'false'; }],
+  ['missing private secret broker gate', value => { delete value.asset_visual_review_private_secret_broker_verified; }],
+  ['false provider history redaction gate', value => { value.asset_visual_review_provider_history_redaction_verified = 'false'; }],
+  ['unsafe Code Input Data secret delivery', value => { value.asset_visual_review_secret_delivery_mode = 'CODE_INPUT_DATA'; }],
+  ['mismatched configured reviewer', value => { value.authorized_image_reviewer_id_sha256 = sha256('different-reviewer'); }],
+  ['mismatched configured key id', value => { value.asset_visual_review_key_id = '02'; }],
+]) {
+  const authorityInput = publicationInput(verifiedAssetEnvelope, retrievedUpload);
+  mutate(authorityInput);
+  const authorityGitHub = makeGitHubMock();
+  await assert.rejects(runAssetPublisher(authorityInput, authorityGitHub.fetch, Buffer), /ASSET_REVIEW_(?:AUTHORITY_)?REQUIRED/,
+    `${label} must fail closed.`);
+  assert.equal(authorityGitHub.state.calls.length, 0, `${label} must fail before every Git provider read or write.`);
+}
+const missingReviewInput = publicationInput(verifiedAssetEnvelope, retrievedUpload);
+delete missingReviewInput.asset_visual_review_private;
+const missingReviewGitHub = makeGitHubMock();
+await assert.rejects(runAssetPublisher(missingReviewInput, missingReviewGitHub.fetch, Buffer), /ASSET_REVIEW_REQUIRED/,
+  'An upload without explicit human visual review must fail closed.');
+assert.equal(missingReviewGitHub.state.calls.length, 0, 'Missing visual review must fail before every Git provider read or write.');
+const tamperedReviewInput = publicationInput(verifiedAssetEnvelope, retrievedUpload);
+const tamperedReview = JSON.parse(tamperedReviewInput.asset_visual_review_private);
+tamperedReview.assets[0].visible_watermark_screening = 'UNKNOWN';
+tamperedReviewInput.asset_visual_review_private = canonicalJson(tamperedReview);
+tamperedReviewInput.asset_visual_review_sha256 = sha256(tamperedReviewInput.asset_visual_review_private);
+tamperedReviewInput.asset_visual_review_hmac_sha256 = hmac(assetVisualReviewSecret,
+  `arc1-asset-visual-review-signature-v1\n${assetVisualReviewKeyId}\n${tamperedReviewInput.asset_visual_review_private}`);
+const tamperedReviewGitHub = makeGitHubMock();
+await assert.rejects(runAssetPublisher(tamperedReviewInput, tamperedReviewGitHub.fetch, Buffer), /ASSET_REVIEW_REQUIRED/,
+  'An ambiguous human visual review must fail closed.');
+assert.equal(tamperedReviewGitHub.state.calls.length, 0, 'Rejected visual review must fail before every Git provider read or write.');
 const publishedUpload = await runAssetPublisher(publicationInput(verifiedAssetEnvelope, retrievedUpload), gitHub.fetch, Buffer);
 assert.equal(publishedUpload.status, 'ARC1_FUNCTION_ASSETS_CREATED');
 assert.equal(publishedUpload.automation_enabled_by_this_step, false);
 assert.equal(publishedUpload.cleanup_action_allowed_by_this_step, false);
 assert.equal(publishedUpload.recovery_mode, 'exact-replay-only');
+assert.equal(publishedUpload.asset_visual_review_status, 'AUTHORIZED_HUMAN_APPROVED');
+assert.equal(publishedUpload.asset_visual_review_authority_verified, true);
+assert.equal(publishedUpload.asset_visual_review_key_id, assetVisualReviewKeyId);
+assert.equal(publishedUpload.asset_visual_review_reviewer_id_sha256, authorizedImageReviewerIdSha256);
+assert.match(publishedUpload.asset_visual_review_sha256, /^[a-f0-9]{64}$/);
+assert.equal(publishedUpload.automated_watermark_screening_status, 'PASSED_DETERMINISTIC_INDICATORS_ONLY');
+assert.equal(publishedUpload.automated_watermark_screening_version, 'arc-deterministic-image-screen-v1');
+assert.equal(publishedUpload.pixel_level_watermark_certainty, false);
+assert.equal(publishedUpload.watermark_free_guarantee, false);
 assert.match(publishedUpload.logo_file_url,
   new RegExp(`/ironwood-roofing-concept-${verifiedAssetEnvelope.public_folder_prefix}/assets/${withAssetManifest[0].sha256}\\.png$`));
 assert.equal(Object.hasOwn(publishedUpload, 'asset_payloads_private_json'), false, 'Raw private bytes must not leave the private publication step.');
 const publishedReceipt = JSON.parse(publishedUpload.asset_publication_receipt_private);
-assert.equal(publishedReceipt.asset_permission, 'Confirmed');
+assert.equal(publishedReceipt.asset_permission, 'Confirmed rights and no visible watermark v1');
+assert.equal(publishedReceipt.asset_visual_review_authority_verified, true);
+assert.equal(publishedReceipt.asset_visual_review_key_id, assetVisualReviewKeyId);
+assert.equal(publishedReceipt.asset_visual_review_reviewer_id_sha256, authorizedImageReviewerIdSha256);
+assert.equal(publishedReceipt.status, 'HUMAN_REVIEWED_CONTENT_ADDRESSED');
 assert.equal(publishedReceipt.private_asset_receipt_sha256, retrievedUpload.asset_receipt_sha256);
 assert.equal(publishedReceipt.entries[0].public_url, publishedUpload.logo_file_url);
 assert.equal(publishedReceipt.entries[0].repository_path,
@@ -889,7 +1011,7 @@ const duplicateContentGrants = [
   { ...withAssetManifest[0], asset_id: 'd'.repeat(64), role: 'hero_image_file' },
   { ...withAssetManifest[0], asset_id: 'e'.repeat(64), role: 'logo_file' },
 ];
-const duplicateData = { ...data, asset_permission: 'Confirmed' };
+const duplicateData = { ...data, asset_permission: 'Confirmed rights and no visible watermark v1' };
 const duplicateEvidence = { ...evidence, delivery_id: 'c'.repeat(64), data: duplicateData, asset_manifest: duplicateContentGrants,
   submission_data_sha256: sha256(canonicalJson({ data: duplicateData, asset_manifest: duplicateContentGrants })) };
 const duplicateRaw = canonicalJson(duplicateEvidence);

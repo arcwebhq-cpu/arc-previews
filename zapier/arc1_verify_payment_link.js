@@ -21,8 +21,8 @@ const stripeMode = stripeLiveModeEnabled ? "live" : "test";
 const requiredTermsVersion = "2026-08-25";
 const stripeApiVersion = "2026-07-29.dahlia";
 const requiredCheckoutRedirectUrl = "https://arcweb.onl/payment-success/?session_id={CHECKOUT_SESSION_ID}";
-if (!new RegExp(`^(?:sk|rk)_${stripeMode}_[A-Za-z0-9_]{12,}$`).test(stripeApiKey)) {
-  throw new Error(`ARC_PAYMENT_LINK_PREFLIGHT_INVALID: Stripe ${stripeMode} API key is required`);
+if (!new RegExp(`^rk_${stripeMode}_[A-Za-z0-9_]{12,}$`).test(stripeApiKey)) {
+  throw new Error(`ARC_PAYMENT_LINK_PREFLIGHT_INVALID: restricted Stripe ${stripeMode} API key is required`);
 }
 if (!/^price_[A-Za-z0-9]+$/.test(expectedPriceId)) {
   throw new Error("ARC_PAYMENT_LINK_PREFLIGHT_INVALID: exact Price id is required");

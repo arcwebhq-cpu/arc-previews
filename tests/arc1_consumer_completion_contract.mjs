@@ -63,7 +63,7 @@ function makePacket({
     completion_endpoint: ARC1_CONSUMER_COMPLETION_ENDPOINT,
     bridge_envelope_json: bridgeEnvelope,
     consumer_schema: "arc1-function-intake-adapter-v1",
-    bridge_contract_sha256: "c4ab396bf04464629624dd19a37602755c8d429db0bf729b49bbfdfdba3ae20c",
+    bridge_contract_sha256: "da1bb4fc84f9871bdec1029d90ff21dfbdabd1e92fe14e838779f06578e426c2",
     bridge_delivery_id: deliveryId,
     bridge_evidence_sha256: bridgeEvidenceSha256,
     bridge_evidence_expires_at: bridgeExpiresAt,

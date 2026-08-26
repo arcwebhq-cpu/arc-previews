@@ -3,6 +3,24 @@ const CONTENT_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 const MAX_IMAGE_WIDTH = 12_000;
 const MAX_IMAGE_HEIGHT = 12_000;
 const MAX_IMAGE_PIXELS = 40_000_000;
+const STOCK_PREVIEW_HOSTS = Object.freeze([
+  "123rf.com",
+  "alamy.com",
+  "bigstockphoto.com",
+  "depositphotos.com",
+  "dreamstime.com",
+  "freepik.com",
+  "gettyimages.com",
+  "istockphoto.com",
+  "shutterstock.com",
+  "stock.adobe.com",
+  "vecteezy.com"
+]);
+const WATERMARK_MARKER_PATTERN = /(?:^|[^a-z0-9])(?:123rf|alamy|bigstock|depositphotos|dreamstime|freepik|getty(?:images)?|istock(?:photo)?|shutterstock|stock[ _-]?preview|vecteezy|watermark(?:ed)?)(?:[^a-z0-9]|$)/i;
+
+export const IMAGE_VISUAL_REVIEW_VERSION = "arc-customer-image-visual-review-v1";
+export const IMAGE_VISUAL_REVIEW_SCOPE = "human-visible-watermark-and-rights-review";
+export const IMAGE_AUTOMATED_SCREENING_VERSION = "arc-deterministic-image-screen-v1";
 
 const crcTable = Array.from({ length: 256 }, (_, value) => {
   let current = value;
@@ -34,6 +52,87 @@ function assertDimensions(width, height, invalid) {
     height > MAX_IMAGE_HEIGHT ||
     width * height > MAX_IMAGE_PIXELS
   ) invalid("invalid image dimensions");
+}
+
+function exactKeys(value, fields) {
+  return value && typeof value === "object" && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype &&
+    JSON.stringify(Object.keys(value).sort()) === JSON.stringify([...fields].sort());
+}
+
+function stockPreviewHost(hostname) {
+  const host = String(hostname || "").toLowerCase();
+  return STOCK_PREVIEW_HOSTS.some(blocked => host === blocked || host.endsWith(`.${blocked}`));
+}
+
+function safeSourceFilename(url, contentType, invalid) {
+  let pathname;
+  try { pathname = decodeURIComponent(url.pathname); } catch { invalid("source filename encoding is invalid"); }
+  if (/%[0-9a-f]{2}/i.test(pathname) || /[\u0000-\u001f\u007f]/.test(pathname)) {
+    invalid("source filename encoding is invalid");
+  }
+  const filename = pathname.split("/").filter(Boolean).at(-1) || "";
+  if (!filename || filename.length > 180 || WATERMARK_MARKER_PATTERN.test(filename.normalize("NFKC"))) {
+    invalid("source filename contains a stock-preview or watermark marker");
+  }
+  let sourceMetadata;
+  try { sourceMetadata = decodeURIComponent(url.search); } catch { invalid("source URL metadata encoding is invalid"); }
+  if (/[\u0000-\u001f\u007f]/.test(sourceMetadata) || WATERMARK_MARKER_PATTERN.test(sourceMetadata.normalize("NFKC"))) {
+    invalid("source URL metadata contains a stock-preview or watermark marker");
+  }
+  const extension = filename.toLowerCase().match(/\.([a-z0-9]{2,5})$/)?.[1] || "";
+  const expected = contentType === "image/png" ? new Set(["png"])
+    : contentType === "image/jpeg" ? new Set(["jpg", "jpeg"])
+      : new Set(["webp"]);
+  if (extension && !expected.has(extension)) invalid("source filename extension does not match image content type");
+}
+
+export function assertSafeImageSource(sourceUrl, contentType, label = "image source") {
+  const invalid = detail => { throw new Error(`ARC_IMAGE_SOURCE_INVALID: ${String(label || "image source")}: ${detail}`); };
+  if (typeof sourceUrl !== "string" || sourceUrl !== sourceUrl.trim()) invalid("source URL is invalid");
+  let parsed;
+  try { parsed = new URL(sourceUrl); } catch { invalid("source URL is invalid"); }
+  if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.port || parsed.hash || parsed.toString() !== sourceUrl) {
+    invalid("source URL must be an exact public HTTPS URL");
+  }
+  if (stockPreviewHost(parsed.hostname)) invalid("stock-preview source hosts are forbidden");
+  safeSourceFilename(parsed, contentType, invalid);
+  return true;
+}
+
+export function assertHumanImageReview(review, assets, label = "customer image review") {
+  const invalid = detail => { throw new Error(`ARC_IMAGE_REVIEW_REQUIRED: ${String(label || "customer image review")}: ${detail}`); };
+  if (!Array.isArray(assets)) invalid("asset set is invalid");
+  if (!assets.length) {
+    if (review !== undefined && review !== null) invalid("review must be absent when there are no customer images");
+    return true;
+  }
+  const fields = ["assets", "automated_screening", "automated_screening_version", "decision", "filename_screening",
+    "pixel_level_watermark_certainty", "policy_version", "review_method", "review_validity", "reviewed_at", "reviewer_id_sha256",
+    "reviewer_type", "rights_basis", "scope", "source_host_screening", "stock_preview_screening", "version",
+    "visible_watermark_screening", "watermark_free_guarantee"];
+  if (!exactKeys(review, fields) || review.version !== IMAGE_VISUAL_REVIEW_VERSION || review.scope !== IMAGE_VISUAL_REVIEW_SCOPE ||
+      review.decision !== "APPROVED_FOR_PUBLICATION" || review.reviewer_type !== "AUTHORIZED_HUMAN" ||
+      review.policy_version !== "arc-image-provenance-policy-v1" || review.review_method !== "HUMAN_VISUAL_INSPECTION_FULL_RESOLUTION" ||
+      review.review_validity !== "CONTENT_DIGEST_BOUND_NO_EXPIRY" || !/^[a-f0-9]{64}$/.test(review.reviewer_id_sha256) ||
+      review.automated_screening !== "PASSED_DETERMINISTIC_INDICATORS_ONLY" ||
+      review.automated_screening_version !== IMAGE_AUTOMATED_SCREENING_VERSION ||
+      review.rights_basis !== "CUSTOMER_CONFIRMED_OWNERSHIP_OR_LICENSE" ||
+      review.filename_screening !== "PASSED_OR_UNAVAILABLE_FROM_FIRST_PARTY_INTAKE" ||
+      review.source_host_screening !== "HTTPS_SYNTAX_AND_STOCK_HOST_DENYLIST_SCREENED" ||
+      review.visible_watermark_screening !== "NO_VISIBLE_WATERMARK_FOUND" ||
+      review.stock_preview_screening !== "NO_VISIBLE_STOCK_PREVIEW_MARKER_FOUND" ||
+      review.pixel_level_watermark_certainty !== false || review.watermark_free_guarantee !== false ||
+      typeof review.reviewed_at !== "string" || !Number.isFinite(Date.parse(review.reviewed_at)) ||
+      new Date(Date.parse(review.reviewed_at)).toISOString() !== review.reviewed_at || !Array.isArray(review.assets)) {
+    invalid("an exact authorized-human approval is required");
+  }
+  const expected = assets.map(asset => ({ content_type: asset.contentType, path: asset.path, sha256: asset.sha256 }))
+    .sort((left, right) => left.path.localeCompare(right.path));
+  if (review.assets.some(item => !exactKeys(item, ["content_type", "path", "sha256"])) ||
+      JSON.stringify(review.assets) !== JSON.stringify(expected)) {
+    invalid("reviewed assets do not match the exact content-addressed asset set");
+  }
+  return true;
 }
 
 function assertJpeg(bytes, invalid) {
@@ -177,7 +276,6 @@ function assertWebp(bytes, invalid) {
   let offset = 12;
   let first = true;
   let extended = false;
-  let animated = false;
   let primary = false;
 
   while (offset < bytes.length) {
@@ -187,28 +285,24 @@ function assertWebp(bytes, invalid) {
     const start = offset + 8;
     const next = start + length + (length & 1);
     if (next > bytes.length) invalid("malformed WebP chunk");
+    if (type === "ANIM" || type === "ANMF") invalid("animated WebP is not allowed");
     if (forbidden.has(type) || !allowed.has(type)) invalid("embedded WebP metadata is not allowed");
     if ((length & 1) && bytes[next - 1] !== 0) invalid("invalid WebP padding");
     const data = bytes.subarray(start, start + length);
 
     if (type === "VP8X") {
       if (!first || extended || length !== 10 || (data[0] & 193)) invalid("invalid WebP VP8X");
+      if (data[0] & 2) invalid("animated WebP is not allowed");
       extended = true;
-      animated = Boolean(data[0] & 2);
       assertDimensions(1 + data.readUIntLE(4, 3), 1 + data.readUIntLE(7, 3), invalid);
     } else if (type === "VP8 ") {
-      if (primary || animated || length < 10 || data[3] !== 157 || data[4] !== 1 || data[5] !== 42) invalid("invalid WebP VP8");
+      if (primary || length < 10 || data[3] !== 157 || data[4] !== 1 || data[5] !== 42) invalid("invalid WebP VP8");
       assertDimensions(data.readUInt16LE(6) & 0x3fff, data.readUInt16LE(8) & 0x3fff, invalid);
       primary = true;
     } else if (type === "VP8L") {
-      if (primary || animated || length < 5 || data[0] !== 47 || (data[4] & 224)) invalid("invalid WebP VP8L");
+      if (primary || length < 5 || data[0] !== 47 || (data[4] & 224)) invalid("invalid WebP VP8L");
       const bits = data.readUInt32LE(1);
       assertDimensions(1 + (bits & 0x3fff), 1 + ((bits >>> 14) & 0x3fff), invalid);
-      primary = true;
-    } else if (type === "ANIM") {
-      if (!extended || !animated || length !== 6 || primary) invalid("invalid WebP animation");
-    } else if (type === "ANMF") {
-      if (!extended || !animated || length < 16) invalid("invalid WebP frame");
       primary = true;
     } else if (type === "ALPH" && (!extended || primary || length < 1)) {
       invalid("invalid WebP alpha");
@@ -228,6 +322,9 @@ export function assertSafeImageAsset(value, contentType, label = "image asset") 
   const bytes = asBuffer(value, invalid);
   if (/<(?:script|svg|html|iframe|object|embed)\b|javascript\s*:/i.test(bytes.toString("latin1"))) {
     invalid("active-content or polyglot signature detected");
+  }
+  if (WATERMARK_MARKER_PATTERN.test(bytes.toString("latin1"))) {
+    invalid("deterministic stock-preview or watermark marker detected");
   }
   if (contentType === "image/jpeg") assertJpeg(bytes, invalid);
   else if (contentType === "image/png") assertPng(bytes, invalid);

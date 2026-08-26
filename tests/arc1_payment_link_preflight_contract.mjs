@@ -74,7 +74,10 @@ assert.equal(evidence.stripe_api_version, "2026-07-29.dahlia");
 assert.doesNotMatch(verified.payment_link_evidence_private, /buy\.stripe\.com|\bplink_/i);
 assert.match(verified.payment_link_evidence_sha256, /^[a-f0-9]{64}$/);
 assert.match(verified.payment_link_evidence_hmac_sha256, /^[a-f0-9]{64}$/);
+assert.match(source, /\^rk_\$\{stripeMode\}/, "preflight must accept only mode-matched restricted Stripe keys");
+assert.doesNotMatch(source, /\(\?:sk\|rk\)/, "preflight must never accept unrestricted Stripe secret keys");
 
+await assert.rejects(run({ stripe_test_api_key: "sk_test_arc_unrestricted_secret_1234567890" }), /restricted Stripe test API key/);
 await assert.rejects(run({}, { [urls.account]: { object: "account", id: "acct_Wrong" } }), /configured ARC account/);
 await assert.rejects(run({}, { [urls.settings]: { ...payloads[urls.settings], status: "pending" } }), /Tax settings are not active/);
 await assert.rejects(run({}, { [urls.price]: { ...price, active: false } }), /Price and Product/);
@@ -83,7 +86,7 @@ await assert.rejects(run({}, { [urls.registration]: { ...payloads[urls.registrat
 await assert.rejects(run({ retained_terms_documents_json: canonical({ [termsVersion]: "0".repeat(64) }) }), /terms document registry mismatch/);
 await assert.rejects(run({ expected_terms_version: "2026-08-12", retained_terms_documents_json: canonical({ "2026-08-12": termsDocumentSha256 }) }), /terms document registry mismatch/);
 await assert.rejects(run({ expected_checkout_redirect_url: "https://attacker.example/?session_id={CHECKOUT_SESSION_ID}" }), /static ARC payment-success URL/);
-await assert.rejects(run({ stripe_live_mode_enabled: "true", stripe_test_api_key: input.stripe_test_api_key }), /Stripe live API key/);
+await assert.rejects(run({ stripe_live_mode_enabled: "true", stripe_test_api_key: input.stripe_test_api_key }), /restricted Stripe live API key/);
 
 await assert.rejects(runPreflight(input, async url => new Response(JSON.stringify(payloads[url]), {
   status: 200, headers: { "content-length": "9000000", "content-type": "application/json" }

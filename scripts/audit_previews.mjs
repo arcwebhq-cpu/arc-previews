@@ -241,7 +241,8 @@ assert.ok(contentSanitizer.includes("form action must stay same-origin"), "Gener
 assert.doesNotMatch(template, /"(?:name|description|areaServed)"\s*:\s*"\[\[/, "Raw placeholders remain inside executable JSON-LD JavaScript");
 assert.match(arc1, /Scalar fields are HTML-escaped/, "Zapier ARC1 does not document its untrusted-content boundary");
 assert.match(arc1, /sanitizeMarkup/, "Zapier ARC1 does not use the typed structured-markup sanitizer");
-assert.match(arc1, /verifiedAssetUrl\.search/, "Zapier ARC1 can publish a signed customer-upload URL containing query credentials or PII");
+assert.match(arc1, /ARC1_LEGACY_INTAKE_DISABLED/, "Zapier ARC1 still permits legacy source URLs instead of the clean Function-intake cutover");
+assert.match(arc1, /const url=`\$\{pagesRoot\}\/\$\{path\}`/, "Zapier ARC1 does not derive public asset URLs solely from the content-addressed repository path");
 assert.match(arc1, /generated class is not allowlisted/, "Zapier ARC1 generated classes are not fail-closed");
 assert.match(arc1, /ARC_CONTENT_QUALITY_INVALID/, "Zapier ARC1 does not enforce the premium content contract before signing a preview");
 assert.match(arc1, /ARC_CLAIM_EVIDENCE_REQUIRED/, "Zapier ARC1 can sign unsupported marketing proof");

@@ -29,7 +29,7 @@ const assetReceiptSecret = String(inputData.asset_receipt_secret == null ? "" : 
 if (encoder.encode(assetReceiptSecret).length < 32 || encoder.encode(assetReceiptSecret).length > 256 || assetReceiptSecret === secret) {
   throw new Error("ARC1_ACK_INVALID: asset receipt secret");
 }
-const BRIDGE_CONTRACT_SHA256 = "c4ab396bf04464629624dd19a37602755c8d429db0bf729b49bbfdfdba3ae20c";
+const BRIDGE_CONTRACT_SHA256 = "da1bb4fc84f9871bdec1029d90ff21dfbdabd1e92fe14e838779f06578e426c2";
 const deliveryId = clean(inputData.bridge_delivery_id).toLowerCase();
 const bridgeEvidenceSha256 = clean(inputData.bridge_evidence_sha256).toLowerCase();
 const ingressStateKey = clean(inputData.ingress_state_key);

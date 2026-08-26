@@ -27,7 +27,7 @@ export const ARC1_CONSUMER_MAX_PACKET_LIFETIME_MS = 24 * 60 * 60_000;
 export const ARC1_CONSUMER_MAX_CLAIM_LIFETIME_MS = 30 * 60_000;
 export const ARC1_CONSUMER_MAX_CLOCK_SKEW_MS = 5 * 60_000;
 
-const BRIDGE_CONTRACT_SHA256 = "c4ab396bf04464629624dd19a37602755c8d429db0bf729b49bbfdfdba3ae20c";
+const BRIDGE_CONTRACT_SHA256 = "da1bb4fc84f9871bdec1029d90ff21dfbdabd1e92fe14e838779f06578e426c2";
 const CONSUMER_SCHEMA = "arc1-function-intake-adapter-v1";
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
 const ATTEMPT_PATTERN = /^arc1attempt_[a-f0-9]{40}$/;

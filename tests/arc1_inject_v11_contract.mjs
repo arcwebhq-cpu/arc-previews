@@ -42,12 +42,17 @@ function injectorInput(fixture, {
   selectedTemplate = template,
   assetManifest = [],
   assetUrls = {},
+  intakeOptions = {},
   privateLeadEmail = `private-leads-${fixture.expectedProfile}@example.test`
 } = {}) {
   const intake = createTestIntakeEvidence({
     assetManifest,
+    businessName: content.BUSINESS_NAME,
+    ...intakeOptions,
     submissionDataSha256: sha256(canonicalJson(content))
   });
+  const receiptUrls = Object.fromEntries(JSON.parse(intake.privateInputs.asset_publication_receipt_private).entries
+    .map(entry => [entry.role, entry.public_url]));
   const payment = createTestPaymentLinkEvidence();
   return {
     input: {
@@ -60,9 +65,9 @@ function injectorInput(fixture, {
       private_contact_address: "123 Private Intake Way, Seattle WA 98101",
       checkout_binding_secret: checkoutBindingSecret,
       checkout_binding_key_id: "01",
-      logo_file_url: assetUrls.logo_file || "",
-      hero_image_url: assetUrls.hero_image_file || "",
-      supporting_image_url: assetUrls.supporting_image_file || "",
+      logo_file_url: assetUrls.logo_file || receiptUrls.logo_file || "",
+      hero_image_url: assetUrls.hero_image_file || receiptUrls.hero_image_file || "",
+      supporting_image_url: assetUrls.supporting_image_file || receiptUrls.supporting_image_file || "",
       ...intake.privateInputs,
       ...payment.privateInputs
     },
@@ -89,7 +94,35 @@ function finalizedFromBundle(bundle, assets = []) {
     approvalManifestJson: canonicalJson(bundle.approval_manifest),
     approvalBundleSha256: bundle.approval_manifest_sha256
   };
-  return finalizeV11ProductionSite(rendered, { assets });
+  const options = { assets };
+  if (assets.length) {
+    options.assetReview = {
+      version: "arc-customer-image-visual-review-v1",
+      scope: "human-visible-watermark-and-rights-review",
+      decision: "APPROVED_FOR_PUBLICATION",
+      reviewer_type: "AUTHORIZED_HUMAN",
+      reviewer_id_sha256: "a".repeat(64),
+      policy_version: "arc-image-provenance-policy-v1",
+      review_method: "HUMAN_VISUAL_INSPECTION_FULL_RESOLUTION",
+      review_validity: "CONTENT_DIGEST_BOUND_NO_EXPIRY",
+      automated_screening: "PASSED_DETERMINISTIC_INDICATORS_ONLY",
+      automated_screening_version: "arc-deterministic-image-screen-v1",
+      pixel_level_watermark_certainty: false,
+      watermark_free_guarantee: false,
+      reviewed_at: "2026-08-25T11:30:00.000Z",
+      rights_basis: "CUSTOMER_CONFIRMED_OWNERSHIP_OR_LICENSE",
+      filename_screening: "PASSED_OR_UNAVAILABLE_FROM_FIRST_PARTY_INTAKE",
+      source_host_screening: "HTTPS_SYNTAX_AND_STOCK_HOST_DENYLIST_SCREENED",
+      visible_watermark_screening: "NO_VISIBLE_WATERMARK_FOUND",
+      stock_preview_screening: "NO_VISIBLE_STOCK_PREVIEW_MARKER_FOUND",
+      assets: assets.map(asset => ({
+        content_type: asset.path.endsWith(".png") ? "image/png" : asset.path.endsWith(".jpg") ? "image/jpeg" : "image/webp",
+        path: asset.path,
+        sha256: asset.path.match(/assets\/([a-f0-9]{64})\./)[1]
+      })).sort((left, right) => left.path.localeCompare(right.path))
+    };
+  }
+  return finalizeV11ProductionSite(rendered, options);
 }
 
 function assertCanonical(raw) {
@@ -110,6 +143,21 @@ assert.equal(allFixtures.length, 19);
 assert.equal(new Set(allFixtures.map(fixture => fixture.expectedProfile)).size, 19);
 assert.doesNotMatch(injectorSource, /\bhtml_content\b|\bfile_path\b/,
   "the active injector source must not expose the legacy one-page handoff names");
+
+for (const malformedEntries of [null, {}]) {
+  const malformed = injectorInput(fixtures[0]);
+  const receipt = JSON.parse(malformed.input.asset_publication_receipt_private);
+  receipt.entries = malformedEntries;
+  const receiptRaw = canonicalJson(receipt);
+  malformed.input.asset_publication_receipt_private = receiptRaw;
+  malformed.input.asset_publication_receipt_sha256 = sha256(receiptRaw);
+  malformed.input.asset_publication_receipt_hmac_sha256 = hmac(
+    malformed.input.asset_publication_receipt_secret,
+    `arc1-public-asset-publication-receipt-v1\n${receiptRaw}`
+  );
+  await assert.rejects(runInjector(malformed.input), /ARC1_ASSET_PUBLICATION_INVALID: exact publication receipt binding/,
+    "malformed publication entries must fail with a controlled ARC error before any length access");
+}
 
 for (const fixture of allFixtures) {
   assert.equal(Object.keys(fixture.content).length, 58, `${fixture.expectedProfile}: exact candidate key count`);
@@ -262,14 +310,22 @@ assert.equal(externalReservation.lead_route_recipient_hmac_sha256, "");
 
 const imageBytes = boundedJpeg(512, 0x45);
 const imageDigest = sha256(imageBytes);
-const imageUrl = `https://uploads.example.test/${imageDigest}.jpg`;
 const assetManifest = [{
+  asset_id: sha256("arc-test-logo-asset"),
   content_type: "image/jpeg",
+  kind: "UPLOAD",
+  retrieval_endpoint_sha256: sha256("https://arcweb.onl/internal/intake/arc1/assets/retrieve"),
   role: "logo_file",
   sha256: imageDigest,
-  size_bytes: imageBytes.length,
-  source_url_sha256: sha256(imageUrl)
+  size_bytes: imageBytes.length
 }];
+const mediaReceivedAt = new Date(Date.now() - 60_000).toISOString();
+const provisionalMediaIntake = createTestIntakeEvidence({
+  assetManifest,
+  businessName: referenceFixture.content.BUSINESS_NAME,
+  receivedAt: mediaReceivedAt
+});
+const imageUrl = JSON.parse(provisionalMediaIntake.privateInputs.asset_publication_receipt_private).entries[0].public_url;
 const mediaContent = {
   ...referenceFixture.content,
   LOGO_HTML: `<img src="${imageUrl}" alt="Customer-supplied logo">`
@@ -277,7 +333,7 @@ const mediaContent = {
 const mediaPrepared = injectorInput(referenceFixture, {
   content: mediaContent,
   assetManifest,
-  assetUrls: { logo_file: imageUrl }
+  intakeOptions: { receivedAt: mediaReceivedAt }
 });
 const mediaOutput = await runInjector(mediaPrepared.input);
 const mediaBundle = JSON.parse(mediaOutput.render_bundle_private);
@@ -295,27 +351,28 @@ assert.equal(mediaFinalized.productionContentSha256, mediaOutput.production_cont
 const oversizedSingleBytes = 1_250_001;
 const oversizedSingleUrl = "https://uploads.example.test/oversized.jpg";
 const oversizedSingleManifest = [{
-  content_type: "image/jpeg", role: "logo_file", sha256: "a".repeat(64), size_bytes: oversizedSingleBytes,
-  source_url_sha256: sha256(oversizedSingleUrl)
+  asset_id: sha256("arc-test-oversized-logo"), content_type: "image/jpeg", kind: "UPLOAD",
+  retrieval_endpoint_sha256: sha256("https://arcweb.onl/internal/intake/arc1/assets/retrieve"),
+  role: "logo_file", sha256: "a".repeat(64), size_bytes: oversizedSingleBytes
 }];
 await assert.rejects(runInjector(injectorInput(referenceFixture, {
   content: { ...referenceFixture.content, LOGO_HTML: `<img src="${oversizedSingleUrl}" alt="Logo">` },
   assetManifest: oversizedSingleManifest,
   assetUrls: { logo_file: oversizedSingleUrl }
-}).input), /production-safe asset caps/i);
+}).input), /asset URL\/hash\/type\/size binding/i);
 
 const aggregateUrls = {
   logo_file: "https://uploads.example.test/aggregate-logo.jpg",
   hero_image_file: "https://uploads.example.test/aggregate-hero.jpg",
   supporting_image_file: "https://uploads.example.test/aggregate-support.jpg"
 };
-const aggregateManifest = ["logo_file", "hero_image_file", "supporting_image_file"].map((role, index) => ({
-  content_type: "image/jpeg", role, sha256: String(index + 1).repeat(64), size_bytes: 1_000_001,
-  source_url_sha256: sha256(aggregateUrls[role])
+const aggregateManifest = ["hero_image_file", "logo_file", "supporting_image_file"].map((role, index) => ({
+  asset_id: sha256(`arc-test-aggregate-${role}`), content_type: "image/jpeg", kind: "UPLOAD",
+  retrieval_endpoint_sha256: sha256("https://arcweb.onl/internal/intake/arc1/assets/retrieve"),
+  role, sha256: String(index + 1).repeat(64), size_bytes: 1_000_001
 }));
 await assert.rejects(runInjector(injectorInput(referenceFixture, {
-  assetManifest: aggregateManifest,
-  assetUrls: aggregateUrls
+  assetManifest: aggregateManifest
 }).input), /production-safe asset caps/i);
 
 const pageOversizedTemplate = template.replace("</head>", `<!--${"p".repeat(130_000)}--></head>`);

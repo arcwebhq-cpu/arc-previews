@@ -7,7 +7,7 @@
   "template": "ARC_MASTER_TEMPLATE_V11.html",
   "template_sha256": "d26c21a61226f360defd3d68fce74ea4839a5658c499efe627ea40ee1ee5f10d",
   "injector": "zapier/arc1_inject.js",
-  "injector_sha256": "372a7e0ab75945716725975171e9064e60619d030a931edfd80f01e686aafb43",
+  "injector_sha256": "bb73b3d493912d3a02878345bc4f7cc0a0a40f3214d08d3c389dff3b1702a0af",
   "page_count": 5,
   "logical_page_paths": [
     "index.html",

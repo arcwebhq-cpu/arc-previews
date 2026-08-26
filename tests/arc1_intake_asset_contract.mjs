@@ -13,6 +13,14 @@ const toArrayBuffer = bytes => bytes.buffer.slice(bytes.byteOffset, bytes.byteOf
 const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
 const jpeg = Buffer.from("/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAEf/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9oADAMBAAIAAwAAABD/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/EH//xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/EH//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/EH//2Q==", "base64");
 const webp = Buffer.from("UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEAAUAmJaQAA3AA/v89", "base64");
+const animatedWebp = (() => {
+  const vp8x = Buffer.alloc(18); vp8x.write("VP8X", 0, 4, "ascii"); vp8x.writeUInt32LE(10, 4); vp8x[8] = 2;
+  const anim = Buffer.alloc(14); anim.write("ANIM", 0, 4, "ascii"); anim.writeUInt32LE(6, 4);
+  const frame = Buffer.alloc(24); frame.write("ANMF", 0, 4, "ascii"); frame.writeUInt32LE(16, 4);
+  const body = Buffer.concat([Buffer.from("WEBP", "ascii"), vp8x, anim, frame]);
+  const riff = Buffer.alloc(8); riff.write("RIFF", 0, 4, "ascii"); riff.writeUInt32LE(body.length, 4);
+  return Buffer.concat([riff, body]);
+})();
 
 const siteId = "123e4567-e89b-42d3-a456-426614174000";
 const formId = "223e4567-e89b-42d3-a456-426614174000";
@@ -161,6 +169,11 @@ assert.equal(
 assert.match(issued.state_key, /^arc1-intake-claim-v1:[a-f0-9]{64}$/);
 assert.match(issued.state_digest_sha256, /^[a-f0-9]{64}$/);
 assert.equal(issued.asset_manifest.length, 3);
+assert.equal(issued.automated_watermark_screening_status, "PASSED_DETERMINISTIC_INDICATORS_ONLY");
+assert.equal(issued.automated_watermark_screening_version, "arc-deterministic-image-screen-v1");
+assert.equal(issued.visual_review_status, "REQUIRED_BEFORE_PUBLICATION");
+assert.equal(issued.pixel_level_watermark_certainty, false);
+assert.equal(issued.watermark_free_guarantee, false);
 for (const item of issued.asset_manifest) {
   assert.equal(item.source_url_sha256, sha256Text(urls[item.role]));
   assert.equal(item.sha256, sha256Bytes(bytesByRole[item.role]));
@@ -205,6 +218,13 @@ assert.equal(positiveMock.requests.filter(request => request.rawUrl.startsWith("
 assert.equal(positiveMock.requests.filter(request => request.rawUrl.startsWith(uploadOrigin)).every(request =>
   request.headers.Authorization == null && request.redirect === "manual"
 ), true);
+const extensionlessMock = new MockNetlify();
+const extensionlessUrl = `${uploadOrigin}/forms/0123456789abcdef`;
+extensionlessMock.submissions[0].data.logo_file = extensionlessUrl;
+extensionlessMock.assets.set(extensionlessUrl, { ...extensionlessMock.assets.get(urls.logo_file), url: extensionlessUrl });
+const extensionlessIssued = await runVerifier(input, extensionlessMock.fetch.bind(extensionlessMock), Buffer);
+assert.equal(extensionlessIssued.asset_manifest.find(item => item.role === "logo_file").content_type, "image/png",
+  "A legitimate first-party opaque upload URL without a filename extension must remain supported.");
 const serialized = JSON.stringify(issued);
 for (const forbidden of [
   netlifyToken,
@@ -281,6 +301,28 @@ await expectReject(mock => {
 await expectReject(mock => {
   mock.assets.get(urls.logo_file).type = "image/svg+xml";
 }, /Content-Type must be exactly PNG\/JPEG\/WEBP/);
+const unsafeFilenameMock = await expectReject(mock => {
+  const unsafeUrl = `${uploadOrigin}/forms/customer-watermarked-preview.png`;
+  mock.submissions[0].data.logo_file = unsafeUrl;
+  mock.assets.set(unsafeUrl, { ...mock.assets.get(urls.logo_file), url: unsafeUrl });
+}, /stock-preview or watermark filename rejected/);
+assert.equal(unsafeFilenameMock.requests.some(request => request.rawUrl.includes("customer-watermarked-preview.png")), false,
+  "A suspicious filename must be rejected before fetching its bytes.");
+const stockHostMock = await expectReject(mock => {
+  const unsafeOrigin = "https://cdn.shutterstock.com";
+  const unsafeUrl = `${unsafeOrigin}/customer-image.png`;
+  mock.submissions[0].data.logo_file = unsafeUrl;
+  mock.assets.set(unsafeUrl, { ...mock.assets.get(urls.logo_file), url: unsafeUrl });
+}, /stock-preview source host rejected/, {
+  asset_upload_origin_allowlist_json: JSON.stringify([uploadOrigin, "https://cdn.shutterstock.com"])
+});
+assert.equal(stockHostMock.requests.some(request => request.rawUrl.startsWith("https://cdn.shutterstock.com/")), false,
+  "A stock-preview source host must be rejected before fetching its bytes.");
+await expectReject(mock => {
+  const mismatchedUrl = `${uploadOrigin}/forms/customer-image.jpg`;
+  mock.submissions[0].data.logo_file = mismatchedUrl;
+  mock.assets.set(mismatchedUrl, { ...mock.assets.get(urls.logo_file), url: mismatchedUrl });
+}, /filename extension does not match Content-Type/);
 await expectReject(mock => {
   mock.assets.get(urls.logo_file).body = Buffer.from(jpeg);
   mock.assets.get(urls.logo_file).declaredSize = jpeg.length;
@@ -296,10 +338,19 @@ await expectReject(mock => {
   mock.assets.set(urls.hero_image_file, { status: 200, body, type: "image/jpeg", url: urls.hero_image_file });
 }, /active-content or polyglot signature/);
 await expectReject(mock => {
+  const body = Buffer.concat([jpeg.subarray(0, -2), Buffer.from("shutterstock watermark", "ascii"), jpeg.subarray(-2)]);
+  mock.assets.set(urls.hero_image_file, { status: 200, body, type: "image/jpeg", url: urls.hero_image_file });
+}, /deterministic stock-preview or watermark marker/);
+await expectReject(mock => {
   const body = Buffer.from(webp);
   body.writeUInt32LE(body.length - 9, 4);
   mock.assets.set(urls.supporting_image_file, { status: 200, body, type: "image/webp", url: urls.supporting_image_file });
 }, /WEBP RIFF envelope/);
+await expectReject(mock => {
+  mock.assets.set(urls.supporting_image_file, {
+    status: 200, body: animatedWebp, type: "image/webp", url: urls.supporting_image_file
+  });
+}, /animated WEBP is not allowed/);
 
 // Three individually valid maximum-size JPEG bodies exercise the exact 7.5 MiB aggregate boundary.
 const maxEach = Math.floor(2.5 * 1024 * 1024);
@@ -310,7 +361,9 @@ maxJpeg[maxJpeg.length - 2] = 0xff;
 maxJpeg[maxJpeg.length - 1] = 0xd9;
 const totalLimitMock = new MockNetlify();
 for (const role of Object.keys(urls)) {
-  totalLimitMock.assets.set(urls[role], { status: 200, body: maxJpeg, type: "image/jpeg", url: urls[role] });
+  const jpegUrl = `${uploadOrigin}/forms/${role}.jpg`;
+  totalLimitMock.submissions[0].data[role] = jpegUrl;
+  totalLimitMock.assets.set(jpegUrl, { status: 200, body: maxJpeg, type: "image/jpeg", url: jpegUrl });
 }
 const atTotalLimit = await runVerifier(input, totalLimitMock.fetch.bind(totalLimitMock), Buffer);
 assert.equal(atTotalLimit.total_asset_bytes, Math.floor(7.5 * 1024 * 1024));

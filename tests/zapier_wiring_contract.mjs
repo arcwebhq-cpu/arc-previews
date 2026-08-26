@@ -316,7 +316,7 @@ assert.deepEqual(contract.arc1.function_intake_bridge, {
     deployment_contract: "zapier/arc1-consumer-runtime-deployment.md",
     test: "tests/arc1_consumer_runtime_bundle_contract.mjs",
     cross_repository_test: "tests/arc1_site_packet_runtime_contract.mjs",
-    pinned_arc_site_commit: "bd0deddee70ddaf20f32680149ebe51f491ec194",
+    pinned_arc_site_commit: "02f2fc5b976f914bf2cd5705dc748e7c7186c242",
     phases: ["CLAIM", "AUTHORIZE", "COMPLETE"],
     generated_bundle_reproducible: true,
     actual_bundle_executed_in_tests: true,

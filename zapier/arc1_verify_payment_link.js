@@ -18,6 +18,8 @@ if (!["", "false", "true"].includes(stripeLiveModeFlag)) {
 }
 const stripeLiveModeEnabled = stripeLiveModeFlag === "true";
 const stripeMode = stripeLiveModeEnabled ? "live" : "test";
+const requiredTermsVersion = "2026-08-25";
+const stripeApiVersion = "2026-07-29.dahlia";
 const requiredCheckoutRedirectUrl = "https://arcweb.onl/payment-success/?session_id={CHECKOUT_SESSION_ID}";
 if (!new RegExp(`^(?:sk|rk)_${stripeMode}_[A-Za-z0-9_]{12,}$`).test(stripeApiKey)) {
   throw new Error(`ARC_PAYMENT_LINK_PREFLIGHT_INVALID: Stripe ${stripeMode} API key is required`);
@@ -61,7 +63,7 @@ if (!expectedTaxRegistrations.some(registration =>
 }
 let retainedTermsDocuments;
 try { retainedTermsDocuments = JSON.parse(retainedTermsDocumentsJson); } catch {}
-if (!/^20[0-9]{2}-[0-9]{2}-[0-9]{2}$/.test(expectedTermsVersion) || !/^[a-f0-9]{64}$/.test(expectedTermsDocumentSha256) ||
+if (expectedTermsVersion !== requiredTermsVersion || !/^[a-f0-9]{64}$/.test(expectedTermsDocumentSha256) ||
     !retainedTermsDocuments || typeof retainedTermsDocuments !== "object" || Array.isArray(retainedTermsDocuments) ||
     JSON.stringify(Object.fromEntries(Object.entries(retainedTermsDocuments).sort(([a],[b])=>a<b?-1:a>b?1:0))) !== retainedTermsDocumentsJson || Object.keys(retainedTermsDocuments).length < 1 ||
     Object.keys(retainedTermsDocuments).length > 32 || Object.entries(retainedTermsDocuments).some(([version,digest]) =>
@@ -110,7 +112,7 @@ const equalHex = (first, second) => {
 const stripeHeaders = {
   Accept: "application/json",
   Authorization: `Basic ${Buffer.from(`${stripeApiKey}:`, "utf8").toString("base64")}`,
-  "Stripe-Version": "2026-06-24.dahlia"
+  "Stripe-Version": stripeApiVersion
 };
 const requestedOperationTimeout=clean(inputData.provider_operation_timeout_ms),operationTimeoutMs=requestedOperationTimeout?Number(requestedOperationTimeout):20_000;
 if(!Number.isSafeInteger(operationTimeoutMs)||operationTimeoutMs<25||operationTimeoutMs>25_000)throw new Error("ARC_PAYMENT_LINK_PREFLIGHT_INVALID: provider deadline");
@@ -223,7 +225,7 @@ const configDigest = await sha256Hex(canonicalJson({
   name_collection_required: true,
   submit_type: "auto",
   checkout_redirect_url: redirectUrl,
-  stripe_api_version: "2026-06-24.dahlia"
+  stripe_api_version: stripeApiVersion
 }));
 const issuedAt = new Date().toISOString();
 const evidencePrivate = canonicalJson({
@@ -250,7 +252,7 @@ const evidencePrivate = canonicalJson({
   name_collection_required: true,
   submit_type: "auto",
   checkout_redirect_url: redirectUrl,
-  stripe_api_version: "2026-06-24.dahlia",
+  stripe_api_version: stripeApiVersion,
   configuration_sha256: configDigest,
   issued_at: issuedAt
 });

@@ -41,18 +41,22 @@ if(!/^[a-f0-9]{2}$/.test(currentKid)||currentSecret.length<32||currentSecret.len
 
 const offerRaw=clean(inputData.checkout_offer_snapshot_private||inputData.checkout_config_snapshot_private);
 const offer=parseCanonical(offerRaw,"offer snapshot");
-const offerFields=["adult_acknowledgement_key","amount_subtotal_minor_units","asset_publication_receipt_sha256","automatic_tax_enabled","checkout_binding_key_id","checkout_redirect_url","configuration_sha256","currency","customer_address_source","environment","lead_route_recipient_hmac_sha256","livemode","name_collection_required","preview_folder","preview_path","preview_source_repository","price_id","price_tax_behavior","product_id","product_tax_code","public_folder_prefix","quantity","scope","stripe_account_id_sha256","stripe_api_version","submit_type","tax_contract_version","tax_registrations","tax_registrations_sha256","tax_settings_status","terms_document_sha256","terms_version","version"];
+const offerFields=["adult_acknowledgement_key","amount_subtotal_minor_units","approval_content_sha256","asset_publication_receipt_sha256","automatic_tax_enabled","checkout_binding_key_id","checkout_redirect_url","configuration_sha256","currency","customer_address_source","deliverable","environment","lead_route_form_name","lead_route_mode","lead_route_recipient_hmac_sha256","livemode","name_collection_required","offer_contract_id","page_count","preview_folder","preview_paths","preview_source_repository","price_id","price_tax_behavior","product_id","product_tax_code","production_content_sha256","public_folder_prefix","published_preview_bundle_sha256","quantity","render_bundle_sha256","scope","stripe_account_id_sha256","stripe_api_version","submit_type","tax_contract_version","tax_registrations","tax_registrations_sha256","tax_settings_status","terms_document_sha256","terms_version","version"];
 exactKeys(offer,offerFields,"offer snapshot");
-if(offer.version!=="arc-checkout-offer-snapshot-v1"||offer.scope!=="immutable-approved-preview-private-checkout-offer"||offer.environment!=="arc-production"||
+const expectedPreviewPaths=["about/index.html","contact/index.html","process/index.html","services/index.html","index.html"].map(path=>`${offer.preview_folder}/${path}`);
+if(offer.version!=="arc-checkout-offer-snapshot-v2"||offer.scope!=="immutable-approved-five-page-preview-private-checkout-offer"||offer.environment!=="arc-production"||
   !/^[a-f0-9]{2}$/.test(offer.checkout_binding_key_id)||!/^[a-f0-9]{8}$/.test(offer.public_folder_prefix)||!/^price_[A-Za-z0-9]+$/.test(offer.price_id)||!/^prod_[A-Za-z0-9]+$/.test(offer.product_id)||
-  !/^[a-f0-9]{64}$/.test(offer.stripe_account_id_sha256)||!/^txcd_[0-9]{8}$/.test(offer.product_tax_code)||!/^20\d\d-\d\d-\d\d$/.test(offer.terms_version)||
+  !/^[a-f0-9]{64}$/.test(offer.stripe_account_id_sha256)||!/^txcd_[0-9]{8}$/.test(offer.product_tax_code)||offer.terms_version!=="2026-08-25"||
   !/^[a-f0-9]{64}$/.test(offer.terms_document_sha256)||offer.amount_subtotal_minor_units!==500000||offer.currency!=="usd"||offer.quantity!==1||
   offer.automatic_tax_enabled!==true||offer.price_tax_behavior!=="exclusive"||offer.tax_contract_version!=="arc-tax-v1"||offer.tax_settings_status!=="active"||
   offer.adult_acknowledgement_key!=="adultpurchaserack"||offer.name_collection_required!==true||offer.submit_type!=="auto"||
-  offer.checkout_redirect_url!=="https://arcweb.onl/payment-success/?session_id={CHECKOUT_SESSION_ID}"||offer.stripe_api_version!=="2026-06-24.dahlia"||
-  offer.preview_source_repository!=="arcwebhq-cpu/arc-previews"||!offer.preview_folder.endsWith(`-${offer.public_folder_prefix}`)||offer.preview_path!==`${offer.preview_folder}/index.html`||
-  !/^[a-f0-9]{64}$/.test(offer.configuration_sha256)||!/^[a-f0-9]{64}$/.test(offer.asset_publication_receipt_sha256)||
-  !/^$|^[a-f0-9]{64}$/.test(offer.lead_route_recipient_hmac_sha256))
+  offer.checkout_redirect_url!=="https://arcweb.onl/payment-success/?session_id={CHECKOUT_SESSION_ID}"||offer.stripe_api_version!=="2026-07-29.dahlia"||
+  offer.offer_contract_id!=="arc-fixed-five-page-offer-v1"||offer.deliverable!=="fixed-five-page-marketing-website-v1"||offer.page_count!==5||
+  offer.preview_source_repository!=="arcwebhq-cpu/arc-previews"||!offer.preview_folder.endsWith(`-${offer.public_folder_prefix}`)||canonicalJson(offer.preview_paths)!==canonicalJson(expectedPreviewPaths)||
+  ![offer.configuration_sha256,offer.asset_publication_receipt_sha256,offer.approval_content_sha256,offer.published_preview_bundle_sha256,offer.production_content_sha256,offer.render_bundle_sha256].every(value=>/^[a-f0-9]{64}$/.test(value))||
+  !new Set(["netlify_form","not_required"]).has(offer.lead_route_mode)||
+  (offer.lead_route_mode==="netlify_form"?(!/^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(offer.lead_route_form_name)||!/^[a-f0-9]{64}$/.test(offer.lead_route_recipient_hmac_sha256))
+    :offer.lead_route_form_name!==""||offer.lead_route_recipient_hmac_sha256!==""))
   throw new Error("ARC_PRIVATE_CHECKOUT_INVALID: offer snapshot semantics");
 const mode=offer.livemode?"live":"test";
 const selectedSecret=offer.checkout_binding_key_id===currentKid?currentSecret:retired[offer.checkout_binding_key_id];
@@ -60,7 +64,7 @@ if(!selectedSecret)throw new Error("ARC_PRIVATE_CHECKOUT_INVALID: offer checkout
 const key=await crypto.subtle.importKey("raw",encoder.encode(selectedSecret),{name:"HMAC",hash:"SHA-256"},false,["sign","verify"]);
 const offerSha=await sha256(offerRaw);
 if(clean(inputData.checkout_offer_snapshot_sha256||inputData.checkout_config_snapshot_sha256).toLowerCase()!==offerSha)throw new Error("ARC_PRIVATE_CHECKOUT_INVALID: offer snapshot digest");
-await verifyHex(key,clean(inputData.checkout_offer_snapshot_hmac_sha256||inputData.checkout_config_snapshot_hmac_sha256).toLowerCase(),`arc-checkout-offer-snapshot-signature-v1\n${mode}\n${offerRaw}`,"offer snapshot");
+await verifyHex(key,clean(inputData.checkout_offer_snapshot_hmac_sha256||inputData.checkout_config_snapshot_hmac_sha256).toLowerCase(),`arc-checkout-offer-snapshot-signature-v2\n${mode}\n${offerRaw}`,"offer snapshot");
 const stableOfferConfiguration=canonicalJson({stripe_account_id_sha256:offer.stripe_account_id_sha256,livemode:offer.livemode,price_id:offer.price_id,product_id:offer.product_id,
   amount_subtotal_minor_units:offer.amount_subtotal_minor_units,currency:offer.currency,quantity:offer.quantity,terms_version:offer.terms_version,
   terms_document_sha256:offer.terms_document_sha256,automatic_tax_enabled:offer.automatic_tax_enabled,customer_address_source:offer.customer_address_source,
@@ -72,60 +76,73 @@ if(await sha256(stableOfferConfiguration)!==offer.configuration_sha256)throw new
 
 const recipientRaw=clean(inputData.checkout_recipient_reservation_private);
 const recipient=parseCanonical(recipientRaw,"recipient reservation");
-exactKeys(recipient,["approval_content_sha256","checkout_binding_key_id","checkout_offer_snapshot_sha256","claim_recipient_email","claim_recipient_email_sha256","lead_notification_email","lead_route_recipient_hmac_sha256","scope","stripe_mode","version"],"recipient reservation");
+exactKeys(recipient,["approval_content_sha256","checkout_binding_key_id","checkout_offer_snapshot_sha256","claim_recipient_email","claim_recipient_email_sha256","deliverable","lead_notification_email","lead_route_form_name","lead_route_mode","lead_route_recipient_hmac_sha256","offer_contract_id","page_count","preview_folder","preview_paths","production_content_sha256","published_preview_bundle_sha256","scope","stripe_mode","version"],"recipient reservation");
 const recipientSha=await sha256(recipientRaw);
-if(recipient.version!=="arc1-checkout-recipient-reservation-v1"||recipient.scope!=="private-lead-recipient-for-approved-checkout"||recipient.checkout_binding_key_id!==offer.checkout_binding_key_id||
+if(recipient.version!=="arc1-checkout-recipient-reservation-v2"||recipient.scope!=="private-recipients-for-approved-five-page-checkout"||recipient.checkout_binding_key_id!==offer.checkout_binding_key_id||
   recipient.checkout_offer_snapshot_sha256!==offerSha||recipient.lead_route_recipient_hmac_sha256!==offer.lead_route_recipient_hmac_sha256||recipient.stripe_mode!==mode||
+  recipient.offer_contract_id!==offer.offer_contract_id||recipient.deliverable!==offer.deliverable||recipient.page_count!==5||recipient.preview_folder!==offer.preview_folder||
+  canonicalJson(recipient.preview_paths)!==canonicalJson(expectedPreviewPaths)||recipient.published_preview_bundle_sha256!==offer.published_preview_bundle_sha256||
+  recipient.production_content_sha256!==offer.production_content_sha256||recipient.lead_route_mode!==offer.lead_route_mode||recipient.lead_route_form_name!==offer.lead_route_form_name||
   !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient.claim_recipient_email)||recipient.claim_recipient_email_sha256!==await sha256(recipient.claim_recipient_email)||
-  !/^[a-f0-9]{64}$/.test(recipient.approval_content_sha256)||((recipient.lead_route_recipient_hmac_sha256!=="")!==/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient.lead_notification_email)))
+  recipient.approval_content_sha256!==offer.approval_content_sha256||
+  (recipient.lead_route_mode==="netlify_form"?!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient.lead_notification_email):recipient.lead_notification_email!==""))
   throw new Error("ARC_PRIVATE_CHECKOUT_INVALID: recipient reservation binding");
-await verifyHex(key,clean(inputData.checkout_recipient_reservation_hmac_sha256).toLowerCase(),`arc1-checkout-recipient-reservation-signature-v1\n${mode}\n${recipientRaw}`,"recipient reservation");
+await verifyHex(key,clean(inputData.checkout_recipient_reservation_hmac_sha256).toLowerCase(),`arc1-checkout-recipient-reservation-signature-v2\n${mode}\n${recipientRaw}`,"recipient reservation");
 
 const coreRaw=clean(inputData.checkout_readiness_core_private),core=parseCanonical(coreRaw,"readiness core"),coreSha=await sha256(coreRaw);
-const coreFields=["approval_content_sha256","asset_publication_receipt_sha256","check_app_id","check_app_slug","check_name","checkout_offer_snapshot_sha256","checkout_recipient_reservation_sha256","content_sha256","customer_email_sha256","email_state_token_sha256","head_sha","merge_commit_sha","merged_at","preview_folder","preview_path","preview_url","pr_number","published_html_sha256","repository","scope","script_manifest_sha256","source_tree_sha","version"];
+const coreFields=["approval_content_sha256","asset_publication_receipt_sha256","check_app_id","check_app_slug","check_name","checkout_offer_snapshot_sha256","checkout_recipient_reservation_sha256","content_sha256","customer_email_sha256","deliverable","email_state_token_sha256","head_sha","lead_route_form_name","lead_route_mode","lead_route_recipient_hmac_sha256","merge_commit_sha","merged_at","offer_contract_id","page_count","preview_folder","preview_paths","preview_url","pr_number","published_preview_bundle_sha256","published_site_sha256","render_bundle_sha256","repository","scope","script_manifest_sha256","source_tree_sha","version"];
 exactKeys(core,coreFields,"readiness core");
-if(core.version!=="arc1-preview-readiness-core-v1"||core.scope!=="immutable-private-checkout-content-and-recipient-readiness"||core.repository!==offer.preview_source_repository||
-  core.preview_folder!==offer.preview_folder||core.preview_path!==offer.preview_path||core.approval_content_sha256!==recipient.approval_content_sha256||core.checkout_offer_snapshot_sha256!==offerSha||
+if(core.version!=="arc1-preview-readiness-core-v2"||core.scope!=="immutable-five-page-private-checkout-content-and-recipient-readiness"||core.repository!==offer.preview_source_repository||
+  core.preview_folder!==offer.preview_folder||canonicalJson(core.preview_paths)!==canonicalJson(expectedPreviewPaths)||core.approval_content_sha256!==offer.approval_content_sha256||core.approval_content_sha256!==recipient.approval_content_sha256||core.checkout_offer_snapshot_sha256!==offerSha||
+  core.offer_contract_id!==offer.offer_contract_id||core.offer_contract_id!==recipient.offer_contract_id||core.deliverable!==offer.deliverable||core.deliverable!==recipient.deliverable||
+  core.page_count!==5||core.page_count!==offer.page_count||core.page_count!==recipient.page_count||core.lead_route_recipient_hmac_sha256!==offer.lead_route_recipient_hmac_sha256||
+  core.lead_route_recipient_hmac_sha256!==recipient.lead_route_recipient_hmac_sha256||
   core.checkout_recipient_reservation_sha256!==recipientSha||core.asset_publication_receipt_sha256!==offer.asset_publication_receipt_sha256||
-  core.customer_email_sha256!==recipient.claim_recipient_email_sha256||
-  ![core.content_sha256,core.customer_email_sha256,core.email_state_token_sha256,core.published_html_sha256].every(value=>/^[a-f0-9]{64}$/.test(value))||core.script_manifest_sha256!=="8ff6073533b7b631ab6657461d3631a2f00ca4a70ed0b79c2c016647948aae7b"||
+  core.customer_email_sha256!==recipient.claim_recipient_email_sha256||core.content_sha256!==core.published_preview_bundle_sha256||
+  core.published_preview_bundle_sha256!==offer.published_preview_bundle_sha256||core.published_site_sha256!==offer.production_content_sha256||
+  core.render_bundle_sha256!==offer.render_bundle_sha256||core.lead_route_mode!==offer.lead_route_mode||core.lead_route_form_name!==offer.lead_route_form_name||
+  (core.lead_route_mode==="netlify_form"?(!/^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(core.lead_route_form_name)||!/^[a-f0-9]{64}$/.test(core.lead_route_recipient_hmac_sha256))
+    :core.lead_route_form_name!==""||core.lead_route_recipient_hmac_sha256!=="")||
+  ![core.content_sha256,core.customer_email_sha256,core.email_state_token_sha256,core.published_preview_bundle_sha256,core.published_site_sha256,core.render_bundle_sha256].every(value=>/^[a-f0-9]{64}$/.test(value))||core.script_manifest_sha256!=="1ef7f0088cdcf042b1593fbc11d7ea2d3c47e9ff92c94caf2f578179e3993685"||
   ![core.head_sha,core.merge_commit_sha,core.source_tree_sha].every(value=>/^[a-f0-9]{40}$/.test(value))||core.check_name!=="ARC preview quality/preview-quality"||core.check_app_slug!=="github-actions"||core.check_app_id!==15368)
   throw new Error("ARC_PRIVATE_CHECKOUT_INVALID: readiness core binding");
 if(clean(inputData.checkout_readiness_core_sha256).toLowerCase()!==coreSha)throw new Error("ARC_PRIVATE_CHECKOUT_INVALID: readiness core digest");
-await verifyHex(key,clean(inputData.checkout_readiness_core_hmac_sha256).toLowerCase(),`arc1-preview-readiness-core-signature-v1\n${mode}\n${coreRaw}`,"readiness core");
+await verifyHex(key,clean(inputData.checkout_readiness_core_hmac_sha256).toLowerCase(),`arc1-preview-readiness-core-signature-v2\n${mode}\n${coreRaw}`,"readiness core");
 
 const observationRaw=clean(inputData.checkout_readiness_observation_private),observation=parseCanonical(observationRaw,"readiness observation");
-exactKeys(observation,["current_main_html_sha256","current_main_sha","expires_at","issued_at","pages_content_sha256","readiness_core_sha256","scope","version"],"readiness observation");
+exactKeys(observation,["current_main_published_preview_bundle_sha256","current_main_sha","current_main_tree_sha","expires_at","issued_at","pages_published_preview_bundle_sha256","preview_folder","preview_paths","published_site_sha256","readiness_core_sha256","repository","scope","version"],"readiness observation");
 const observationIssued=Date.parse(observation.issued_at),observationExpires=Date.parse(observation.expires_at),now=Date.now();
-if(observation.version!=="arc1-preview-readiness-observation-v1"||observation.scope!=="renewable-private-checkout-readiness-observation"||observation.readiness_core_sha256!==coreSha||
-  !/^[a-f0-9]{40}$/.test(observation.current_main_sha)||observation.current_main_html_sha256!==core.published_html_sha256||observation.pages_content_sha256!==core.published_html_sha256||
+if(observation.version!=="arc1-preview-readiness-observation-v2"||observation.scope!=="renewable-five-page-private-checkout-readiness-observation"||observation.readiness_core_sha256!==coreSha||
+  observation.repository!==core.repository||observation.preview_folder!==core.preview_folder||canonicalJson(observation.preview_paths)!==canonicalJson(expectedPreviewPaths)||
+  !/^[a-f0-9]{40}$/.test(observation.current_main_sha)||!/^[a-f0-9]{40}$/.test(observation.current_main_tree_sha)||
+  observation.current_main_published_preview_bundle_sha256!==core.published_preview_bundle_sha256||observation.pages_published_preview_bundle_sha256!==core.published_preview_bundle_sha256||observation.published_site_sha256!==core.published_site_sha256||
   !Number.isFinite(observationIssued)||!Number.isFinite(observationExpires)||new Date(observationIssued).toISOString()!==observation.issued_at||new Date(observationExpires).toISOString()!==observation.expires_at||
   observationIssued>now+300000||observationExpires<=observationIssued||observationExpires-observationIssued>600000)
   throw new Error("ARC_PRIVATE_CHECKOUT_INVALID: readiness observation binding");
-await verifyHex(key,clean(inputData.checkout_readiness_observation_hmac_sha256).toLowerCase(),`arc1-preview-readiness-observation-signature-v1\n${mode}\n${observationRaw}`,"readiness observation");
+await verifyHex(key,clean(inputData.checkout_readiness_observation_hmac_sha256).toLowerCase(),`arc1-preview-readiness-observation-signature-v2\n${mode}\n${observationRaw}`,"readiness observation");
 const observationSha=await sha256(observationRaw);
 const requireFreshObservation=()=>{if(observationExpires<=Date.now())throw new Error("ARC_PRIVATE_CHECKOUT_WAIT: refresh readiness before first provider mutation");};
 
-const policy=canonicalJson({version:"arc-private-checkout-policy-v1",scope:"one-approved-preview-one-private-payment-link",checkout_binding_key_id:offer.checkout_binding_key_id,
+const policy=canonicalJson({version:"arc-private-checkout-policy-v2",scope:"one-approved-five-page-preview-one-private-payment-link",checkout_binding_key_id:offer.checkout_binding_key_id,
   stripe_mode:mode,stripe_account_id_sha256:offer.stripe_account_id_sha256,price_id:offer.price_id,product_id:offer.product_id,amount_subtotal_minor_units:offer.amount_subtotal_minor_units,
   currency:offer.currency,quantity:offer.quantity,terms_version:offer.terms_version,terms_document_sha256:offer.terms_document_sha256,automatic_tax_enabled:true,
   customer_address_source:offer.customer_address_source,price_tax_behavior:offer.price_tax_behavior,product_tax_code:offer.product_tax_code,tax_contract_version:offer.tax_contract_version,
-  payment_method_selection:"dynamic",
   tax_registrations:offer.tax_registrations,tax_registrations_sha256:offer.tax_registrations_sha256,adult_acknowledgement_key:offer.adult_acknowledgement_key,
   name_collection_required:true,checkout_redirect_url:offer.checkout_redirect_url,completed_sessions_limit:1,stripe_api_version:offer.stripe_api_version,
-  preview_source_repository:core.repository,preview_folder:core.preview_folder,preview_path:core.preview_path,approval_content_sha256:core.approval_content_sha256,
-  content_sha256:core.content_sha256,published_html_sha256:core.published_html_sha256,source_commit_sha:core.merge_commit_sha,source_tree_sha:core.source_tree_sha,
+  offer_contract_id:offer.offer_contract_id,deliverable:offer.deliverable,page_count:offer.page_count,
+  preview_source_repository:core.repository,preview_folder:core.preview_folder,preview_paths:core.preview_paths,approval_content_sha256:core.approval_content_sha256,
+  content_sha256:core.content_sha256,published_site_sha256:core.published_site_sha256,source_commit_sha:core.merge_commit_sha,source_tree_sha:core.source_tree_sha,
   asset_publication_receipt_sha256:core.asset_publication_receipt_sha256,lead_route_recipient_hmac_sha256:offer.lead_route_recipient_hmac_sha256,
   claim_recipient_email_sha256:core.customer_email_sha256,readiness_core_sha256:coreSha,offer_snapshot_sha256:offerSha,recipient_reservation_sha256:recipientSha});
 const policySha=await sha256(policy);
 const referencePayload=new Uint8Array(69);referencePayload.set(hexBytes(offer.checkout_binding_key_id),0);referencePayload.set(hexBytes(offer.public_folder_prefix),1);referencePayload.set(hexBytes(core.approval_content_sha256),5);referencePayload.set(hexBytes(policySha),37);
-const referenceDomain=encoder.encode(`arc-checkout-reference-v3\narcwebhq-cpu/arc-previews\narc-production\nstripe-${mode}\n`),referenceMessage=new Uint8Array(referenceDomain.length+referencePayload.length);referenceMessage.set(referenceDomain);referenceMessage.set(referencePayload,referenceDomain.length);
+const referenceDomain=encoder.encode(`arc-checkout-reference-v4\narcwebhq-cpu/arc-previews\narc-production\nstripe-${mode}\n`),referenceMessage=new Uint8Array(referenceDomain.length+referencePayload.length);referenceMessage.set(referenceDomain);referenceMessage.set(referencePayload,referenceDomain.length);
 const referenceMac=new Uint8Array(await crypto.subtle.sign("HMAC",key,referenceMessage));
-const checkoutReference=`v3_${Buffer.concat([Buffer.from(referencePayload),Buffer.from(referenceMac)]).toString("base64url")}`;
+const checkoutReference=`v4_${Buffer.concat([Buffer.from(referencePayload),Buffer.from(referenceMac)]).toString("base64url")}`;
 if(checkoutReference.length!==138)throw new Error("ARC_PRIVATE_CHECKOUT_INVALID: packed reference length");
 const referenceSha=await sha256(checkoutReference);
 const intentKeyHmac=await hmacHex(key,`arc-private-checkout-intent-key-v1\n${mode}\n${referenceSha}`);
-const linkMetadata={arc_intent_sha256:"",arc_policy_sha256:policySha,arc_preview_commit:core.merge_commit_sha,arc_v3_ref:checkoutReference,arc_v3_ref_sha256:referenceSha,tax_contract_version:offer.tax_contract_version,terms_document_sha256:offer.terms_document_sha256,terms_version:offer.terms_version};
+const linkMetadata={arc_intent_sha256:"",arc_policy_sha256:policySha,arc_preview_commit:core.merge_commit_sha,arc_v4_ref:checkoutReference,arc_v4_ref_sha256:referenceSha,tax_contract_version:offer.tax_contract_version,terms_document_sha256:offer.terms_document_sha256,terms_version:offer.terms_version};
 const buildCreateBody=async()=>{
   const params=new URLSearchParams();
   const set=(key,value)=>params.append(key,String(value));
@@ -232,7 +249,7 @@ const fetchBytes=async(url,options,max,label)=>{const controller=new AbortContro
 const fetchJson=async(url,options,max,label)=>{const bytes=await fetchBytes(url,options,max,label);try{return JSON.parse(bytes.toString("utf8"));}catch{throw new Error(`${label}: JSON`);}};
 const fetchJsonStatus=async(url,options,max,label,allowed=[])=>{if(deadline-Date.now()<=0)throw new Error(`${label}: operation deadline exhausted`);const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),Math.max(1,Math.min(10000,deadline-Date.now())));let reader;try{const response=await fetch(url,{...options,redirect:"error",signal:controller.signal});if(response.url&&response.url!==url)throw new Error(`${label}: redirect`);const length=response.headers?.get?.("content-length");if(length&&(!/^\d+$/.test(length)||Number(length)>max))throw new Error(`${label}: too large`);reader=response.body?.getReader?.();if(!reader)throw new Error(`${label}: streaming required`);let total=0,chunks=[];while(true){const {done,value}=await reader.read();if(done)break;total+=value.byteLength;if(total>max){try{await reader.cancel();}catch{}throw new Error(`${label}: too large`);}chunks.push(Buffer.from(value));}let body={};if(total){try{body=JSON.parse(Buffer.concat(chunks,total).toString("utf8"));}catch{throw new Error(`${label}: JSON`);}}if(!response.ok&&!allowed.includes(response.status))throw new Error(`${label}: HTTP ${response.status}`);return{status:response.status,body};}catch(error){if(error?.name==="AbortError")throw new Error(`${label}: timeout`);throw error;}finally{clearTimeout(timer);try{reader?.releaseLock?.();}catch{}}};
 const stripeKey=clean(inputData.stripe_api_key);if(!new RegExp(`^rk_${mode}_[A-Za-z0-9_]{12,}$`).test(stripeKey))throw new Error("ARC_PRIVATE_CHECKOUT_INVALID: exact mode restricted Stripe key");
-const stripeHeaders={Accept:"application/json",Authorization:`Basic ${Buffer.from(`${stripeKey}:`).toString("base64")}`,"Stripe-Version":"2026-06-24.dahlia"};
+const stripeHeaders={Accept:"application/json",Authorization:`Basic ${Buffer.from(`${stripeKey}:`).toString("base64")}`,"Stripe-Version":"2026-07-29.dahlia"};
 const expectedAdultField=[{key:"adultpurchaserack",type:"dropdown",optional:false,label:{type:"custom",custom:"I am 18+ and authorized to buy for this business"},dropdown:{options:[{label:"I confirm",value:"accepted"}]}}];
 const expectedNameCollection={business:{enabled:true,optional:false},individual:{enabled:true,optional:false}};
 const validateLink=async link=>{if(!link||link.object!=="payment_link"||!/^plink_[A-Za-z0-9]+$/.test(clean(link.id))||link.livemode!==offer.livemode||link.active!==true||
@@ -340,7 +357,7 @@ const githubToken=clean(inputData.github_token);if(!githubToken)throw new Error(
 const api="https://api.github.com/repos/arcwebhq-cpu/arc-previews",githubHeaders={Accept:"application/vnd.github+json",Authorization:`Bearer ${githubToken}`,"Content-Type":"application/json","X-GitHub-Api-Version":"2022-11-28"};
 const github=async(url,options={},allowed=[])=>{const response=await fetchJsonStatus(url,{...options,headers:{...githubHeaders,...(options.headers||{})}},65536,"ARC_PRIVATE_CHECKOUT_GITHUB",allowed);return allowed.includes(response.status)&&response.status>=400?{_status:response.status}:response.body;};
 const createExactTag=async(name,sha)=>{const created=await github(`${api}/git/refs`,{method:"POST",body:JSON.stringify({ref:`refs/tags/${name}`,sha})},[422]);if(created._status){const found=await github(`${api}/git/ref/${encodeURIComponent(`tags/${name}`)}`);if(clean(found.ref)!==`refs/tags/${name}`||clean(found.object?.type)!=="commit"||clean(found.object?.sha).toLowerCase()!==sha)throw new Error("ARC_PRIVATE_CHECKOUT_CONFLICT: tag replay");}else if(clean(created.ref)!==`refs/tags/${name}`||clean(created.object?.type)!=="commit"||clean(created.object?.sha).toLowerCase()!==sha)throw new Error("ARC_PRIVATE_CHECKOUT_CONFLICT: tag create");};
-await createExactTag(`arc-checkout-ready-v3/${referenceSha}`,core.merge_commit_sha);
+await createExactTag(`arc-checkout-ready-v4/${referenceSha}`,core.merge_commit_sha);
 const emailClaim=await sha256(`arc-preview-private-checkout-email-v1\n${referenceSha}\n${core.merge_commit_sha}\n${inputIntent.link_receipt_sha256}`);
 await createExactTag(`arc-preview-email/${emailClaim}`,core.merge_commit_sha);
 const nextEmail={...emailState,status:"CLAIMED",claim_token_sha256:emailClaim,checkout_reference_sha256:referenceSha,link_receipt_sha256:inputIntent.link_receipt_sha256};
@@ -348,4 +365,4 @@ if(emailState.status==="SENT")return{status:"PRIVATE_PREVIEW_AND_CHECKOUT_EMAIL_
 if(emailState.status==="CLAIMED"&&(emailState.claim_token_sha256!==emailClaim||emailState.checkout_reference_sha256!==referenceSha||emailState.link_receipt_sha256!==inputIntent.link_receipt_sha256))throw new Error("ARC_PRIVATE_CHECKOUT_CONFLICT: claimed email replay");
 return{status:"READY_TO_SEND_PRIVATE_PREVIEW_AND_CHECKOUT_EMAIL",send_preview_email:true,checkout_url_private:clean(link.url),checkout_reference_private:checkoutReference,
   email_state_write_required_before_email:emailState.status==="PENDING",next_email_state:canonicalJson(nextEmail),email_provider_idempotency_key:`arc-preview-${emailClaim}`,
-  customer_email:customerEmail,preview_url:core.preview_url,private_checkout_link_allowed:true,ready_tag:`arc-checkout-ready-v3/${referenceSha}`};
+  customer_email:customerEmail,preview_url:core.preview_url,private_checkout_link_allowed:true,ready_tag:`arc-checkout-ready-v4/${referenceSha}`};

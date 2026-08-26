@@ -14,7 +14,7 @@ const productId = "prod_ArcWebsiteService";
 const productTaxCode = "txcd_12345678";
 const registrationId = "taxreg_ArcWashingtonTest";
 const accountId = "acct_ArcBusinessTest";
-const termsVersion = "2026-08-12";
+const termsVersion = "2026-08-25";
 const termsDocumentSha256 = sha("immutable ARC terms test document");
 const redirect = "https://arcweb.onl/payment-success/?session_id={CHECKOUT_SESSION_ID}";
 const registration = { country: "US", id: registrationId, state: "WA", type: "state_sales_tax" };
@@ -52,7 +52,7 @@ const payloads = {
 const run = async (overrides = {}, mutate = {}) => runPreflight({ ...input, ...overrides }, async (url, options = {}) => {
   assert.equal(options.method, "GET");
   assert.equal(options.redirect, "error");
-  assert.equal(options.headers?.["Stripe-Version"], "2026-06-24.dahlia");
+  assert.equal(options.headers?.["Stripe-Version"], "2026-07-29.dahlia");
   assert.ok(Object.hasOwn(payloads, url), `unexpected Stripe resource ${url}`);
   const payload = Object.hasOwn(mutate, url) ? mutate[url] : payloads[url];
   return new Response(JSON.stringify(payload), { status: 200, headers: { "content-type": "application/json" } });
@@ -69,6 +69,8 @@ assert.equal(evidence.scope, "authoritative-private-checkout-offer-template-pref
 assert.equal(evidence.price_id, priceId);
 assert.equal(evidence.product_id, productId);
 assert.equal(evidence.terms_document_sha256, termsDocumentSha256);
+assert.equal(evidence.terms_version, "2026-08-25");
+assert.equal(evidence.stripe_api_version, "2026-07-29.dahlia");
 assert.doesNotMatch(verified.payment_link_evidence_private, /buy\.stripe\.com|\bplink_/i);
 assert.match(verified.payment_link_evidence_sha256, /^[a-f0-9]{64}$/);
 assert.match(verified.payment_link_evidence_hmac_sha256, /^[a-f0-9]{64}$/);
@@ -79,6 +81,7 @@ await assert.rejects(run({}, { [urls.price]: { ...price, active: false } }), /Pr
 await assert.rejects(run({}, { [urls.price]: { ...price, product: { ...product, tax_code: "txcd_87654321" } } }), /Price and Product/);
 await assert.rejects(run({}, { [urls.registration]: { ...payloads[urls.registration], expires_at: Math.floor(Date.now() / 1000) - 1 } }), /registration is not active/);
 await assert.rejects(run({ retained_terms_documents_json: canonical({ [termsVersion]: "0".repeat(64) }) }), /terms document registry mismatch/);
+await assert.rejects(run({ expected_terms_version: "2026-08-12", retained_terms_documents_json: canonical({ "2026-08-12": termsDocumentSha256 }) }), /terms document registry mismatch/);
 await assert.rejects(run({ expected_checkout_redirect_url: "https://attacker.example/?session_id={CHECKOUT_SESSION_ID}" }), /static ARC payment-success URL/);
 await assert.rejects(run({ stripe_live_mode_enabled: "true", stripe_test_api_key: input.stripe_test_api_key }), /Stripe live API key/);
 

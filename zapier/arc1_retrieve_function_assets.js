@@ -31,7 +31,7 @@ const safeSecret = (value, label) => {
   return secret;
 };
 const sha = value => /^[a-f0-9]{64}$/.test(clean(value));
-const BRIDGE_CONTRACT_SHA256 = "e9bd5a3be21e0192acdc8b81692dab7bf5b1d0a132325a73011aa03e43674841";
+const BRIDGE_CONTRACT_SHA256 = "c4ab396bf04464629624dd19a37602755c8d429db0bf729b49bbfdfdba3ae20c";
 const bearer = safeSecret(inputData.asset_retrieval_bearer, "retrieval bearer");
 const receiptSecret = safeSecret(inputData.asset_receipt_secret, "receipt");
 if (bearer === receiptSecret) throw new Error("ARC1_ASSET_INVALID: secrets must be distinct");

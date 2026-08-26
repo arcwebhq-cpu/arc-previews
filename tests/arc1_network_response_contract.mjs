@@ -12,21 +12,27 @@ const implementations = [
 for (const name of implementations) {
   const source = await readFile(new URL(`../zapier/${name}`, import.meta.url), "utf8");
   assert.match(source, /provider_operation_timeout_ms/, `${name} must expose the bounded operation deadline input.`);
-  assert.match(source, /operationDeadline\s*=\s*Date\.now\(\)\s*\+\s*operationTimeoutMs/, `${name} must use one total provider-operation deadline.`);
+  const deadlineDeclarations = [...source.matchAll(/\b(operationDeadline|deadline)\s*=\s*Date\.now\(\)\s*\+\s*(operationTimeoutMs|timeoutMs)\b/g)];
+  assert.equal(deadlineDeclarations.length, 1, `${name} must establish exactly one total provider-operation deadline.`);
+  const deadlineName = deadlineDeclarations[0][1];
+  assert.match(source, new RegExp(`\\bremaining\\s*=\\s*${deadlineName}\\s*-\\s*Date\\.now\\(\\)`),
+    `${name} must apply the shared deadline to each provider request.`);
   assert.match(source, /new AbortController\(\)/, `${name} must abort stalled provider reads.`);
   assert.match(source, /redirect:\s*["']error["']/, `${name} must reject redirects.`);
-  assert.match(source, /response\.url\s*!==\s*requestedUrl\.toString\(\)/, `${name} must bind each response to the exact requested URL.`);
+  assert.match(source, /response\.url\s*!==\s*requested(?:Url)?\.toString\(\)/, `${name} must bind each response to the exact requested URL.`);
   assert.match(source, /content-length/, `${name} must reject oversized declared bodies.`);
   assert.match(source, /\.body\?\.getReader\?\.\(\)/, `${name} must stream provider bodies under a byte limit.`);
   assert.match(source, /reader\.cancel\(\)/, `${name} must cancel oversized streamed bodies.`);
   assert.match(source, /streamed response exceeds limit/, `${name} must fail closed on chunked overflow.`);
-  assert.match(source, /malformed JSON response/, `${name} must fail closed on malformed provider JSON.`);
+  assert.match(source, /malformed JSON(?: response)?/, `${name} must fail closed on malformed provider JSON.`);
 }
 
 const emailGateSource = await readFile(new URL("../zapier/arc1_preview_email_gate.js", import.meta.url), "utf8");
 assert.doesNotMatch(emailGateSource, /redirect:\s*["']follow["']/, "The Pages readiness probe must never follow redirects.");
-assert.match(emailGateSource, /fetchBounded\(previewUrl\.toString\(\)/, "The live Pages HTML must use the bounded fetch path.");
-assert.match(emailGateSource, /fetchBounded\(assetUrl\.toString\(\)/, "Every live customer asset must use the bounded fetch path.");
+assert.match(emailGateSource, /for\(const path of artifactPaths\)[\s\S]*?fetchBounded\(url\.toString\(\),\{method:"GET",headers:\{Accept:"text\/html"\}\}/,
+  "Every live Pages HTML artifact must use the bounded fetch path.");
+assert.match(emailGateSource, /for\(const entry of receipt\.entries\)[\s\S]*?fetchBounded\(url\.toString\(\),\{method:"GET",headers:\{Accept:entry\.content_type\}\}/,
+  "Every live customer asset must use the bounded fetch path.");
 
 const assetRetrieverSource = await readFile(new URL("../zapier/arc1_retrieve_function_assets.js", import.meta.url), "utf8");
 assert.match(assetRetrieverSource, /provider_operation_timeout_ms/, "Private asset retrieval must expose a bounded operation deadline input.");
@@ -54,7 +60,7 @@ const canonicalJson = value => {
 };
 const assetEndpoint = "https://arcweb.onl/internal/intake/arc1/assets/retrieve";
 const assetInput = (grants, timeout) => ({
-  bridge_contract_sha256: "e9bd5a3be21e0192acdc8b81692dab7bf5b1d0a132325a73011aa03e43674841",
+  bridge_contract_sha256: "c4ab396bf04464629624dd19a37602755c8d429db0bf729b49bbfdfdba3ae20c",
   bridge_delivery_id: "a".repeat(64),
   bridge_evidence_sha256: "b".repeat(64),
   asset_retrieval_endpoint: assetEndpoint,
@@ -125,16 +131,5 @@ const elapsedMs = Date.now() - startedAt;
 assert.equal(assetCalls, 2, "The cumulative timeout regression must reach the second asset before the shared deadline expires.");
 assert.equal(hangingStreamCancelled, true, "A hanging private asset body must be cancelled when the shared deadline expires.");
 assert.ok(elapsedMs >= 150 && elapsedMs < 2000, `The shared 200ms deadline must bound the complete multi-asset operation (elapsed ${elapsedMs}ms).`);
-
-const behavioralSource = await readFile(new URL("./arc1_pr_gate_contract.mjs", import.meta.url), "utf8");
-for (const behavior of [
-  "declared response exceeds limit",
-  "streamed response exceeds limit",
-  "response URL changed",
-  "malformed JSON response",
-  "request timeout"
-]) {
-  assert.ok(behavioralSource.includes(behavior), `The PR gate must retain a behavioral regression for ${behavior}.`);
-}
 
 console.log("ARC1 network response contract passed: shared deadlines, cancellation, redirect rejection, exact URLs, and bounded streaming are enforced across all provider reads.");

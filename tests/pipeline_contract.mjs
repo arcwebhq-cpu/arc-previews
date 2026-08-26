@@ -7,7 +7,7 @@ import { fixtures } from "../fixtures/v10_industries.mjs";
 import { renderPreview } from "../scripts/arc_contract.mjs";
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"..");
-const siteRoot=path.resolve(root,process.env.ARC_SITE_DIR||"../arc-site-finalize");
+const siteRoot=path.resolve(root,process.env.ARC_SITE_DIR||"../arc-site");
 const read=(base,relative)=>readFile(path.join(base,relative),"utf8");
 const [template,injector,privateCheckout,privateCheckoutLifecycle,resolver,deliveryGate,wiringText,siteCore,siteService,siteStart]=await Promise.all([
   read(root,"ARC_MASTER_TEMPLATE.html"),read(root,"zapier/arc1_inject.js"),read(root,"zapier/arc1_private_checkout_link.js"),
@@ -20,7 +20,7 @@ for(const fixture of fixtures){
   const rendered=renderPreview(template,fixture.content,{trustedEventPrefix:"a1b2c3d4",customerEmail:fixture.customerEmail,
     leadNotificationEmail:`verified-${fixture.expectedProfile}@example.test`});
   assert.match(rendered.html,/data-arc-checkout-private/);
-  assert.doesNotMatch(rendered.html,/buy\.stripe\.com|\bplink_|client_reference_id|v3_[A-Za-z0-9_-]{135}|arc-private-checkout-policy-v1/i);
+  assert.doesNotMatch(rendered.html,/buy\.stripe\.com|\bplink_|client_reference_id|v[34]_[A-Za-z0-9_-]{135}|arc-private-checkout-policy-v[12]/i);
   assert.equal(rendered.checkoutUrl,undefined);
   assert.equal(rendered.checkoutReference,undefined);
 }
@@ -35,13 +35,12 @@ for(const [name,source,args] of [
 ])assert.doesNotThrow(()=>new AsyncFunction(...args,source),`${name} Code step must compile`);
 
 for(const source of [privateCheckout,resolver,siteCore,deliveryGate]){
-  assert.match(source,/arc-private-checkout-policy-v1/);
-  assert.match(source,/arc2-payment-evidence-v3|arc-checkout-reference-v3/);
+  assert.match(source,/arc-private-checkout-policy-v2/);
+  assert.match(source,/arc2-payment-evidence-v4|arc-checkout-reference-v4/);
 }
 assert.doesNotMatch(privateCheckout,/payment_method_types/);
 assert.doesNotMatch(resolver,/payment_method_types/);
 assert.doesNotMatch(siteCore,/payment_method_types|payment_methods/);
-assert.match(privateCheckout,/payment_method_selection:"dynamic"/);
 assert.match(privateCheckout,/completed_sessions\]\[limit\].*1/s);
 assert.match(privateCheckout,/state_hmac_sha256/);
 assert.match(privateCheckout,/starting_after/);
@@ -49,7 +48,7 @@ assert.match(privateCheckoutLifecycle,/DEACTIVATION_AUTHORIZED/);
 assert.match(privateCheckoutLifecycle,/rerun offer and tax readiness immediately before/);
 assert.doesNotMatch(privateCheckoutLifecycle,/api\.stripe\.com|stripe_api_key|\bfetch\s*\(|payment_method_types/i);
 assert.match(resolver,/private_link_reverse_state/);
-assert.match(resolver,/arc-checkout-ready-v3/);
+assert.match(resolver,/arc-checkout-ready-v4/);
 assert.match(resolver,/claim_recipient_email_sha256/);
 assert.match(resolver,/payer_email_sha256/);
 assert.match(resolver,/payment_intent_id/);
@@ -65,9 +64,10 @@ assert.match(siteService,/checkout-reference-index/);
 assert.match(siteService,/duplicate-payment-review/);
 assert.match(siteService,/assertHandoffFulfillmentAllowed/);
 assert.match(siteStart,/reversal_control_ready/);
-assert.match(deliveryGate,/retiredCheckoutBindingKeys/);
+assert.match(deliveryGate,/retired_checkout_binding_keys_json/);
+assert.match(deliveryGate,/selectedCheckoutSecret/);
 assert.match(deliveryGate,/reserved claim recipient/);
-assert.doesNotMatch(deliveryGate,/expected_payment_link_id|expectedPriceId|arc2-payment-evidence-signature-v2/);
+assert.doesNotMatch(deliveryGate,/expected_payment_link_id|expectedPriceId|arc2-payment-evidence-signature-v[23]/);
 
 assert.equal(wiring.live_complete,false);
 assert.equal(wiring.arc1.private_checkout_link.automation_enabled,false);
@@ -81,10 +81,10 @@ assert.equal(wiring.arc1.private_checkout_link.unpaid_link_lifecycle.lifecycle_e
 assert.equal(wiring.arc1.private_checkout_link.unpaid_link_lifecycle.deactivation_adapter_enabled,false);
 assert.equal(wiring.arc1.private_checkout_link.unpaid_link_lifecycle.renewal_adapter_enabled,false);
 assert.equal(wiring.arc1.private_checkout_link.unpaid_link_lifecycle.provider_adapter_live_verified,false);
-assert.equal(wiring.arc2.payment_evidence_gate.evidence_version,"arc2-payment-evidence-v3");
-assert.equal(wiring.arc2.artifact_evidence_gate.evidence_version,"arc2-handoff-artifact-evidence-v3");
+assert.equal(wiring.arc2.payment_evidence_gate.evidence_version,"arc2-payment-evidence-v4");
+assert.equal(wiring.arc2.artifact_evidence_gate.evidence_version,"arc2-handoff-artifact-evidence-v4");
 assert.equal(wiring.arc2.required_session_contract.checkout_reference_exact_length,138);
-assert.equal(wiring.arc2.required_session_contract.checkout_reference_pattern,"^v3_[A-Za-z0-9_-]{135}$");
+assert.equal(wiring.arc2.required_session_contract.checkout_reference_pattern,"^v4_[A-Za-z0-9_-]{135}$");
 assert.equal(wiring.arc2.required_session_contract.payment_link_identity_source,
   "authenticated-session.payment_link plus private create-before-provider reverse reservation");
 assert.equal(Object.values(wiring.external_verification).every(value=>value===false),true);

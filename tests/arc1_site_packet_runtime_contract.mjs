@@ -30,7 +30,7 @@ const {
   createAdapterAttestation,
   deliverIntakeToArc1,
 } = bridgeCore;
-const { BUDGET_CONFIRMATION, TERMS_CONFIRMATION, normalizeIntakeForm } = submissionCore;
+const { BUDGET_CONFIRMATION, OFFER_CONTRACT_ID, TERMS_CONFIRMATION, normalizeIntakeForm } = submissionCore;
 
 class FakeStore {
   constructor() { this.values = new Map(); this.sequence = 0; }
@@ -59,7 +59,8 @@ const baseTime = new Date(Date.now() - 60_000);
 const submissionId = "33333333-3333-4333-8333-333333333333";
 const form = new FormData();
 for (const [field, value] of Object.entries({
-  intake_version: "arc-intake-v7",
+  intake_version: "arc-intake-v8",
+  offer_contract_id: OFFER_CONTRACT_ID,
   name: "Cross Repo Private Owner",
   email: "cross-repo-owner@example.test",
   business: "Cross Repo Roofing",

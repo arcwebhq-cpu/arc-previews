@@ -3,8 +3,12 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import {
   ARC1_GENERATION_CONTRACT_SHA256,
+  ARC1_GENERATION_CONTRACT_VERSION,
+  ARC1_GENERATION_EVALUATION_VERSION,
   ARC1_GENERATION_INSTRUCTIONS_SHA256,
   ARC1_GENERATION_OUTPUT_SCHEMA_SHA256,
+  ARC1_GENERATION_REQUEST_VERSION,
+  ARC1_GENERATION_RETRY_STATE_VERSION,
   ARC1_PRIVATE_OR_OPERATIONAL_FIELDS,
   ARC1_PUBLIC_BRIEF_FIELDS
 } from "../scripts/arc1_generation_contract.mjs";
@@ -142,10 +146,10 @@ assert.deepEqual(contract.arc1.ordered_steps, [
 assert.equal(contract.arc1.publish_mode, "pull-request-only");
 assert.equal(contract.arc1.direct_main_publish_allowed, false);
 assert.deepEqual(contract.arc1.generation, {
-  contract_version: "arc1-generation-contract-v1",
-  request_version: "arc1-generation-request-v1",
-  evaluation_version: "arc1-generation-evaluation-v1",
-  retry_state_version: "arc1-generation-retry-state-v1",
+  contract_version: ARC1_GENERATION_CONTRACT_VERSION,
+  request_version: ARC1_GENERATION_REQUEST_VERSION,
+  evaluation_version: ARC1_GENERATION_EVALUATION_VERSION,
+  retry_state_version: ARC1_GENERATION_RETRY_STATE_VERSION,
   source: "scripts/arc1_generation_contract.mjs",
   test: "tests/arc1_generation_contract.mjs",
   contract_sha256: ARC1_GENERATION_CONTRACT_SHA256,
@@ -172,6 +176,35 @@ assert.deepEqual(contract.arc1.generation, {
   signed_generation_response_evidence_verified: false,
   provider_retry_state_verified: false,
   live_generation_e2e_verified: false,
+  activation_allowed: false
+});
+assert.deepEqual(contract.arc1.injector_v11, {
+  runtime_version: "arc1-inject-v11-render-runtime-v1",
+  site_contract_version: "arc-five-page-site-v1",
+  template_version: "11.0",
+  render_bundle_version: "arc1-five-page-render-bundle-v1",
+  render_evidence_version: "arc1-render-evidence-v2",
+  checkout_offer_snapshot_version: "arc-checkout-offer-snapshot-v2",
+  checkout_recipient_reservation_version: "arc1-checkout-recipient-reservation-v2",
+  offer_contract_id: "arc-fixed-five-page-offer-v1",
+  deliverable: "fixed-five-page-marketing-website-v1",
+  runtime_source: "scripts/arc1_inject_v11_runtime.mjs",
+  runtime_builder: "scripts/build_arc1_inject_v11_runtime.mjs",
+  runtime_manifest: "zapier/arc1_inject_v11_runtime.manifest.json",
+  template: "ARC_MASTER_TEMPLATE_V11.html",
+  injector: "zapier/arc1_inject.js",
+  test: "tests/arc1_inject_v11_contract.mjs",
+  page_count: 5,
+  logical_page_paths: ["index.html", "services/index.html", "about/index.html", "process/index.html", "contact/index.html"],
+  artifact_page_paths: ["about/index.html", "contact/index.html", "process/index.html", "services/index.html", "index.html"],
+  generated_runtime_reproducible: true,
+  actual_injector_executed_for_all_19_profiles: true,
+  exact_58_key_string_schema_verified: true,
+  whole_site_digest_and_secondary_page_tamper_verified: true,
+  legacy_singular_output_absent: true,
+  downstream_publication_migrated: true,
+  live_wiring_complete: false,
+  automation_enabled: false,
   activation_allowed: false
 });
 assert.deepEqual(contract.arc1.function_intake_bridge.generator_projection, {
@@ -218,9 +251,10 @@ assert.deepEqual(contract.arc1.authoritative_intake, {
   client_received_at_authoritative: false,
   client_form_started_at_authoritative: false,
   client_lead_route_status_authoritative: false,
-  required_intake_version: "arc-intake-v7",
-  required_budget_confirmation: "Yes, understands the finished ARC website subtotal is $5,000 plus applicable sales tax only after preview approval",
-  required_terms_acceptance: "Accepted ARC preview terms, privacy policy, refund policy, and service scope dated 2026-08-12; separate adult checkout acceptance required",
+  required_intake_version: "arc-intake-v8",
+  required_offer_contract_id: "arc-fixed-five-page-offer-v1",
+  required_budget_confirmation: "Yes, understands the finished ARC website is a fixed five-page website with a $5,000 subtotal plus applicable sales tax only after preview approval",
+  required_terms_acceptance: "Accepted ARC preview terms, privacy policy, refund policy, and fixed five-page service scope dated 2026-08-25; separate adult checkout acceptance required",
   maximum_submission_age_seconds: 86400,
   maximum_future_clock_skew_seconds: 300
 });
@@ -230,7 +264,7 @@ assert.deepEqual(contract.arc1.function_intake_bridge, {
   source_schema: "arc-intake-function-submission-v1",
   bridge_schema: "arc-intake-arc1-bridge-evidence-v1",
   consumer_schema: "arc1-function-intake-adapter-v1",
-  bridge_contract_sha256: "e9bd5a3be21e0192acdc8b81692dab7bf5b1d0a132325a73011aa03e43674841",
+  bridge_contract_sha256: "c4ab396bf04464629624dd19a37602755c8d429db0bf729b49bbfdfdba3ae20c",
   folder_link_contract_clause: "folder-link-intake-rejected-until-private-provider-adapter",
   generator_projection: {
     mode: "positive-public-content-allowlist",
@@ -282,7 +316,7 @@ assert.deepEqual(contract.arc1.function_intake_bridge, {
     deployment_contract: "zapier/arc1-consumer-runtime-deployment.md",
     test: "tests/arc1_consumer_runtime_bundle_contract.mjs",
     cross_repository_test: "tests/arc1_site_packet_runtime_contract.mjs",
-    pinned_arc_site_commit: "163f6e2a4c769c779fa23e5c3df1c1008e819a2f",
+    pinned_arc_site_commit: "bd0deddee70ddaf20f32680149ebe51f491ec194",
     phases: ["CLAIM", "AUTHORIZE", "COMPLETE"],
     generated_bundle_reproducible: true,
     actual_bundle_executed_in_tests: true,
@@ -463,11 +497,16 @@ assert.equal(contract.arc1.preview_email.gate_must_verify_pages_live_bytes, true
 assert.deepEqual(contract.arc1.preview_email, {
   allowed_before_gate: false,
   gate_must_bind_exact_pr_head_sha: true,
+  gate_must_bind_exact_pr_head_tree_sha: true,
   gate_must_require_latest_named_check_success: true,
   gate_must_verify_merged_main_content: true,
   gate_must_verify_pages_live_bytes: true,
+  gate_must_verify_all_five_merged_main_raw_bytes: true,
+  gate_must_verify_all_five_pages_clean_routes: true,
+  gate_must_bind_v2_whole_site_evidence: true,
   gate_must_verify_preview_noindex: true,
-  gate_must_claim_private_outbox_first: true
+  gate_must_claim_private_outbox_first: false,
+  outbox_and_email_authority_enabled: false
 });
 assert.equal(contract.arc1.payment_link_preflight.source, "zapier/arc1_verify_payment_link.js");
 assert.equal(contract.arc1.payment_link_preflight.expected_checkout_redirect_url, "https://arcweb.onl/payment-success/?session_id={CHECKOUT_SESSION_ID}");
@@ -481,8 +520,11 @@ assert.equal(contract.arc1.payment_link_preflight.tax_settings_resource, "/v1/ta
 assert.equal(contract.arc1.payment_link_preflight.active_tax_settings_required, true);
 assert.equal(contract.arc1.payment_link_preflight.automatic_tax_enabled_required, true);
 assert.equal(contract.arc1.payment_link_preflight.active_expected_tax_registration_readback_required, true);
+assert.equal(contract.arc1.payment_link_preflight.stripe_api_version, "2026-07-29.dahlia");
+assert.equal(contract.arc1.payment_link_preflight.required_terms_version, "2026-08-25");
 assert.match(arc1IntakeSource, /https:\/\/api\.netlify\.com\/api\/v1/);
-assert.match(arc1PaymentLinkSource, /Stripe-Version": "2026-06-24\.dahlia"/);
+assert.match(arc1PaymentLinkSource, /const stripeApiVersion = "2026-07-29\.dahlia"/);
+assert.match(arc1PaymentLinkSource, /"Stripe-Version": stripeApiVersion/);
 assert.match(arc1PaymentLinkSource, /arc1-checkout-offer-template-evidence-signature-v1/);
 assert.match(arc1PaymentLinkSource, /https:\/\/api\.stripe\.com\/v1\/account/);
 assert.match(arc1PaymentLinkSource, /https:\/\/api\.stripe\.com\/v1\/tax\/settings/);
@@ -500,7 +542,7 @@ assert.deepEqual(contract.arc2.trigger.events, [
 assert.equal(contract.arc2.trigger.async_payment_failed_alert_event, "checkout.session.async_payment_failed");
 assert.equal(contract.arc2.trigger.durable_fulfillment_claim_before_authenticated_paid_validation_allowed, false);
 assert.equal(contract.arc2.authoritative_session_retrieval.resource, "/v1/checkout/sessions/{CHECKOUT_SESSION_ID}?expand[]=line_items.data.price.product&expand[]=payment_intent.latest_charge");
-assert.equal(contract.arc2.authoritative_session_retrieval.stripe_api_version, "2026-06-24.dahlia");
+assert.equal(contract.arc2.authoritative_session_retrieval.stripe_api_version, "2026-07-29.dahlia");
 assert.equal(contract.arc2.expected_payment_link_id, null);
 assert.equal(contract.arc2.expected_price_id, null);
 assert.equal(contract.arc2.required_session_contract.amount_subtotal, 500000);
@@ -516,12 +558,24 @@ assert.deepEqual(contract.arc2.required_session_contract.id_pattern_by_mode, {
 assert.equal(contract.arc2.required_session_contract.automatic_tax_status, "complete");
 assert.equal(contract.arc2.required_session_contract.customer_address_status, "verified");
 assert.equal(contract.arc2.required_session_contract.tax_registration_status, "historical_precheckout_snapshot");
+assert.equal(contract.arc2.required_session_contract.product_tax_code_authority, "signed-private-policy historical pre-exposure snapshot");
+assert.equal(contract.arc2.required_session_contract.mutable_current_product_tax_code_read_during_paid_replay_allowed, false);
 assert.equal(contract.arc2.required_session_contract.exactly_one_line_item_required, true);
 assert.equal(contract.arc2.required_session_contract.checkout_reference_must_bind_immutable_approval_content_sha256, true);
-assert.equal(contract.arc2.required_session_contract.checkout_reference_version, "arc-checkout-reference-v3");
-assert.match(contract.arc2.required_session_contract.checkout_reference_hmac_message, /arc-checkout-reference-v3/);
-assert.equal(contract.arc2.required_session_contract.checkout_reference_pattern, "^v3_[A-Za-z0-9_-]{135}$");
+assert.equal(contract.arc2.required_session_contract.checkout_reference_version, "arc-checkout-reference-v4");
+assert.match(contract.arc2.required_session_contract.checkout_reference_hmac_message, /arc-checkout-reference-v4/);
+assert.equal(contract.arc2.required_session_contract.checkout_reference_pattern, "^v4_[A-Za-z0-9_-]{135}$");
 assert.equal(contract.arc2.required_session_contract.checkout_reference_exact_length, 138);
+assert.equal(contract.arc2.required_session_contract.checkout_ready_tag, "arc-checkout-ready-v4/{checkout_reference_sha256}");
+assert.equal(contract.arc2.required_session_contract.checkout_policy_version, "arc-private-checkout-policy-v2");
+assert.equal(contract.arc2.required_session_contract.checkout_policy_scope, "one-approved-five-page-preview-one-private-payment-link");
+assert.equal(contract.arc2.required_session_contract.offer_contract_id, "arc-fixed-five-page-offer-v1");
+assert.equal(contract.arc2.required_session_contract.deliverable, "fixed-five-page-marketing-website-v1");
+assert.equal(contract.arc2.required_session_contract.page_count, 5);
+assert.deepEqual(contract.arc2.required_session_contract.preview_path_order,
+  ["about/index.html", "contact/index.html", "process/index.html", "services/index.html", "index.html"]);
+assert.equal(contract.arc2.required_session_contract.fresh_v3_or_mixed_pair_allowed, false);
+assert.equal(contract.arc2.required_session_contract.exact_frozen_existing_v3_replay_only, true);
 assert.equal(contract.arc2.required_session_contract.adult_acknowledgement_key, "adultpurchaserack");
 assert.deepEqual(contract.arc2.required_session_contract.required_collected_names, ["business_name", "individual_name"]);
 assert.equal(contract.arc2.checkout_configuration.automatic_tax_enabled, true);
@@ -543,20 +597,42 @@ assert.deepEqual(contract.arc2.stripe_public_details_urls, {
   live_configuration_verified: false
 });
 assert.match(arc2ResolverSource, /expand%5B%5D=line_items\.data\.price\.product/);
-assert.match(arc2ResolverSource, /Stripe-Version": "2026-06-24\.dahlia"/);
+assert.match(arc2ResolverSource, /const STRIPE_API_VERSION = "2026-07-29\.dahlia"/);
 assert.match(arc2ResolverSource, /https:\/\/api\.stripe\.com\/v1\/account/);
 assert.match(arc2ResolverSource, /ARC_STRIPE_ACCOUNT_INVALID/);
-assert.match(arc2ResolverSource, /Stripe automatic tax must be enabled and complete/);
+assert.match(arc2ResolverSource, /automatic_tax\?\.status !== "complete"/);
 assert.match(arc2ResolverSource, /adultpurchaserack/);
-assert.match(arc2ResolverSource, /arc-checkout-reference-v3/);
+assert.match(arc2ResolverSource, /arc-checkout-reference-v4/);
 assert.match(arc2ResolverSource, /private_link_reverse_state/);
-assert.match(arc2ResolverSource, /arc-checkout-ready-v3/);
+assert.match(arc2ResolverSource, /arc-checkout-ready-v4/);
+assert.match(arc2ResolverSource, /one-approved-five-page-preview-one-private-payment-link/);
+assert.match(arc2ResolverSource, /arc2-handoff-artifact-evidence-v4/);
+assert.match(arc2ResolverSource, /arc2-payment-evidence-v4/);
+assert.doesNotMatch(arc2ResolverSource, /arc-checkout-reference-v3|arc-checkout-ready-v3|production_content_base64/);
 assert.match(arc1PrivateCheckoutSource, /MUTATION_STARTED/);
 assert.match(arc1PrivateCheckoutSource, /starting_after/);
 assert.doesNotMatch(arc1PrivateCheckoutSource,/payment_method_types/);
 assert.equal(contract.arc1.private_checkout_link.automation_enabled,false);
 assert.equal(contract.arc1.private_checkout_link.durable_cas_adapter_verified,false);
 assert.equal(contract.arc1.private_checkout_link.payment_method_selection,"dynamic");
+assert.equal(contract.arc1.private_checkout_link.offer_snapshot_version,"arc-checkout-offer-snapshot-v2");
+assert.equal(contract.arc1.private_checkout_link.recipient_reservation_version,"arc1-checkout-recipient-reservation-v2");
+assert.equal(contract.arc1.private_checkout_link.readiness_core_version,"arc1-preview-readiness-core-v2");
+assert.equal(contract.arc1.private_checkout_link.readiness_observation_version,"arc1-preview-readiness-observation-v2");
+assert.equal(contract.arc1.private_checkout_link.checkout_policy_version,"arc-private-checkout-policy-v2");
+assert.equal(contract.arc1.private_checkout_link.checkout_reference_version,"arc-checkout-reference-v4");
+assert.equal(contract.arc1.private_checkout_link.offer_contract_id,"arc-fixed-five-page-offer-v1");
+assert.equal(contract.arc1.private_checkout_link.deliverable,"fixed-five-page-marketing-website-v1");
+assert.equal(contract.arc1.private_checkout_link.page_count,5);
+assert.deepEqual(contract.arc1.private_checkout_link.preview_path_order,["about/index.html","contact/index.html","process/index.html","services/index.html","index.html"]);
+assert.equal(contract.arc1.private_checkout_link.reverse_index_authority,"authenticated-session-payment-link-id-to-v4-reference");
+assert.match(arc1PrivateCheckoutSource,/arc-checkout-offer-snapshot-signature-v2/);
+assert.match(arc1PrivateCheckoutSource,/arc1-checkout-recipient-reservation-signature-v2/);
+assert.match(arc1PrivateCheckoutSource,/arc1-preview-readiness-core-signature-v2/);
+assert.match(arc1PrivateCheckoutSource,/arc1-preview-readiness-observation-signature-v2/);
+assert.match(arc1PrivateCheckoutSource,/arc-checkout-reference-v4/);
+assert.match(arc1PrivateCheckoutSource,/arc-checkout-ready-v4/);
+assert.doesNotMatch(arc1PrivateCheckoutSource,/arc-checkout-reference-v3|arc-checkout-ready-v3|arc_v3_ref/);
 assert.equal(contract.arc1.private_checkout_link.renewable_provider_offer_readiness_verified,true);
 assert.equal(contract.arc1.private_checkout_link.offer_expiry_and_link_deactivation_verified,true);
 assert.deepEqual(contract.arc1.private_checkout_link.unpaid_link_lifecycle.phases,["ENROLL_ACTIVE","REQUEST_DEACTIVATION","CONFIRM_DEACTIVATION","AUTHORIZE_RENEWAL","FINALIZE_RENEWAL"]);
@@ -647,20 +723,31 @@ assert.equal(contract.arc2.publish_mode, "netlify-deploy-and-claim");
 assert.equal(contract.arc2.github_delivery_repository_required, false);
 assert.equal(contract.arc2.github_delivery_pr_allowed, false);
 assert.equal(contract.arc2.customer_github_account_required, false);
-assert.equal(contract.arc2.deploy_artifacts.minimum_count, 2);
-assert.equal(contract.arc2.deploy_artifacts.maximum_count, 5);
-assert.deepEqual(contract.arc2.deploy_artifacts.required_paths, ["_headers", "index.html"]);
+assert.equal(contract.arc2.deploy_artifacts.minimum_count, 6);
+assert.equal(contract.arc2.deploy_artifacts.maximum_count, 9);
+assert.deepEqual(contract.arc2.deploy_artifacts.required_paths,
+  ["_headers", "about/index.html", "contact/index.html", "process/index.html", "services/index.html", "index.html"]);
 assert.deepEqual(contract.arc2.deploy_artifacts.conditionally_allowed_paths, ["assets/{sha256}.{png|jpg|webp}"]);
-assert.equal(contract.arc2.deploy_artifacts.exact_order, "_headers, sorted content-addressed assets, index.html");
+assert.equal(contract.arc2.deploy_artifacts.exact_order,
+  "_headers, sorted content-addressed assets, about/index.html, contact/index.html, process/index.html, services/index.html, index.html");
 assert.equal(contract.arc2.deploy_artifacts.maximum_asset_count, 3);
+assert.equal(contract.arc2.deploy_artifacts.maximum_asset_bytes, 1250000);
+assert.equal(contract.arc2.deploy_artifacts.maximum_html_page_bytes, 150000);
+assert.equal(contract.arc2.deploy_artifacts.maximum_aggregate_html_bytes, 500000);
+assert.equal(contract.arc2.deploy_artifacts.maximum_headers_bytes, 10000);
 assert.equal(contract.arc2.deploy_artifacts.maximum_aggregate_bytes, 3510000);
 assert.equal(contract.arc2.deploy_artifacts.maximum_asset_aggregate_bytes, 3000000);
+assert.equal(contract.arc2.deploy_artifacts.maximum_deploy_artifacts_json_bytes, 4700000);
 assert.equal(contract.arc2.deploy_artifacts.maximum_start_request_bytes, 5000000);
+assert.equal(contract.arc2.deploy_artifacts.contact_only_exact_netlify_form_or_no_form_required, true);
 assert.equal(contract.arc2.deploy_artifacts.additional_paths_require_new_signed_evidence_version, true);
 assert.deepEqual(contract.arc2.deploy_artifacts.forbidden_paths, ["USAGE.md", ".arc-handoff.json", "netlify.toml"]);
 assert.equal(contract.arc2.deploy_artifacts.public_artifact_pii_or_secrets_allowed, false);
 assert.deepEqual(contract.arc2.artifact_evidence_gate.required_manifest_fields, ["path", "sha256", "size"]);
-assert.equal(contract.arc2.artifact_evidence_gate.evidence_version, "arc2-handoff-artifact-evidence-v3");
+assert.equal(contract.arc2.artifact_evidence_gate.evidence_version, "arc2-handoff-artifact-evidence-v4");
+assert.equal(contract.arc2.artifact_evidence_gate.signature_prefix, "arc2-handoff-artifact-evidence-signature-v4\\n");
+assert.match(contract.arc2.artifact_evidence_gate.production_content_digest_scope, /exact five production HTML pages/);
+assert.match(contract.arc2.artifact_evidence_gate.bundle_fingerprint_scope, /full exact artifact vector/);
 assert.equal(contract.arc2.artifact_evidence_gate.self_contained_asset_bytes_required, true);
 assert.equal(contract.arc2.artifact_evidence_gate.preview_host_references_allowed, false);
 assert.equal(contract.arc2.artifact_evidence_gate.immutable_preview_source_commit_required, true);
@@ -705,13 +792,22 @@ assert.equal(contract.arc2.final_delivery_email.signed_claim_state_evidence_vers
 assert.equal(contract.arc2.final_delivery_email.signed_claim_state_evidence_scope, "netlify-deploy-and-claim-final-deploy");
 assert.equal(contract.arc2.final_delivery_email.source_pat_post_claim_read_assumed, false);
 assert.equal(contract.arc2.final_delivery_email.separate_customer_authorized_readback_or_live_capability_proof_required, true);
-assert.equal(contract.arc2.payment_evidence_gate.evidence_version, "arc2-payment-evidence-v3");
+assert.equal(contract.arc2.final_delivery_email.signed_payment_evidence_version, "arc2-payment-evidence-v4");
+assert.equal(contract.arc2.final_delivery_email.signed_artifact_evidence_version, "arc2-handoff-artifact-evidence-v4");
+assert.equal(contract.arc2.final_delivery_email.private_checkout_policy_version, "arc-private-checkout-policy-v2");
+assert.equal(contract.arc2.final_delivery_email.exact_five_page_manifest_and_whole_site_digest_required, true);
+assert.equal(contract.arc2.final_delivery_email.claim_state_transitively_proves_fresh_final_deploy_readback, true);
+assert.equal(contract.arc2.final_delivery_email.provider_send_performed_by_gate, false);
+assert.equal(contract.arc2.final_delivery_email.state_write_allowed_by_gate, false);
+assert.equal(contract.arc2.final_delivery_email.automation_enabled, false);
+assert.equal(contract.arc2.final_delivery_email.activation_allowed, false);
+assert.equal(contract.arc2.payment_evidence_gate.evidence_version, "arc2-payment-evidence-v4");
 assert.equal(contract.arc2.payment_evidence_gate.evidence_scope, "authoritative-stripe-checkout-session");
-assert.equal(contract.arc2.payment_evidence_gate.signature_prefix, "arc2-payment-evidence-signature-v3\\n{mode}");
+assert.equal(contract.arc2.payment_evidence_gate.signature_prefix, "arc2-payment-evidence-signature-v4\\n{mode}\\n");
 assert.match(emailGateSource, /FINAL_DEPLOY_READY/);
 assert.match(emailGateSource, /netlify-deploy-and-claim-final-deploy/);
 assert.match(emailGateSource, /claim_recipient_email_sha256/);
-assert.match(emailGateSource, /retiredCheckoutBindingKeys/);
+assert.match(emailGateSource, /retiredKeys/);
 assert.doesNotMatch(emailGateSource, /businessName/);
 
 assert.equal(contract.lead_routing.authoritative_inbox_attestation.source, null);
@@ -720,6 +816,12 @@ assert.equal(contract.lead_routing.caller_status_string_is_authoritative, false)
 assert.equal(contract.lead_routing.maximum_receipt_age_seconds, 1800);
 assert.equal(contract.lead_routing.maximum_age_when_evidence_is_issued_seconds, 1800);
 assert.equal(contract.lead_routing.maximum_future_clock_skew_seconds, 300);
+assert.equal(contract.lead_routing.handoff_artifact_evidence_version, "arc2-handoff-artifact-evidence-v4");
+assert.deepEqual(contract.lead_routing.exact_five_page_path_order,
+  ["about/index.html", "contact/index.html", "process/index.html", "services/index.html", "index.html"]);
+assert.equal(contract.lead_routing.whole_site_production_digest_required, true);
+assert.equal(contract.lead_routing.contact_only_form_action, "/contact/?submitted=1");
+assert.equal(contract.lead_routing.no_form_bypass_requires_empty_route_bindings, true);
 assert.deepEqual(contract.lead_routing.required_evidence_fields, [
   "preview_folder", "production_content_sha256", "artifact_manifest_sha256",
   "handoff_artifact_evidence_sha256", "bundle_fingerprint", "netlify_account_id",
@@ -759,10 +861,12 @@ assert.deepEqual(contract.lead_routing.verifier.authoritative_netlify_api_reads_
 ]);
 for (const field of [
   "read_only", "exact_published_deploy_required", "exact_original_uploaded_artifact_bytes_required",
+  "all_five_original_html_pages_required", "all_five_live_processed_pages_required",
   "documented_netlify_post_processing_transform_required", "immutable_and_current_processed_html_must_match",
   "exact_manifest_and_no_snippets_required", "unique_exact_form_required",
   "unique_synthetic_submission_required", "enabled_exact_recipient_hook_required",
-  "synthetic_probe_submitted_through_rendered_project_details_control"
+  "synthetic_probe_submitted_through_rendered_project_details_control", "contact_only_form_required_when_mode_is_netlify_form",
+  "no_form_provider_checks_bypassed_only_when_signed_mode_is_not_required"
 ]) assert.equal(contract.lead_routing.verifier[field], true, `lead verifier ${field} must remain required`);
 assert.equal(contract.lead_routing.verifier.write_methods_allowed, false);
 assert.equal(contract.lead_routing.verifier.raw_recipient_or_probe_in_evidence_allowed, false);
@@ -787,8 +891,8 @@ for (const field of [
   "stripe_customer_email_allowed", "stripe_customer_details_email_allowed", "public_artifact_recipient_allowed",
   "public_evidence_allowed", "raw_recipient_public_allowed"
 ]) assert.equal(contract.lead_routing[field], false);
-assert.match(leadRouteSource, /sourceFormAttributes\?\.get\("action"\) !== "\/\?submitted=1"/);
-assert.match(leadRouteSource, /exact visible lead privacy disclosure/);
+assert.match(leadRouteSource, /exactAttribute\(attrs, "action"\) !== "\/contact\/\?submitted=1"/);
+assert.match(leadRouteSource, /By submitting this form/);
 assert.equal(contract.email_outbox.claim_must_be_atomic, true);
 assert.equal(contract.email_outbox.send_only_after_claim, true);
 assert.deepEqual(contract.email_outbox, {
@@ -846,7 +950,7 @@ assert.deepEqual(contract.synthetic_validation, {
   external_provider_proof: false,
   satisfies_required_test_scenarios: false,
   stripe_mode: "test",
-  stripe_api_version: "2026-06-24.dahlia",
+  stripe_api_version: "2026-07-29.dahlia",
   billing_address_collection: "required",
   niches: ["roofing", "hvac", "remodeling", "landscaping", "auto-detailing"],
   scenarios: ["paid-happy-path", "duplicate-replay", "unpaid-then-async-success", "expiry-deactivation-renewal", "refund-and-dispute-halt"]
@@ -885,4 +989,4 @@ assert.doesNotMatch(contractText, /\bcs_(?:test|live)_[A-Za-z0-9]{6,}\b/);
 assert.doesNotMatch(contractText, /\b(?:sk|rk)_(?:test|live)_[A-Za-z0-9]{6,}\b/);
 assert.doesNotMatch(contractText, /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/);
 
-console.log("ARC wiring v3 passed: private one-use checkout and claimable deploy flow remain fail-closed and all external gates unverified");
+console.log("ARC wiring passed: exact five-page v4 checkout evidence and claimable deploy flow remain fail-closed and all external gates unverified");

@@ -10,6 +10,7 @@ import { createTestPaymentLinkEvidence } from "./fixtures/payment_link_evidence.
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const template = await readFile(path.join(root, "ARC_MASTER_TEMPLATE.html"), "utf8");
+const v11Template = await readFile(path.join(root, "ARC_MASTER_TEMPLATE_V11.html"), "utf8");
 const validatorSource = await readFile(path.join(root, "arc_step7_validator.js"), "utf8");
 const arc1Source = await readFile(path.join(root, "zapier/arc1_inject.js"), "utf8");
 const validate = new Function("inputData", validatorSource);
@@ -30,7 +31,7 @@ const rendererOptions = {
   leadRouteEvidenceSecret
 };
 const arc1Input = content => ({
-  template_content: template,
+  template_content: v11Template,
   raw_json: JSON.stringify(content),
   customer_email: fixture.customerEmail,
   private_claim_recipient_email: fixture.customerEmail,
@@ -66,8 +67,11 @@ assert.equal(scalarValidation.validation_pass, true);
 assert.equal(scalarValidation.scalar_render_escaping_pass, true);
 
 const escapedArc1 = await runArc1(arc1Input(scalarContent));
-assert.doesNotMatch(escapedArc1.html_content, /<script>document\.body\.dataset\.arcInjected/i);
-assert.match(escapedArc1.html_content, /&lt;script&gt;document\.body\.dataset\.arcInjected=/i);
+const escapedArc1Bundle = JSON.parse(escapedArc1.render_bundle_private);
+assert.equal(escapedArc1Bundle.pages.length, 5);
+const escapedArc1ApprovalSite = escapedArc1Bundle.pages.map(page => page.approval_html).join("\n");
+assert.doesNotMatch(escapedArc1ApprovalSite, /<script>document\.body\.dataset\.arcInjected/i);
+assert.match(escapedArc1ApprovalSite, /&lt;script&gt;document\.body\.dataset\.arcInjected=/i);
 assert.equal(escapedArc1.trusted_event_prefix, intakeContext.publicFolderPrefix);
 const spoofedBrowserIdentity = await runArc1({
   ...arc1Input(scalarContent),
@@ -76,7 +80,8 @@ const spoofedBrowserIdentity = await runArc1({
   form_started_at: "2099-01-01T00:00:00.000Z",
   lead_route_status: "verified"
 });
-assert.equal(spoofedBrowserIdentity.file_path, escapedArc1.file_path);
+assert.deepEqual(spoofedBrowserIdentity.preview_paths, escapedArc1.preview_paths);
+assert.equal(spoofedBrowserIdentity.render_bundle_sha256, escapedArc1.render_bundle_sha256);
 assert.equal(spoofedBrowserIdentity.trusted_event_prefix, intakeContext.publicFolderPrefix);
 await assert.rejects(
   runArc1({ ...arc1Input(scalarContent), intake_evidence_private: "" }),
@@ -177,7 +182,7 @@ const finalByteEgressAttacks = [
   '<img src="https://evil.test/unsigned.png" alt="Unsigned">'
 ];
 for (const attack of finalByteEgressAttacks) {
-  const attackedTemplate = template.replace("</head>", `${attack}\n</head>`);
+  const attackedTemplate = v11Template.replace("</head>", `${attack}\n</head>`);
   await assert.rejects(
     runArc1({ ...arc1Input(fixture.content), template_content: attackedTemplate }),
     /ARC_REMOTE_DEPENDENCY_INVALID/,

@@ -8,8 +8,9 @@ const expectedSiteId = clean(inputData.expected_netlify_site_id).toLowerCase();
 const expectedFormId = clean(inputData.expected_netlify_form_id).toLowerCase();
 const expectedFormName = clean(inputData.expected_netlify_form_name);
 const triggerSubmissionId = clean(inputData.trigger_submission_id).toLowerCase();
-const requiredBudgetConfirmation = "Yes, understands the finished ARC website subtotal is $5,000 plus applicable sales tax only after preview approval";
-const requiredTermsAcceptance = "Accepted ARC preview terms, privacy policy, refund policy, and service scope dated 2026-08-12; separate adult checkout acceptance required";
+const requiredOfferContractId = "arc-fixed-five-page-offer-v1";
+const requiredBudgetConfirmation = "Yes, understands the finished ARC website is a fixed five-page website with a $5,000 subtotal plus applicable sales tax only after preview approval";
+const requiredTermsAcceptance = "Accepted ARC preview terms, privacy policy, refund policy, and fixed five-page service scope dated 2026-08-25; separate adult checkout acceptance required";
 
 if (!netlifyToken) throw new Error("ARC1_INTAKE_INVALID: Netlify access token is required");
 if (!globalThis.crypto?.subtle || typeof TextEncoder !== "function" || typeof Buffer !== "function") {
@@ -163,8 +164,11 @@ if (
 ) {
   throw new Error("ARC1_INTAKE_INVALID: trigger submission form binding mismatch");
 }
-if (submissionData.intake_version !== "arc-intake-v7") {
-  throw new Error("ARC1_INTAKE_INVALID: intake_version must exactly match arc-intake-v7");
+if (submissionData.intake_version !== "arc-intake-v8") {
+  throw new Error("ARC1_INTAKE_INVALID: intake_version must exactly match arc-intake-v8");
+}
+if (submissionData.offer_contract_id !== requiredOfferContractId) {
+  throw new Error("ARC1_INTAKE_INVALID: offer_contract_id must exactly match arc-fixed-five-page-offer-v1");
 }
 if (submissionData.budget_confirmed !== requiredBudgetConfirmation) {
   throw new Error("ARC1_INTAKE_INVALID: budget_confirmed does not match the current ARC intake disclosure");
@@ -390,7 +394,8 @@ const evidence = {
   form_name: expectedFormName,
   submission_id: trustedSubmissionId,
   received_at: trustedReceivedAt,
-  intake_version: "arc-intake-v7",
+  intake_version: "arc-intake-v8",
+  offer_contract_id: requiredOfferContractId,
   budget_confirmed: requiredBudgetConfirmation,
   terms_accepted: requiredTermsAcceptance,
   public_folder_prefix: publicFolderPrefix,

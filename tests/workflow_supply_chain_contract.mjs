@@ -8,7 +8,7 @@ const workflow = await readFile(path.join(projectRoot, ".github/workflows/previe
 const dependabot = await readFile(path.join(projectRoot, ".github/dependabot.yml"), "utf8");
 const packageJson = JSON.parse(await readFile(path.join(projectRoot, "package.json"), "utf8"));
 
-assert.match(workflow, /repository:\s*arcwebhq-cpu\/arc-site\s*\n\s*ref:\s*fcc21bd3175f19b6877bb82a34fa8a8fa0c2d744\s*\n\s*path:\s*\.arc-site-contract/,
+assert.match(workflow, /repository:\s*arcwebhq-cpu\/arc-site\s*\n\s*ref:\s*f7ee8e69962bba3010bb2c32c4bff4d22c1fb8cc\s*\n\s*path:\s*\.arc-site-contract/,
   "CI must execute against the reviewed ARC1 v2 site producer authority.");
 assert.match(workflow, /run:\s*npm ci --prefix \.arc-site-contract\s*$/m,
   "CI must install the pinned ARC site contract's exact dependencies before importing its runtime modules.");

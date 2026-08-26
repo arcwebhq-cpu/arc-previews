@@ -31,7 +31,8 @@ const safeSecret = (value, label) => {
   return secret;
 };
 const sha = value => /^[a-f0-9]{64}$/.test(clean(value));
-const BRIDGE_CONTRACT_SHA256 = "c4ab396bf04464629624dd19a37602755c8d429db0bf729b49bbfdfdba3ae20c";
+const watermarkMarker = /(?:^|[^a-z0-9])(?:123rf|alamy|bigstock|depositphotos|dreamstime|freepik|getty(?:images)?|istock(?:photo)?|shutterstock|stock[ _-]?preview|vecteezy|watermark(?:ed)?)(?:[^a-z0-9]|$)/i;
+const BRIDGE_CONTRACT_SHA256 = "da1bb4fc84f9871bdec1029d90ff21dfbdabd1e92fe14e838779f06578e426c2";
 const bearer = safeSecret(inputData.asset_retrieval_bearer, "retrieval bearer");
 const receiptSecret = safeSecret(inputData.asset_receipt_secret, "receipt");
 if (bearer === receiptSecret) throw new Error("ARC1_ASSET_INVALID: secrets must be distinct");
@@ -189,6 +190,9 @@ const rejectEmbeddedMetadata = (bytes, contentType) => {
       const length = bytes.readUInt32LE(offset + 4);
       const next = offset + 8 + length + (length & 1);
       if (next > bytes.length) throw new Error("ARC1_ASSET_INVALID: malformed WebP chunk");
+      if (type === "ANIM" || type === "ANMF" || (type === "VP8X" && length === 10 && (bytes[offset + 8] & 2))) {
+        throw new Error("ARC1_ASSET_INVALID: animated WebP is not allowed");
+      }
       if (forbidden.has(type) || !allowed.has(type)) throw new Error("ARC1_ASSET_INVALID: embedded WebP metadata is not allowed");
       offset = next;
     }
@@ -277,25 +281,23 @@ const validateImageStructure = (bytes, contentType, prefix) => {
   }
   if (contentType === "image/webp") {
     if (bytes.length < 25) invalid("incomplete WebP structure");
-    let offset = 12, first = true, extended = false, animated = false, primary = false;
+    let offset = 12, first = true, extended = false, primary = false;
     while (offset < bytes.length) {
       const type = bytes.subarray(offset, offset + 4).toString("ascii"), length = bytes.readUInt32LE(offset + 4);
       const start = offset + 8, next = start + length + (length & 1), data = bytes.subarray(start, start + length);
       if (next > bytes.length) invalid("malformed WebP chunk");
+      if (type === "ANIM" || type === "ANMF") invalid("animated WebP is not allowed");
       if (type === "VP8X") {
         if (!first || extended || length !== 10 || (data[0] & 193)) invalid("invalid WebP VP8X");
-        extended = true; animated = Boolean(data[0] & 2);
+        if (data[0] & 2) invalid("animated WebP is not allowed");
+        extended = true;
         dimension(1 + data.readUIntLE(4, 3), 1 + data.readUIntLE(7, 3));
       } else if (type === "VP8 ") {
-        if (primary || animated || length < 10 || data[3] !== 157 || data[4] !== 1 || data[5] !== 42) invalid("invalid WebP VP8");
+        if (primary || length < 10 || data[3] !== 157 || data[4] !== 1 || data[5] !== 42) invalid("invalid WebP VP8");
         dimension(data.readUInt16LE(6) & 0x3fff, data.readUInt16LE(8) & 0x3fff); primary = true;
       } else if (type === "VP8L") {
-        if (primary || animated || length < 5 || data[0] !== 47 || (data[4] & 224)) invalid("invalid WebP VP8L");
+        if (primary || length < 5 || data[0] !== 47 || (data[4] & 224)) invalid("invalid WebP VP8L");
         const bits = data.readUInt32LE(1); dimension(1 + (bits & 0x3fff), 1 + ((bits >>> 14) & 0x3fff)); primary = true;
-      } else if (type === "ANIM") {
-        if (!extended || !animated || length !== 6 || primary) invalid("invalid WebP animation");
-      } else if (type === "ANMF") {
-        if (!extended || !animated || length < 16) invalid("invalid WebP frame"); primary = true;
       } else if (type === "ALPH" && (!extended || primary || length < 1)) invalid("invalid WebP alpha");
       offset = next; first = false;
     }
@@ -355,6 +357,9 @@ for (const grant of grants) {
     grant.content_type === "image/jpeg" ? bytes.length >= 3 && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255 :
     bytes.length >= 12 && bytes.subarray(0, 4).toString() === "RIFF" && bytes.subarray(8, 12).toString() === "WEBP";
   if (!magic) throw new Error("ARC1_ASSET_INVALID: media signature");
+  if (watermarkMarker.test(bytes.toString("latin1"))) {
+    throw new Error("ARC1_ASSET_INVALID: deterministic stock-preview or watermark marker detected");
+  }
   rejectEmbeddedMetadata(bytes, grant.content_type);
   validateImageStructure(bytes, grant.content_type, "ARC1_ASSET_INVALID");
   payloads.push({ asset_id: grant.asset_id, kind: grant.kind, role: grant.role, content_type: grant.content_type,
@@ -387,6 +392,13 @@ return {
   asset_manifest: assetManifest,
   asset_manifest_sha256: assetManifestSha256,
   total_asset_bytes: totalBytes,
+  automated_watermark_screening_status: assetManifest.length ? "PASSED_DETERMINISTIC_INDICATORS_ONLY" : "NOT_REQUIRED",
+  automated_watermark_screening_version: "arc-deterministic-image-screen-v1",
+  visual_review_status: assetManifest.length ? "REQUIRED_BEFORE_PUBLICATION" : "NOT_REQUIRED",
+  source_host_screening_status: assetManifest.length ? "FIRST_PARTY_RETRIEVAL_ENDPOINT_VERIFIED" : "NOT_REQUIRED",
+  original_filename_screening_status: assetManifest.length ? "UNAVAILABLE_REQUIRES_VISUAL_REVIEW" : "NOT_REQUIRED",
+  pixel_level_watermark_certainty: false,
+  watermark_free_guarantee: false,
   asset_receipt_private: receiptRaw,
   asset_receipt_hmac_sha256: receiptHmac,
   asset_receipt_sha256: await sha256Text(receiptRaw)

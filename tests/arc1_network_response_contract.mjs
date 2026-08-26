@@ -60,7 +60,7 @@ const canonicalJson = value => {
 };
 const assetEndpoint = "https://arcweb.onl/internal/intake/arc1/assets/retrieve";
 const assetInput = (grants, timeout) => ({
-  bridge_contract_sha256: "c4ab396bf04464629624dd19a37602755c8d429db0bf729b49bbfdfdba3ae20c",
+  bridge_contract_sha256: "da1bb4fc84f9871bdec1029d90ff21dfbdabd1e92fe14e838779f06578e426c2",
   bridge_delivery_id: "a".repeat(64),
   bridge_evidence_sha256: "b".repeat(64),
   asset_retrieval_endpoint: assetEndpoint,

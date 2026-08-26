@@ -82,6 +82,37 @@ function publishedManifest(rendered) {
   };
 }
 
+function reviewedAssets(assets) {
+  return {
+    assets,
+    assetReview: {
+      version: "arc-customer-image-visual-review-v1",
+      scope: "human-visible-watermark-and-rights-review",
+      decision: "APPROVED_FOR_PUBLICATION",
+      reviewer_type: "AUTHORIZED_HUMAN",
+      reviewer_id_sha256: "a".repeat(64),
+      policy_version: "arc-image-provenance-policy-v1",
+      review_method: "HUMAN_VISUAL_INSPECTION_FULL_RESOLUTION",
+      review_validity: "CONTENT_DIGEST_BOUND_NO_EXPIRY",
+      automated_screening: "PASSED_DETERMINISTIC_INDICATORS_ONLY",
+      automated_screening_version: "arc-deterministic-image-screen-v1",
+      pixel_level_watermark_certainty: false,
+      watermark_free_guarantee: false,
+      reviewed_at: "2026-08-25T11:30:00.000Z",
+      rights_basis: "CUSTOMER_CONFIRMED_OWNERSHIP_OR_LICENSE",
+      filename_screening: "PASSED_OR_UNAVAILABLE_FROM_FIRST_PARTY_INTAKE",
+      source_host_screening: "HTTPS_SYNTAX_AND_STOCK_HOST_DENYLIST_SCREENED",
+      visible_watermark_screening: "NO_VISIBLE_WATERMARK_FOUND",
+      stock_preview_screening: "NO_VISIBLE_STOCK_PREVIEW_MARKER_FOUND",
+      assets: assets.map(asset => ({
+        content_type: asset.path.endsWith(".png") ? "image/png" : asset.path.endsWith(".jpg") ? "image/jpeg" : "image/webp",
+        path: asset.path,
+        sha256: asset.path.match(/assets\/([a-f0-9]{64})\./)[1]
+      })).sort((left, right) => left.path.localeCompare(right.path))
+    }
+  };
+}
+
 function renderScenario({ noForm = false, noAssets = false } = {}) {
   const baseContent = noForm ? {
     ...fixture.content,
@@ -101,12 +132,13 @@ function renderScenario({ noForm = false, noAssets = false } = {}) {
   };
   const rendered = renderV11Site(template, content, { trustedEventPrefix: fixture.id, heroImageUrl: sourceUrl });
   const asset = { path: `assets/${assetDigest}.jpg`, bytes: assetBytes, sourceUrl };
-  const finalized = finalizeV11ProductionSite(rendered, { assets: [asset] });
+  const finalized = finalizeV11ProductionSite(rendered, reviewedAssets([asset]));
   return { rendered, finalized, asset };
 }
 
 function buildScenario(options = {}) {
   const { rendered, finalized, asset } = renderScenario(options);
+  const scenarioProductTaxCode = options.productTaxCode || productTaxCode;
   const folder = rendered.folder;
   const previewPaths = V11_PRODUCTION_HTML_PATHS.map(path => `${folder}/${path}`);
   const assetGitSha = asset ? gitSha(asset.bytes) : "";
@@ -123,14 +155,18 @@ function buildScenario(options = {}) {
   const publication = canonicalJson({
     version: "arc1-public-asset-publication-receipt-v1",
     scope: "github-content-addressed-preview-assets",
-    bridge_contract_sha256: "c4ab396bf04464629624dd19a37602755c8d429db0bf729b49bbfdfdba3ae20c",
+    bridge_contract_sha256: "da1bb4fc84f9871bdec1029d90ff21dfbdabd1e92fe14e838779f06578e426c2",
     delivery_id: "3".repeat(64),
     bridge_evidence_sha256: "4".repeat(64),
     private_asset_receipt_sha256: "5".repeat(64),
     intake_evidence_sha256: "6".repeat(64),
     intake_state_digest_sha256: "7".repeat(64),
     asset_manifest_sha256: "8".repeat(64),
-    asset_permission: asset ? "Confirmed" : "",
+    asset_permission: asset ? "Confirmed rights and no visible watermark v1" : "",
+    asset_visual_review_authority_verified: Boolean(asset),
+    asset_visual_review_key_id: asset ? "01" : "",
+    asset_visual_review_reviewer_id_sha256: asset ? sha256("authorized-image-reviewer") : "",
+    asset_visual_review_sha256: asset ? sha256("digest-bound-asset-visual-review") : "",
     repository: "arcwebhq-cpu/arc-previews",
     base_branch: "main",
     preview_branch: `arc-preview/${folder.slice(-8)}`,
@@ -138,7 +174,7 @@ function buildScenario(options = {}) {
     public_folder_prefix: folder.slice(-8),
     preview_folder: folder,
     entries: publicationEntries,
-    status: asset ? "VERIFIED_CONTENT_ADDRESSED" : "NO_PUBLIC_UPLOADS"
+    status: asset ? "HUMAN_REVIEWED_CONTENT_ADDRESSED" : "NO_PUBLIC_UPLOADS"
   });
   const publicationSha256 = sha256(publication);
   const leadRouteMode = finalized.leadRouteMode;
@@ -184,7 +220,7 @@ function buildScenario(options = {}) {
     automatic_tax_enabled: true,
     customer_address_source: "stripe_checkout_customer_details.address",
     price_tax_behavior: "exclusive",
-    product_tax_code: productTaxCode,
+    product_tax_code: scenarioProductTaxCode,
     tax_contract_version: "arc-tax-v1",
     tax_registrations: taxRegistrations,
     tax_registrations_sha256: sha256(canonicalJson(taxRegistrations)),
@@ -248,8 +284,9 @@ function buildScenario(options = {}) {
     stripe_mode: "test",
     stripe_account_id_sha256: accountSha256,
     credential_key_id: "arc_test_rak_v4",
+    readback_contract: "product-tax-code-bound-v1",
     readback_sha256: sha256(canonicalJson({ id: paymentLinkId, active: true, livemode: false, url_sha256: sha256(paymentLinkUrl),
-      metadata, completed_sessions_limit: 1, price_id: priceId, product_id: productId }))
+      metadata, completed_sessions_limit: 1, price_id: priceId, product_id: productId, product_tax_code: scenarioProductTaxCode }))
   });
   const reverse = canonicalJson({
     version: "arc-private-checkout-link-reverse-v1",
@@ -267,11 +304,11 @@ function buildScenario(options = {}) {
     link_receipt_hmac_sha256: mac(checkoutSecret, `arc-private-checkout-link-receipt-signature-v1\ntest\n${linkReceipt}`)
   });
 
-  const product = { object: "product", id: productId, tax_code: productTaxCode };
+  const product = { object: "product", id: productId, tax_code: scenarioProductTaxCode };
   const price = { object: "price", id: priceId, livemode: false, type: "one_time", currency: "usd", unit_amount: 500000,
     custom_unit_amount: null, recurring: null, tax_behavior: "exclusive", product };
   const lineItem = { object: "item", quantity: 1, currency: "usd", amount_subtotal: 500000, amount_discount: 0,
-    amount_tax: 50000, amount_total: 550000, price };
+    amount_tax: 50000, amount_total: 550000, taxes: [{ amount: 50000, taxability_reason: "standard_rated" }], price };
   const adultField = [{ key: "adultpurchaserack", type: "dropdown", optional: false,
     label: { type: "custom", custom: "I am 18+ and authorized to buy for this business" },
     dropdown: { options: [{ label: "I confirm", value: "accepted" }], value: "accepted" } }];
@@ -369,6 +406,18 @@ async function runScenario(scenario, mutations) {
   return { output: await runResolverSource(scenario.inputs, mocked.fetch, Buffer), calls: mocked.calls, requests: mocked.requests };
 }
 
+function setSessionTax(scenario, { amount, reason, state }) {
+  scenario.session.total_details.amount_tax = amount;
+  scenario.session.amount_total = 500000 + amount;
+  scenario.session.line_items.data[0].amount_tax = amount;
+  scenario.session.line_items.data[0].amount_total = 500000 + amount;
+  scenario.session.line_items.data[0].taxes = reason == null ? [] : [{ amount, taxability_reason: reason }];
+  scenario.session.payment_intent.amount = 500000 + amount;
+  scenario.session.payment_intent.amount_received = 500000 + amount;
+  scenario.session.payment_intent.latest_charge.amount = 500000 + amount;
+  scenario.session.customer_details.address.state = state;
+}
+
 const scenario = buildScenario();
 const first = await runScenario(scenario);
 const second = await runScenario(scenario);
@@ -389,6 +438,8 @@ for (const request of first.requests.filter(item => item.url.startsWith("https:/
   assert.equal(request.options.headers["Stripe-Version"], "2026-07-29.dahlia");
   assert.match(request.options.headers.Authorization, /^Basic [A-Za-z0-9+/]+=*$/);
 }
+assert.ok(first.calls.some(url => url.includes("expand%5B%5D=line_items.data.taxes")),
+  "authoritative Session retrieval must expand line-item taxes for taxability_reason validation");
 for (const request of first.requests.filter(item => item.url.startsWith("https://api.github.com/"))) {
   assert.equal(request.options.method, "GET");
   assert.equal(request.options.headers.Authorization, "Bearer github-token");
@@ -407,15 +458,78 @@ assert.equal(first.output.payment_evidence_private, second.output.payment_eviden
 assert.equal(first.output.handoff_start_payload_private, second.output.handoff_start_payload_private);
 assert.equal(Object.hasOwn(first.output, "production_content_base64"), false, "Home-only production fallback must be removed");
 assert.equal(Object.hasOwn(first.output, "preview_file_path"), false, "singular preview fallback must be removed");
-assert.doesNotMatch(resolverSource, /(?:paidLinkProduct|product)\?\.tax_code/,
-  "paid replay must not read a mutable current Product tax code");
+assert.match(resolverSource, /paidLinkProductTaxCode/,
+  "paid resolution must read back the authenticated Payment Link Product tax code");
 
-const historicalTaxScenario = buildScenario();
-historicalTaxScenario.session.line_items.data[0].price.product.tax_code = "txcd_87654321";
-const historicalTaxReplay = await runScenario(historicalTaxScenario);
-assert.equal(historicalTaxReplay.output.status, "READY_FOR_CLAIMABLE_DEPLOY",
-  "a completed payment must replay from the signed pre-exposure tax snapshot after mutable Product tax-code drift");
-assert.equal(JSON.parse(historicalTaxReplay.output.payment_evidence_private).product_tax_code, productTaxCode);
+const sessionProductTaxDriftScenario = buildScenario();
+sessionProductTaxDriftScenario.session.line_items.data[0].price.product.tax_code = "txcd_87654321";
+await assert.rejects(runScenario(sessionProductTaxDriftScenario), /ARC_TAX_REVIEW_REQUIRED: current Checkout Product tax code differs/,
+  "current Product tax-code drift must stop automatic fulfillment and route to manual tax review");
+
+const paidLinkTaxDriftScenario = buildScenario();
+paidLinkTaxDriftScenario.paidLink.line_items.data[0].price = {
+  ...paidLinkTaxDriftScenario.paidLink.line_items.data[0].price,
+  product: { ...paidLinkTaxDriftScenario.paidLink.line_items.data[0].price.product, tax_code: "txcd_87654321" }
+};
+await assert.rejects(runScenario(paidLinkTaxDriftScenario), /ARC_TAX_REVIEW_REQUIRED: current Payment Link Product tax code differs/,
+  "current paid-Link Product tax-code drift must stop automatic fulfillment and route to manual tax review");
+
+const unexplainedZeroTaxScenario = buildScenario();
+setSessionTax(unexplainedZeroTaxScenario, { amount: 0, reason: null, state: "OR" });
+await assert.rejects(runScenario(unexplainedZeroTaxScenario), /line-item tax breakdown/,
+  "zero tax without expanded Stripe taxability evidence must fail closed");
+
+const unreconciledTaxScenario = buildScenario();
+unreconciledTaxScenario.session.line_items.data[0].taxes[0].amount -= 1;
+await assert.rejects(runScenario(unreconciledTaxScenario), /line-item tax breakdown/,
+  "expanded line-item taxes must exactly reconcile to Checkout total_details.amount_tax");
+
+const positiveReducedRateScenario = buildScenario();
+positiveReducedRateScenario.session.line_items.data[0].taxes[0].taxability_reason = "reduced_rated";
+await assert.rejects(runScenario(positiveReducedRateScenario), /line-item tax breakdown/,
+  "recognized non-standard positive-tax reasons remain fail-closed for review");
+
+const unregisteredNotCollectingScenario = buildScenario();
+setSessionTax(unregisteredNotCollectingScenario, { amount: 0, reason: "not_collecting", state: "OR" });
+await assert.rejects(runScenario(unregisteredNotCollectingScenario), /ARC_TAX_REVIEW_REQUIRED/,
+  "Stripe's ambiguous not_collecting reason must fail closed without making a legal conclusion about registration obligations");
+
+const unsupportedTaxScenario = buildScenario();
+setSessionTax(unsupportedTaxScenario, { amount: 0, reason: "not_supported", state: "OR" });
+await assert.rejects(runScenario(unsupportedTaxScenario), /unsupported-tax review/,
+  "Stripe's not_supported reason must fail closed for provider-support review");
+
+for (const reason of ["customer_exempt", "reverse_charge"]) {
+  const manualTaxEvidenceScenario = buildScenario();
+  setSessionTax(manualTaxEvidenceScenario, { amount: 0, reason, state: "OR" });
+  await assert.rejects(runScenario(manualTaxEvidenceScenario), /ARC_TAX_REVIEW_REQUIRED/,
+    `${reason} must stop automatic fulfillment until separately signed supporting tax evidence exists`);
+}
+
+const explainedZeroTaxScenario = buildScenario();
+setSessionTax(explainedZeroTaxScenario, { amount: 0, reason: "not_subject_to_tax", state: "OR" });
+assert.equal((await runScenario(explainedZeroTaxScenario)).output.status, "READY_FOR_CLAIMABLE_DEPLOY",
+  "a recognized non-ambiguous Stripe taxability reason may explain a zero-tax result");
+
+const exemptHolidayScenario = buildScenario();
+setSessionTax(exemptHolidayScenario, { amount: 0, reason: "product_exempt_holiday", state: "OR" });
+assert.equal((await runScenario(exemptHolidayScenario)).output.status, "READY_FOR_CLAIMABLE_DEPLOY",
+  "the official product_exempt_holiday reason is accepted as an explained zero-tax result");
+
+const futureUnknownReasonScenario = buildScenario();
+setSessionTax(futureUnknownReasonScenario, { amount: 0, reason: "future_unpinned_reason", state: "OR" });
+await assert.rejects(runScenario(futureUnknownReasonScenario), /line-item tax breakdown/,
+  "future taxability reasons must fail closed until the pinned API contract is reviewed");
+
+const advisorConfirmedNontaxableScenario = buildScenario({ productTaxCode: "txcd_00000000" });
+setSessionTax(advisorConfirmedNontaxableScenario, { amount: 0, reason: "not_collecting", state: "OR" });
+assert.equal((await runScenario(advisorConfirmedNontaxableScenario)).output.status, "READY_FOR_CLAIMABLE_DEPLOY",
+  "not_collecting is explained when both authenticated Products match the signed advisor-confirmed Stripe Nontaxable code");
+
+const registeredNotCollectingScenario = buildScenario();
+setSessionTax(registeredNotCollectingScenario, { amount: 0, reason: "not_collecting", state: "WA" });
+await assert.rejects(runScenario(registeredNotCollectingScenario), /applicable tax|ARC_TAX_REVIEW_REQUIRED/,
+  "not_collecting must fail closed when the destination is present in the signed active-registration snapshot");
 
 const artifactEvidence = JSON.parse(first.output.handoff_artifact_evidence_private);
 const paymentEvidence = JSON.parse(first.output.payment_evidence_private);
@@ -430,6 +544,11 @@ assert.equal(paymentEvidence.production_content_sha256, artifactEvidence.product
 assert.equal(paymentEvidence.artifact_manifest_sha256, artifactEvidence.artifact_manifest_sha256);
 assert.equal(paymentEvidence.bundle_fingerprint, artifactEvidence.bundle_fingerprint);
 assert.equal(paymentEvidence.handoff_artifact_evidence_sha256, sha256(first.output.handoff_artifact_evidence_private));
+assert.deepEqual(paymentEvidence.taxability_reasons, ["standard_rated"]);
+assert.equal(paymentEvidence.line_item_taxes_sha256,
+  sha256(canonicalJson([{ amount_minor_units: 50000, taxability_reason: "standard_rated" }])));
+assert.deepEqual(first.output.taxability_reasons, ["standard_rated"]);
+assert.equal(first.output.line_item_taxes_sha256, paymentEvidence.line_item_taxes_sha256);
 assert.equal(first.output.payment_evidence_hmac_sha256,
   mac(checkoutSecret, `arc2-payment-evidence-signature-v4\ntest\n${first.output.payment_evidence_private}`));
 assert.equal(first.output.handoff_artifact_evidence_hmac_sha256,
@@ -521,6 +640,11 @@ const oversizedPageTree = scenario.treeItems.map(item => item.path === `${scenar
 await assert.rejects(runScenario(scenario, { treeItems: oversizedPageTree }), /missing|exceeds|binding/i, "per-page source cap must fail closed");
 
 let preflightNetworkCalls = 0;
+assert.doesNotMatch(resolverSource, /\(\?:sk\|rk\)/, "ARC2 must never accept unrestricted Stripe secret keys");
+await assert.rejects(runResolverSource({ ...scenario.inputs, stripe_api_key: "sk_test_arc_unrestricted_secret_1234567890" }, async () => {
+  preflightNetworkCalls += 1;
+  throw new Error("unrestricted Stripe key must fail before network");
+}, Buffer), /restricted Stripe test API key/);
 const v3Reverse = canonicalJson({ ...JSON.parse(scenario.reverse), checkout_reference: `v3_${scenario.checkoutReference.slice(3)}` });
 await assert.rejects(runResolverSource({ ...scenario.inputs, private_link_reverse_state: v3Reverse }, async () => {
   preflightNetworkCalls += 1;
@@ -536,7 +660,21 @@ await assert.rejects(runResolverSource({ ...scenario.inputs, asset_publication_r
   preflightNetworkCalls += 1;
   throw new Error("invalid publication HMAC must fail before network");
 }, Buffer), /publication receipt HMAC/);
-assert.equal(preflightNetworkCalls, 0, "fresh v3, mixed/cross pairs, and unauthenticated publication receipts must fail before provider reads or mutations");
+const legacyLinkReceiptObject = JSON.parse(scenario.linkReceipt);
+delete legacyLinkReceiptObject.readback_contract;
+const legacyLinkReceipt = canonicalJson(legacyLinkReceiptObject);
+const legacyLinkReverse = canonicalJson({
+  ...JSON.parse(scenario.reverse),
+  link_receipt_private: legacyLinkReceipt,
+  link_receipt_sha256: sha256(legacyLinkReceipt),
+  link_receipt_hmac_sha256: mac(checkoutSecret, `arc-private-checkout-link-receipt-signature-v1\ntest\n${legacyLinkReceipt}`)
+});
+await assert.rejects(runResolverSource({ ...scenario.inputs, private_link_reverse_state: legacyLinkReverse }, async () => {
+  preflightNetworkCalls += 1;
+  throw new Error("legacy Link receipt must fail before network");
+}, Buffer), /private Link receipt fields|v4 private Link receipt binding/);
+assert.equal(preflightNetworkCalls, 0,
+  "unrestricted credentials, fresh v3, mixed/cross pairs, unauthenticated publication receipts, and legacy Link receipts must fail before provider reads or mutations");
 
 const noFormScenario = buildScenario({ noForm: true });
 const noForm = await runScenario(noFormScenario);

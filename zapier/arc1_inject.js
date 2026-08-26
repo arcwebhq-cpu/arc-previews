@@ -755,52 +755,39 @@ try{intakeEvidence=JSON.parse(evidenceRaw);}catch(error){throw new Error("ARC1_I
 if(!intakeEvidence||typeof intakeEvidence!=="object"||Array.isArray(intakeEvidence)||canonicalJson(intakeEvidence)!==evidenceRaw){
   throw new Error("ARC1_INTAKE_INVALID: intake evidence must be canonical plain JSON");
 }
-const legacyEvidenceFields=[
-  "version","scope","site_id","site_url","form_id","form_name","submission_id","received_at",
-  "intake_version","offer_contract_id","budget_confirmed","terms_accepted","public_folder_prefix","submission_data_sha256",
-  "asset_manifest","asset_manifest_sha256","total_asset_bytes","state_key","state_digest_sha256","claim_required_before_build","issued_at"
-];
+if(intakeEvidence.version!=="arc1-intake-evidence-v2"||intakeEvidence.scope!=="authoritative-first-party-function-intake"){
+  throw new Error("ARC1_LEGACY_INTAKE_DISABLED: clean cutover requires authority-bound Function evidence");
+}
 const functionEvidenceFields=[
   "version","scope","bridge_contract_sha256","site_id_sha256","source_schema","source_form_name","source_key_hmac_sha256",
   "delivery_id","submission_id","received_at","intake_version","offer_contract_id","budget_confirmed","terms_accepted","asset_permission","public_folder_prefix",
   "submission_data_sha256","asset_manifest","asset_manifest_sha256","total_asset_bytes","state_key","state_digest_sha256",
   "claim_required_before_build","issued_at"
 ];
-const isFunctionEvidence=intakeEvidence.version==="arc1-intake-evidence-v2";
-const expectedEvidenceFields=isFunctionEvidence?functionEvidenceFields:legacyEvidenceFields;
-if(JSON.stringify(Object.keys(intakeEvidence).sort())!==JSON.stringify(expectedEvidenceFields.slice().sort())){
+if(JSON.stringify(Object.keys(intakeEvidence).sort())!==JSON.stringify(functionEvidenceFields.slice().sort())){
   throw new Error("ARC1_INTAKE_INVALID: intake evidence fields");
 }
 const externalId=value=>/^(?:[a-f0-9]{24}|[a-f0-9]{40}|[a-f0-9]{8}-[a-f0-9]{4}-[1-5a-f][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})$/i.test(clean(value));
 const expectedSiteId=clean(inputData.expected_netlify_site_id).toLowerCase();
-const expectedFormId=clean(inputData.expected_netlify_form_id).toLowerCase();
-const expectedFormName=clean(inputData.expected_netlify_form_name);
-const bridgeContractSha256="c4ab396bf04464629624dd19a37602755c8d429db0bf729b49bbfdfdba3ae20c";
+const bridgeContractSha256="da1bb4fc84f9871bdec1029d90ff21dfbdabd1e92fe14e838779f06578e426c2";
 const requiredOfferContractId="arc-fixed-five-page-offer-v1";
 const requiredBudgetConfirmation="Yes, understands the finished ARC website is a fixed five-page website with a $5,000 subtotal plus applicable sales tax only after preview approval";
 const requiredTermsAcceptance="Accepted ARC preview terms, privacy policy, refund policy, and fixed five-page service scope dated 2026-08-25; separate adult checkout acceptance required";
 const receivedAt=clean(intakeEvidence.received_at),issuedAt=clean(intakeEvidence.issued_at);
 const receivedMs=Date.parse(receivedAt),issuedMs=Date.parse(issuedAt),nowMs=Date.now();
 const expectedSiteIdSha256=await sha256Text(expectedSiteId);
-const derivedPublicFolderPrefix=(await sha256Text((isFunctionEvidence?[
+const derivedPublicFolderPrefix=(await sha256Text([
   "arc-preview-folder-v2",bridgeContractSha256,expectedSiteIdSha256,clean(intakeEvidence.submission_id).toLowerCase(),receivedAt
-]:[
-  "arc-preview-folder-v1",expectedSiteId,expectedFormId,clean(intakeEvidence.submission_id).toLowerCase(),receivedAt
-]).join("\n"))).slice(0,8);
-const legacyIdentityValid=!isFunctionEvidence&&intakeEvidence.version==="arc1-intake-evidence-v1"&&
-  intakeEvidence.scope==="authoritative-netlify-intake-and-assets"&&externalId(expectedFormId)&&
-  clean(intakeEvidence.site_id).toLowerCase()===expectedSiteId&&clean(intakeEvidence.form_id).toLowerCase()===expectedFormId&&
-  clean(intakeEvidence.form_name)===expectedFormName&&externalId(intakeEvidence.submission_id)&&
-  clean(intakeEvidence.state_key)===`arc1-intake-claim-v1:${clean(intakeEvidence.state_digest_sha256)}`;
-const functionIdentityValid=isFunctionEvidence&&intakeEvidence.scope==="authoritative-first-party-function-intake"&&
+].join("\n"))).slice(0,8);
+const functionIdentityValid=intakeEvidence.scope==="authoritative-first-party-function-intake"&&
   intakeEvidence.bridge_contract_sha256===bridgeContractSha256&&clean(intakeEvidence.site_id_sha256)===expectedSiteIdSha256&&
   intakeEvidence.source_schema==="arc-intake-function-submission-v1"&&intakeEvidence.source_form_name==="arc-preview-function-v1"&&
   /^[a-f0-9]{64}$/.test(clean(intakeEvidence.source_key_hmac_sha256))&&/^[a-f0-9]{64}$/.test(clean(intakeEvidence.delivery_id))&&
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(clean(intakeEvidence.submission_id))&&
-  intakeEvidence.asset_permission===(intakeEvidence.asset_manifest?.length?"Confirmed":"")&&
+  intakeEvidence.asset_permission===(intakeEvidence.asset_manifest?.length?"Confirmed rights and no visible watermark v1":"")&&
   clean(intakeEvidence.state_key)===`arc1-intake-claim-v2:${clean(intakeEvidence.state_digest_sha256)}`;
 if(
-  !externalId(expectedSiteId)||(!legacyIdentityValid&&!functionIdentityValid)||intakeEvidence.intake_version!=="arc-intake-v8"||
+  !externalId(expectedSiteId)||!functionIdentityValid||intakeEvidence.intake_version!=="arc-intake-v8"||
   intakeEvidence.offer_contract_id!==requiredOfferContractId||
   intakeEvidence.budget_confirmed!==requiredBudgetConfirmation||intakeEvidence.terms_accepted!==requiredTermsAcceptance||
   clean(intakeEvidence.public_folder_prefix)!==derivedPublicFolderPrefix||
@@ -816,44 +803,34 @@ const evidenceSignature=clean(inputData.intake_evidence_hmac_sha256).toLowerCase
 if(!/^[a-f0-9]{64}$/.test(evidenceSignature))throw new Error("ARC1_INTAKE_INVALID: intake evidence HMAC");
 const evidenceKey=await globalThis.crypto.subtle.importKey("raw",evidenceEncoder.encode(intakeEvidenceSecret),{name:"HMAC",hash:"SHA-256"},false,["sign","verify"]);
 const evidenceSignatureBytes=Uint8Array.from(evidenceSignature.match(/../g),byte=>Number.parseInt(byte,16));
-const evidenceSignaturePrefix=isFunctionEvidence?"arc1-intake-evidence-signature-v2\n":"arc1-intake-evidence-signature-v1\n";
+const evidenceSignaturePrefix="arc1-intake-evidence-signature-v2\n";
 if(!(await globalThis.crypto.subtle.verify("HMAC",evidenceKey,evidenceSignatureBytes,evidenceEncoder.encode(`${evidenceSignaturePrefix}${evidenceRaw}`)))){
   throw new Error("ARC1_INTAKE_INVALID: intake evidence HMAC mismatch");
 }
 const intakeEvidenceSha256=await sha256Text(evidenceRaw);
 const evidenceManifest=Array.isArray(intakeEvidence.asset_manifest)?intakeEvidence.asset_manifest:null;
 if(!evidenceManifest||evidenceManifest.length>3||!Number.isSafeInteger(intakeEvidence.total_asset_bytes)||
-  intakeEvidence.total_asset_bytes<0||intakeEvidence.total_asset_bytes>(isFunctionEvidence?3020000:7864320)){
+  intakeEvidence.total_asset_bytes<0||intakeEvidence.total_asset_bytes>3020000){
   throw new Error("ARC1_ASSET_INVALID: signed asset manifest");
 }
 const assetInputs={logo_file:inputData.logo_file_url,hero_image_file:inputData.hero_image_url,supporting_image_file:inputData.supporting_image_url};
-const roleOrder=isFunctionEvidence?["hero_image_file","logo_file","supporting_image_file"]:["logo_file","hero_image_file","supporting_image_file"];
+const roleOrder=["hero_image_file","logo_file","supporting_image_file"];
 let manifestTotal=0,lastRoleIndex=-1;
 for(const entry of evidenceManifest){
-  if(isFunctionEvidence&&(entry?.kind==="FOLDER_LINK"||entry?.role==="asset_folder_link")){
+  if(entry?.kind==="FOLDER_LINK"||entry?.role==="asset_folder_link"){
     throw new Error("ARC1_ASSET_UNSUPPORTED: folder links require a private provider adapter");
   }
-  const expectedAssetFields=isFunctionEvidence?
-    ["asset_id","content_type","kind","retrieval_endpoint_sha256","role","sha256","size_bytes"]:
-    ["content_type","role","sha256","size_bytes","source_url_sha256"];
+  const expectedAssetFields=["asset_id","content_type","kind","retrieval_endpoint_sha256","role","sha256","size_bytes"];
   if(!entry||typeof entry!=="object"||Array.isArray(entry)||JSON.stringify(Object.keys(entry).sort())!==JSON.stringify(expectedAssetFields.sort())){
     throw new Error("ARC1_ASSET_INVALID: asset evidence fields");
   }
   const roleIndex=roleOrder.indexOf(clean(entry.role));
-  const exactUrl=String(assetInputs[entry.role]==null?"":assetInputs[entry.role]);
-  let legacyUrlValid=true;
-  if(!isFunctionEvidence){
-    let verifiedAssetUrl;
-    try{verifiedAssetUrl=new URL(exactUrl);}catch(error){legacyUrlValid=false;}
-    legacyUrlValid=legacyUrlValid&&exactUrl===exactUrl.trim()&&Boolean(exactUrl)&&await sha256Text(exactUrl)===clean(entry.source_url_sha256)&&
-      verifiedAssetUrl.protocol==="https:"&&!verifiedAssetUrl.username&&!verifiedAssetUrl.password&&!verifiedAssetUrl.port&&!verifiedAssetUrl.search&&!verifiedAssetUrl.hash;
-  }
-  const functionAssetValid=!isFunctionEvidence||(/^[a-f0-9]{64}$/.test(clean(entry.asset_id))&&
+  const functionAssetValid=/^[a-f0-9]{64}$/.test(clean(entry.asset_id))&&
     /^[a-f0-9]{64}$/.test(clean(entry.retrieval_endpoint_sha256))&&entry.kind==="UPLOAD"&&
-    new Set(["image/png","image/jpeg","image/webp"]).has(entry.content_type));
-  if(roleIndex<=lastRoleIndex||!legacyUrlValid||!functionAssetValid||
+    new Set(["image/png","image/jpeg","image/webp"]).has(entry.content_type);
+  if(roleIndex<=lastRoleIndex||!functionAssetValid||
     !/^[a-f0-9]{64}$/.test(clean(entry.sha256))||
-    !Number.isSafeInteger(entry.size_bytes)||entry.size_bytes<1||entry.size_bytes>(isFunctionEvidence?1250000:2621440)){
+    !Number.isSafeInteger(entry.size_bytes)||entry.size_bytes<1||entry.size_bytes>1250000){
     throw new Error("ARC1_ASSET_INVALID: asset URL/hash/type/size binding");
   }
   lastRoleIndex=roleIndex;manifestTotal+=entry.size_bytes;
@@ -869,7 +846,7 @@ if (!submissionPrefix || !businessSlug) throw new Error("ARC_PATH_INVALID: busin
 const previewFolder = `${businessSlug}-${submissionPrefix}`;
 let assetPublicationReceiptSha256="";
 let publicAssetUrlMap={};
-if(isFunctionEvidence){
+{
   const publicationSecret=clean(inputData.asset_publication_receipt_secret);
   if(evidenceEncoder.encode(publicationSecret).length<32||evidenceEncoder.encode(publicationSecret).length>256||publicationSecret===intakeEvidenceSecret){
     throw new Error("ARC1_ASSET_PUBLICATION_INVALID: publication receipt secret");
@@ -878,12 +855,16 @@ if(isFunctionEvidence){
   let publication;
   try{publication=JSON.parse(publicationRaw);}catch(error){throw new Error("ARC1_ASSET_PUBLICATION_INVALID: publication receipt JSON");}
   const publicationFields=["version","scope","bridge_contract_sha256","delivery_id","bridge_evidence_sha256","private_asset_receipt_sha256",
-    "intake_evidence_sha256","intake_state_digest_sha256","asset_manifest_sha256","asset_permission","repository","base_branch",
+    "intake_evidence_sha256","intake_state_digest_sha256","asset_manifest_sha256","asset_permission","asset_visual_review_authority_verified",
+    "asset_visual_review_key_id","asset_visual_review_reviewer_id_sha256","asset_visual_review_sha256","repository","base_branch",
     "preview_branch","pages_base_url","public_folder_prefix","preview_folder","entries","status"];
   const publicationEntryFields=["asset_id","content_type","git_blob_sha1","public_url","repository_path","role","sha256","size_bytes"];
   const pagesRoot="https://arcwebhq-cpu.github.io/arc-previews";
   const extensions={"image/png":"png","image/jpeg":"jpg","image/webp":"webp"};
-  if(!publication||typeof publication!=="object"||Array.isArray(publication)||canonicalJson(publication)!==publicationRaw||
+  if(!publication||typeof publication!=="object"||Array.isArray(publication)||!Array.isArray(publication.entries)){
+    throw new Error("ARC1_ASSET_PUBLICATION_INVALID: exact publication receipt binding");
+  }
+  if(canonicalJson(publication)!==publicationRaw||
     JSON.stringify(Object.keys(publication).sort())!==JSON.stringify(publicationFields.slice().sort())||
     publication.version!=="arc1-public-asset-publication-receipt-v1"||publication.scope!=="github-content-addressed-preview-assets"||
     publication.bridge_contract_sha256!==bridgeContractSha256||publication.delivery_id!==intakeEvidence.delivery_id||
@@ -891,13 +872,18 @@ if(isFunctionEvidence){
     publication.private_asset_receipt_sha256!==clean(inputData.ingress_claim_asset_receipt_sha256).toLowerCase()||
     !/^[a-f0-9]{64}$/.test(publication.private_asset_receipt_sha256)||publication.intake_evidence_sha256!==intakeEvidenceSha256||
     publication.intake_state_digest_sha256!==clean(intakeEvidence.state_digest_sha256)||publication.asset_manifest_sha256!==assetManifestSha256||
-    publication.asset_permission!==intakeEvidence.asset_permission||publication.repository!=="arcwebhq-cpu/arc-previews"||publication.base_branch!=="main"||
+    publication.asset_permission!==intakeEvidence.asset_permission||(publication.entries.length?
+      (publication.asset_visual_review_authority_verified!==true||!/^[a-f0-9]{2}$/.test(publication.asset_visual_review_key_id)||
+        !/^[a-f0-9]{64}$/.test(publication.asset_visual_review_reviewer_id_sha256)||!/^[a-f0-9]{64}$/.test(publication.asset_visual_review_sha256)):
+      (publication.asset_visual_review_authority_verified!==false||publication.asset_visual_review_key_id!==""||
+        publication.asset_visual_review_reviewer_id_sha256!==""||publication.asset_visual_review_sha256!==""))||
+    publication.repository!=="arcwebhq-cpu/arc-previews"||publication.base_branch!=="main"||
     publication.preview_branch!==`arc-preview/${intakeEvidence.public_folder_prefix}`||publication.pages_base_url!==pagesRoot||
-    publication.public_folder_prefix!==intakeEvidence.public_folder_prefix||publication.preview_folder!==previewFolder||!Array.isArray(publication.entries)){
+    publication.public_folder_prefix!==intakeEvidence.public_folder_prefix||publication.preview_folder!==previewFolder){
     throw new Error("ARC1_ASSET_PUBLICATION_INVALID: exact publication receipt binding");
   }
   const uploads=evidenceManifest.filter(entry=>entry.kind==="UPLOAD");
-  if(publication.entries.length!==uploads.length||publication.status!==(uploads.length?"VERIFIED_CONTENT_ADDRESSED":"NO_PUBLIC_UPLOADS")){
+  if(publication.entries.length!==uploads.length||publication.status!==(uploads.length?"HUMAN_REVIEWED_CONTENT_ADDRESSED":"NO_PUBLIC_UPLOADS")){
     throw new Error("ARC1_ASSET_PUBLICATION_INVALID: publication entry count/status");
   }
   for(let index=0;index<uploads.length;index+=1){
@@ -927,10 +913,6 @@ if(isFunctionEvidence){
   assetPublicationReceiptSha256=await sha256Text(publicationRaw);
   if(clean(inputData.asset_publication_receipt_sha256).toLowerCase()!==assetPublicationReceiptSha256){
     throw new Error("ARC1_ASSET_PUBLICATION_INVALID: publication receipt digest mismatch");
-  }
-}else{
-  for(const role of ["logo_file","hero_image_file","supporting_image_file"]){
-    if(Boolean(clean(assetInputs[role]))!==evidenceManifest.some(entry=>entry.role===role))throw new Error("ARC1_ASSET_INVALID: unverified or missing mapped asset URL");
   }
 }
 const claimCreatedAt=clean(inputData.intake_claim_created_at),claimCreatedMs=Date.parse(claimCreatedAt);
@@ -1120,7 +1102,7 @@ for(const entry of evidenceManifest){
 if(manifestTotal>3000000||evidenceManifest.some(entry=>entry.size_bytes>1250000)||new Set(productionAssetPathByUrl.values()).size!==evidenceManifest.length){
   throw new Error("ARC1_ASSET_INVALID: production-safe asset caps or content-addressed paths");
 }
-if(isFunctionEvidence&&canonicalJson(verifiedAssetUrlMap)!==canonicalJson(publicAssetUrlMap)){
+if(canonicalJson(verifiedAssetUrlMap)!==canonicalJson(publicAssetUrlMap)){
   throw new Error("ARC1_ASSET_PUBLICATION_INVALID: verified render asset map differs from publication receipt");
 }
 const receiptUrls=new Set(Object.values(verifiedAssetUrlMap));

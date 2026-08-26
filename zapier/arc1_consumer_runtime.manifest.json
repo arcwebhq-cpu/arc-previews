@@ -1,10 +1,10 @@
 {
   "schema": "arc-intake-arc1-consumer-runtime-manifest-v1",
   "bundle": "zapier/arc1_consumer_runtime.js",
-  "bundle_sha256": "7f7d3e8a2a3b0af1153d693e10947997039dc06ab17578171a53d9d00b741c37",
+  "bundle_sha256": "75acff3193ed89918f710b23a799ef925934b8aaa8c93ed9fc29aa3c83bb205d",
   "bundle_bytes": 64812,
   "sources": {
-    "scripts/arc1_consumer_contract.mjs": "48c0c28d30d7bad702beb8325c140a946c9dd2589d95075302a26a0369ab90c7",
+    "scripts/arc1_consumer_contract.mjs": "945567f479032e715e6af934efbabf7b6a2ed559c96ce2826b9c918b26f5e8d7",
     "scripts/arc1_consumer_runtime.mjs": "69a7f33eaa833161e0975d228798bd04fb6617b0c2bccddc24163bc2452b3850"
   },
   "execution": {

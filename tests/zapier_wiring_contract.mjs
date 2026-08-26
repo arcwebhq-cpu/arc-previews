@@ -16,6 +16,8 @@ import {
 const read = relative => readFile(new URL(relative, import.meta.url), "utf8");
 const contractText = await read("../zapier/wiring-contract.json");
 const contract = JSON.parse(contractText);
+const receiptCutoverText = await read("../zapier/receipt-v1-clean-cutover.json");
+const receiptCutoverSha256 = createHash("sha256").update(receiptCutoverText).digest("hex");
 const [
   arc1IntakeSource,
   arc1FunctionIntakeSource,
@@ -105,7 +107,12 @@ for (const name of [
     "ARC_INTAKE_ARC1_INPUTDATA_SECRET_COMPATIBILITY_ENABLED",
     "ARC_INTAKE_ARC1_LEGACY_MIGRATION_ENABLED", "ARC_INTAKE_ARC1_CONSUMER_TIMEOUT_MS",
     "ARC_INTAKE_ARC1_CONSUMER_PRIVATE_STATE_TIMEOUT_MS",
-    "ARC1_ASSET_RECEIPT_SECRET", "ARC1_ASSET_PUBLICATION_RECEIPT_SECRET"
+    "ARC1_ASSET_RECEIPT_SECRET", "ARC1_ASSET_PUBLICATION_RECEIPT_SECRET",
+    "ARC1_ASSET_VISUAL_REVIEW_SECRET", "ARC1_ASSET_VISUAL_REVIEW_KEY_ID",
+    "ARC1_AUTHORIZED_IMAGE_REVIEWER_ID_SHA256", "ARC1_ASSET_VISUAL_REVIEW_AUTHORITY_VERIFIED",
+    "ARC1_ASSET_VISUAL_REVIEW_PRIVATE_SECRET_BROKER_VERIFIED",
+    "ARC1_ASSET_VISUAL_REVIEW_PROVIDER_HISTORY_REDACTION_VERIFIED",
+    "ARC1_ASSET_VISUAL_REVIEW_SECRET_DELIVERY_MODE"
 ]) assert.ok(contract.secrets.required_runtime_names.includes(name), `${name} must remain runtime-only`);
 assert.equal(contract.secrets.customer_authorization.source, "netlify-official-deploy-and-claim");
 assert.equal(contract.secrets.customer_authorization.customer_authorization_code_expected, false);
@@ -264,7 +271,8 @@ assert.deepEqual(contract.arc1.function_intake_bridge, {
   source_schema: "arc-intake-function-submission-v1",
   bridge_schema: "arc-intake-arc1-bridge-evidence-v1",
   consumer_schema: "arc1-function-intake-adapter-v1",
-  bridge_contract_sha256: "c4ab396bf04464629624dd19a37602755c8d429db0bf729b49bbfdfdba3ae20c",
+  bridge_contract_version: "arc-intake-to-arc1-contract-v2",
+  bridge_contract_sha256: "da1bb4fc84f9871bdec1029d90ff21dfbdabd1e92fe14e838779f06578e426c2",
   folder_link_contract_clause: "folder-link-intake-rejected-until-private-provider-adapter",
   generator_projection: {
     mode: "positive-public-content-allowlist",
@@ -316,7 +324,7 @@ assert.deepEqual(contract.arc1.function_intake_bridge, {
     deployment_contract: "zapier/arc1-consumer-runtime-deployment.md",
     test: "tests/arc1_consumer_runtime_bundle_contract.mjs",
     cross_repository_test: "tests/arc1_site_packet_runtime_contract.mjs",
-    pinned_arc_site_commit: "02f2fc5b976f914bf2cd5705dc748e7c7186c242",
+    pinned_arc_site_commit: "fcc21bd3175f19b6877bb82a34fa8a8fa0c2d744",
     phases: ["CLAIM", "AUTHORIZE", "COMPLETE"],
     generated_bundle_reproducible: true,
     actual_bundle_executed_in_tests: true,
@@ -393,11 +401,53 @@ assert.deepEqual(contract.arc1.function_intake_bridge, {
     path: "{preview_folder}/assets/{sha256}.{validated_extension}",
     mode: "create-only-or-exact-tree-replay",
     signed_receipt_schema: "arc1-public-asset-publication-receipt-v1",
+    nonempty_receipt_status: "HUMAN_REVIEWED_CONTENT_ADDRESSED",
+    legacy_nonempty_receipt_status_accepted: false,
+    legacy_intake_evidence_accepted_by_injector: false,
+    asset_permission: "Confirmed rights and no visible watermark v1",
+    image_review_protocol: "arc1-asset-visual-review-v1",
+    automated_screening_protocol: "arc-deterministic-image-screen-v1",
+    animated_webp_accepted: false,
     injector_and_publisher_exact_receipt_required: true,
+    receipt_consumers_atomic_cutover_required: true,
+    clean_cutover_contract: "zapier/receipt-v1-clean-cutover.json",
+    clean_cutover_contract_sha256: receiptCutoverSha256,
     cleanup_action_allowed: false,
     git_history_retention_and_purge_verified: false,
     arc2_local_asset_migration_implemented: true,
     paid_site_preview_host_dependency_allowed: false
+  },
+  visual_review_authority: {
+    gate_input: "asset_visual_review_authority_verified",
+    gate_default: false,
+    gate_required_normalized_value: "true",
+    zapier_code_input_data_string_true_supported: true,
+    non_string_non_boolean_values_accepted: false,
+    gate_source: "verified-review-provider-output-only",
+    review_secret_input: "asset_visual_review_secret",
+    review_key_id_input: "asset_visual_review_key_id",
+    authorized_reviewer_id_input: "authorized_image_reviewer_id_sha256",
+    review_secret_mapping: "verified-private-integration-secret-store-only",
+    review_key_id_mapping: "verified-private-integration-secret-store-only",
+    authorized_reviewer_id_mapping: "verified-private-integration-secret-store-only",
+    secret_delivery_mode_input: "asset_visual_review_secret_delivery_mode",
+    secret_delivery_mode_required: "PRIVATE_INTEGRATION_REDACTED",
+    private_secret_broker_gate_input: "asset_visual_review_private_secret_broker_verified",
+    provider_history_redaction_gate_input: "asset_visual_review_provider_history_redaction_verified",
+    ordinary_input_data_mapping_allowed: false,
+    code_by_zapier_input_data_secret_custody_allowed: false,
+    private_integration_or_secret_broker_required: true,
+    private_integration_or_secret_broker_verified: false,
+    provider_history_redaction_verified: false,
+    secret_store_mappings_implemented: false,
+    review_key_id_bound_into_signature: true,
+    review_key_id_bound_into_receipt: true,
+    reviewer_id_must_match_signed_review: true,
+    provider_authority_verified: false,
+    provider_authority_enabled: false,
+    review_secret_and_key_custody_verified: false,
+    operator_configuration_cryptographically_proves_human_review: false,
+    activation_allowed: false
   },
   external_producer_consumer_wiring_proof_required: true,
   downstream_bound_asset_url_publication_implemented: true,
@@ -414,11 +464,34 @@ assert.deepEqual(contract.arc1.function_intake_bridge, {
     "catch-raw-hook-exact-200-and-header-envelope-mapping-behind-adapter",
     "signed-downstream-completion-receipt-and-ambiguous-hook-retry-reconciliation",
     "exact-signed-acknowledgement-round-trip-proof", "content-addressed-private-asset-retrieval-wiring-proof",
-    "content-addressed-public-asset-publication-wiring-proof", "arc1-publication-receipt-to-arc2-private-input-mapping-proof",
+    "content-addressed-public-asset-publication-wiring-proof",
+    "verified-image-review-provider-authority-and-secret-key-custody-proof",
+    "secret-store-only-image-review-key-id-and-reviewer-id-mapping-proof",
+    "image-review-private-secret-broker-and-redacted-provider-history-proof",
+    "arc1-publication-receipt-to-arc2-private-input-mapping-proof",
     "adult-reviewed-git-history-asset-retention-and-purge-protocol",
     "failure-alert-recipient-proof", "end-to-end-disabled-synthetic-test"
   ]
 });
+assert.deepEqual(contract.arc1.receipt_v1_clean_cutover, {
+  contract: "zapier/receipt-v1-clean-cutover.json",
+  contract_sha256: receiptCutoverSha256,
+  document: "zapier/receipt-v1-clean-cutover.md",
+  asset_publication_receipt_included: true,
+  private_payment_link_receipt_included: true,
+  arc2_payment_evidence_v4_included: true,
+  bridge_contract_version: "arc-intake-to-arc1-contract-v2",
+  bridge_contract_sha256: "da1bb4fc84f9871bdec1029d90ff21dfbdabd1e92fe14e838779f06578e426c2",
+  legacy_receipts_accepted: false,
+  producer_consumer_atomic_deploy_required: true,
+  customer_or_live_receipt_inventory_at_freeze: 0,
+  pending_function_intake_evidence_or_submissions_at_freeze: 0,
+  inventory_is_cryptographic_proof: false,
+  external_provider_zero_state_verified: false,
+  activation_allowed: false
+});
+assert.equal(contract.arc1.function_intake_bridge.public_asset_publication.clean_cutover_contract_sha256,
+  receiptCutoverSha256, "both wiring cutover pins must equal the actual frozen contract bytes");
 assert.match(arc1FunctionIntakeSource, /arc-intake-arc1-bridge-evidence-v1/);
 assert.match(arc1FunctionIntakeSource, /arc-intake-private-asset-grant-v1/);
 assert.match(arc1FunctionAckSource, /exact durable ingress claim required/);
@@ -443,6 +516,9 @@ assert.equal(Object.values(arc1ConsumerManifest.activation_flags).every(value =>
 assert.match(arc1ConsumerDeploymentContract, /activation prohibited; provider capabilities unverified/i);
 assert.match(arc1ConsumerDeploymentContract, /authoritative provider write and readback is not durability/i);
 assert.match(arc1FunctionAssetPublisherSource, /arc1-public-asset-publication-receipt-v1/);
+assert.match(arc1FunctionAssetPublisherSource, /configuredTrue\(inputData\.asset_visual_review_authority_verified\)/);
+assert.match(arc1FunctionAssetPublisherSource, /asset_visual_review_private_secret_broker_verified/);
+assert.match(arc1FunctionAssetPublisherSource, /asset_visual_review_provider_history_redaction_verified/);
 assert.doesNotMatch(arc1FunctionAssetPublisherSource, /console\.(?:log|error|warn)/);
 assert.equal(contract.arc1.authoritative_intake.client_submission_id_authoritative, false);
 assert.equal(contract.arc1.asset_validation.signed_intake_evidence_required_by_injector_and_publisher, true);
@@ -462,6 +538,8 @@ assert.deepEqual(contract.arc1.asset_validation, {
     png: ["eXIf", "tEXt", "zTXt", "iTXt", "iCCP", "tIME", "unrecognized-ancillary-chunks"],
     webp: ["EXIF", "XMP", "ICCP", "unrecognized-chunks"]
   },
+  animated_webp_allowed: false,
+  accepted_images_have_exactly_one_visual_frame: true,
   maximum_file_bytes: 2621440,
   maximum_total_bytes: 7864320,
   function_bridge_maximum_file_bytes: 1250000,
@@ -541,7 +619,7 @@ assert.deepEqual(contract.arc2.trigger.events, [
 ]);
 assert.equal(contract.arc2.trigger.async_payment_failed_alert_event, "checkout.session.async_payment_failed");
 assert.equal(contract.arc2.trigger.durable_fulfillment_claim_before_authenticated_paid_validation_allowed, false);
-assert.equal(contract.arc2.authoritative_session_retrieval.resource, "/v1/checkout/sessions/{CHECKOUT_SESSION_ID}?expand[]=line_items.data.price.product&expand[]=payment_intent.latest_charge");
+assert.equal(contract.arc2.authoritative_session_retrieval.resource, "/v1/checkout/sessions/{CHECKOUT_SESSION_ID}?expand[]=line_items.data.price.product&expand[]=line_items.data.taxes&expand[]=payment_intent.latest_charge");
 assert.equal(contract.arc2.authoritative_session_retrieval.stripe_api_version, "2026-07-29.dahlia");
 assert.equal(contract.arc2.expected_payment_link_id, null);
 assert.equal(contract.arc2.expected_price_id, null);
@@ -549,7 +627,17 @@ assert.equal(contract.arc2.required_session_contract.amount_subtotal, 500000);
 assert.equal(contract.arc2.required_session_contract.amount_tax_minimum, 0);
 assert.equal(contract.arc2.required_session_contract.amount_total_rule, "amount_subtotal + amount_tax");
 assert.equal(contract.arc2.required_session_contract.line_item_total_rule, "amount_subtotal + amount_tax");
-assert.equal(contract.arc2.required_session_contract.line_item_tax_rule, "equals Checkout Session total_details.amount_tax");
+assert.equal(contract.arc2.required_session_contract.line_item_tax_rule, "expanded taxes sum equals Checkout Session total_details.amount_tax");
+assert.equal(contract.arc2.required_session_contract.line_item_taxes_expand_required, true);
+assert.equal(contract.arc2.required_session_contract.zero_tax_requires_known_taxability_reason, true);
+assert.deepEqual(contract.arc2.required_session_contract.known_taxability_reasons,
+  ["customer_exempt", "not_collecting", "not_subject_to_tax", "not_supported", "portion_product_exempt", "portion_reduced_rated", "portion_standard_rated",
+    "product_exempt", "product_exempt_holiday", "proportionally_rated", "reduced_rated", "reverse_charge", "standard_rated", "taxable_basis_reduced", "zero_rated"]);
+assert.match(contract.arc2.required_session_contract.not_collecting_rule, /without making a legal taxability conclusion/);
+assert.match(contract.arc2.required_session_contract.customer_exempt_and_reverse_charge_rule, /ARC_TAX_REVIEW_REQUIRED/);
+assert.match(contract.arc2.required_session_contract.not_supported_rule, /provider-support review/);
+assert.equal(contract.arc2.required_session_contract.positive_tax_rule,
+  "positive tax entries must use standard_rated; other recognized rated reasons require review");
 assert.equal(contract.arc2.required_session_contract.livemode_rule, "must equal ARC_STRIPE_LIVE_MODE_ENABLED");
 assert.deepEqual(contract.arc2.required_session_contract.id_pattern_by_mode, {
   test: "^cs_test_[A-Za-z0-9_]+$",
@@ -558,8 +646,10 @@ assert.deepEqual(contract.arc2.required_session_contract.id_pattern_by_mode, {
 assert.equal(contract.arc2.required_session_contract.automatic_tax_status, "complete");
 assert.equal(contract.arc2.required_session_contract.customer_address_status, "verified");
 assert.equal(contract.arc2.required_session_contract.tax_registration_status, "historical_precheckout_snapshot");
-assert.equal(contract.arc2.required_session_contract.product_tax_code_authority, "signed-private-policy historical pre-exposure snapshot");
-assert.equal(contract.arc2.required_session_contract.mutable_current_product_tax_code_read_during_paid_replay_allowed, false);
+assert.equal(contract.arc2.required_session_contract.product_tax_code_authority,
+  "signed creation-time policy and receipt plus current authenticated Product observations on paid Link and Checkout line item");
+assert.equal(contract.arc2.required_session_contract.authenticated_product_tax_code_readback_required, true);
+assert.equal(contract.arc2.required_session_contract.product_tax_code_drift_allowed, false);
 assert.equal(contract.arc2.required_session_contract.exactly_one_line_item_required, true);
 assert.equal(contract.arc2.required_session_contract.checkout_reference_must_bind_immutable_approval_content_sha256, true);
 assert.equal(contract.arc2.required_session_contract.checkout_reference_version, "arc-checkout-reference-v4");
@@ -803,6 +893,8 @@ assert.equal(contract.arc2.final_delivery_email.automation_enabled, false);
 assert.equal(contract.arc2.final_delivery_email.activation_allowed, false);
 assert.equal(contract.arc2.payment_evidence_gate.evidence_version, "arc2-payment-evidence-v4");
 assert.equal(contract.arc2.payment_evidence_gate.evidence_scope, "authoritative-stripe-checkout-session");
+assert.equal(contract.arc2.payment_evidence_gate.taxability_reasons_retained_in_signed_evidence, true);
+assert.equal(contract.arc2.payment_evidence_gate.line_item_taxes_sha256_retained_in_signed_evidence, true);
 assert.equal(contract.arc2.payment_evidence_gate.signature_prefix, "arc2-payment-evidence-signature-v4\\n{mode}\\n");
 assert.match(emailGateSource, /FINAL_DEPLOY_READY/);
 assert.match(emailGateSource, /netlify-deploy-and-claim-final-deploy/);

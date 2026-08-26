@@ -92,11 +92,19 @@ const paymentFields = [
   "payment_link_id", "payment_intent_id", "payment_status", "payer_email_sha256", "preview_folder", "preview_source_commit_sha",
   "preview_source_repository", "preview_source_tag_sha256", "price_id", "price_tax_behavior", "product_tax_code", "product_id",
   "production_content_sha256", "quantity", "scope", "status", "charge_id", "stripe_account_id_sha256", "subtotal_amount_minor_units",
-  "tax_amount_minor_units", "tax_contract_version", "tax_registrations_sha256", "tax_registration_status", "terms_of_service_consent", "terms_version", "version"
+  "tax_amount_minor_units", "taxability_reasons", "line_item_taxes_sha256", "tax_contract_version", "tax_registrations_sha256", "tax_registration_status", "terms_of_service_consent", "terms_version", "version"
 ];
 const hexFields = ["approval_content_sha256", "artifact_manifest_sha256", "asset_publication_receipt_sha256", "bundle_fingerprint", "checkout_config_snapshot_sha256",
   "client_reference_id_sha256", "claim_recipient_email_sha256", "handoff_artifact_evidence_sha256", "payer_email_sha256", "preview_source_tag_sha256",
-  "production_content_sha256", "stripe_account_id_sha256", "tax_registrations_sha256", "customer_address_sha256"];
+  "production_content_sha256", "stripe_account_id_sha256", "tax_registrations_sha256", "customer_address_sha256", "line_item_taxes_sha256"];
+const knownTaxabilityReasons = new Set(["customer_exempt", "not_collecting", "not_subject_to_tax", "not_supported", "portion_product_exempt", "portion_reduced_rated",
+  "portion_standard_rated", "product_exempt", "product_exempt_holiday", "proportionally_rated", "reduced_rated", "reverse_charge", "standard_rated",
+  "taxable_basis_reduced", "zero_rated"]);
+const ratedTaxabilityReasons = new Set(["portion_reduced_rated", "portion_standard_rated", "proportionally_rated", "reduced_rated", "standard_rated", "taxable_basis_reduced"]);
+const taxabilityReasonsValid = Array.isArray(payment.taxability_reasons) && payment.taxability_reasons.length >= 1 &&
+  payment.taxability_reasons.length <= knownTaxabilityReasons.size &&
+  payment.taxability_reasons.every(reason => typeof reason === "string" && knownTaxabilityReasons.has(reason)) &&
+  JSON.stringify(payment.taxability_reasons) === JSON.stringify([...new Set(payment.taxability_reasons)].sort());
 if (JSON.stringify(Object.keys(payment).sort()) !== JSON.stringify(paymentFields.slice().sort()) || payment.version !== "arc2-payment-evidence-v4" ||
     payment.scope !== "authoritative-stripe-checkout-session" || !new RegExp(`^cs_${stripeMode}_[A-Za-z0-9_]+$`).test(payment.checkout_session_id) ||
     payment.client_reference_id !== checkoutReference || payment.client_reference_id_sha256 !== await sha256Hex(checkoutReference) ||
@@ -106,6 +114,10 @@ if (JSON.stringify(Object.keys(payment).sort()) !== JSON.stringify(paymentFields
     payment.status !== "complete" || payment.payment_status !== "paid" || payment.currency !== "usd" || payment.subtotal_amount_minor_units !== 500000 ||
     !Number.isSafeInteger(payment.tax_amount_minor_units) || payment.tax_amount_minor_units < 0 || payment.tax_amount_minor_units > 500000 ||
     !Number.isSafeInteger(payment.amount_total_minor_units) || payment.amount_total_minor_units !== 500000 + payment.tax_amount_minor_units || payment.quantity !== 1 ||
+    !taxabilityReasonsValid || (payment.tax_amount_minor_units > 0 && !payment.taxability_reasons.includes("standard_rated")) ||
+    (payment.tax_amount_minor_units === 0 && (payment.taxability_reasons.some(reason => ratedTaxabilityReasons.has(reason)) ||
+      payment.taxability_reasons.some(reason => ["customer_exempt", "not_supported", "reverse_charge"].includes(reason)) ||
+      (payment.taxability_reasons.includes("not_collecting") && payment.product_tax_code !== "txcd_00000000"))) ||
     !/^plink_[A-Za-z0-9]+$/.test(payment.payment_link_id) || !/^pi_[A-Za-z0-9]+$/.test(payment.payment_intent_id) || !/^ch_[A-Za-z0-9]+$/.test(payment.charge_id) ||
     !/^price_[A-Za-z0-9]+$/.test(payment.price_id) || !/^prod_[A-Za-z0-9]+$/.test(payment.product_id) || !/^txcd_[0-9]{8}$/.test(payment.product_tax_code) ||
     payment.price_tax_behavior !== "exclusive" || payment.automatic_tax_enabled !== true || payment.automatic_tax_status !== "complete" ||

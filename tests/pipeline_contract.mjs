@@ -54,8 +54,10 @@ assert.match(resolver,/payer_email_sha256/);
 assert.match(resolver,/payment_intent_id/);
 assert.match(resolver,/charge_id/);
 assert.match(resolver,/tax_registration_status:\s*"historical_precheckout_snapshot"/);
-assert.doesNotMatch(resolver,/paidLinkProduct\?\.tax_code/,
-  "Paid replay must not depend on the Product's mutable current tax code after pre-exposure validation.");
+assert.match(resolver,/paidLinkProductTaxCode/,
+  "Paid resolution must authenticate the Product tax code used by the paid Link.");
+assert.match(resolver,/line_items\.data\.taxes/,
+  "Paid resolution must expand Stripe's line-item taxability evidence.");
 assert.doesNotMatch(siteCore,/ARC_EXPECTED_(?:PAYMENT_LINK_ID|PRICE_ID|PRODUCT_TAX_CODE)/);
 assert.match(siteCore,/claim_recipient_email_sha256/);
 assert.match(siteCore,/historical_precheckout_snapshot/);

@@ -231,6 +231,21 @@ created=await runStep({...base,phase:"CREATE",private_checkout_provider_mutation
 assert.equal(created.status,"PRIVATE_CHECKOUT_LINK_VALIDATED");
 assert.equal(JSON.parse(created.private_checkout_intent_state).status,"LINK_CREATED");
 assert.equal(created.link_reverse_state_write_required,false);
+assert.equal(JSON.parse(created.link_receipt_private).readback_contract,"product-tax-code-bound-v1");
+assert.equal(JSON.parse(created.link_receipt_private).readback_sha256,sha(canonical({id:linkBase.id,active:true,livemode:false,url_sha256:sha(linkBase.url),metadata,
+  completed_sessions_limit:1,price_id:stableConfiguration.price_id,product_id:stableConfiguration.product_id,product_tax_code:stableConfiguration.product_tax_code})),
+"the authenticated Product tax code must be bound into the private Link readback digest");
+const oldReceiptState=JSON.parse(created.private_checkout_intent_state),oldReceipt=JSON.parse(oldReceiptState.link_receipt_private);
+delete oldReceipt.readback_contract;
+const oldReceiptRaw=canonical(oldReceipt),oldReceiptSha=sha(oldReceiptRaw),oldReceiptHmac=mac(secret,`arc-private-checkout-link-receipt-signature-v1\n${mode}\n${oldReceiptRaw}`);
+oldReceiptState.link_receipt_private=oldReceiptRaw;oldReceiptState.link_receipt_sha256=oldReceiptSha;oldReceiptState.link_receipt_hmac_sha256=oldReceiptHmac;
+const oldReverse=JSON.parse(oldReceiptState.reverse_mapping_private);
+oldReverse.link_receipt_private=oldReceiptRaw;oldReverse.link_receipt_sha256=oldReceiptSha;oldReverse.link_receipt_hmac_sha256=oldReceiptHmac;
+oldReceiptState.reverse_mapping_private=canonical(oldReverse);oldReceiptState.reverse_mapping_sha256=sha(oldReceiptState.reverse_mapping_private);
+let oldReceiptNetworkCalls=0;
+await assert.rejects(runStep({...base,phase:"PERSIST_REVERSE",private_checkout_state_commit_enabled:"true",
+  private_checkout_intent_state:canonical(oldReceiptState)},()=>{oldReceiptNetworkCalls+=1;throw new Error("network");},Buffer),/embedded Link receipt fields/);
+assert.equal(oldReceiptNetworkCalls,0,"pre-cutover private Link receipt v1 semantics must fail before provider access");
 const badReadback={...readback,after_completion:{type:"redirect",redirect:{url:"https://attacker.invalid/"}}};
 readback=badReadback;
 await assert.rejects(runStep({...base,phase:"CREATE",private_checkout_provider_mutation_enabled:"true",private_checkout_intent_state:authorized.private_checkout_intent_state},providerFetch,Buffer),/Payment Link readback/);

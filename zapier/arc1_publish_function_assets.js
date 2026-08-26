@@ -3,6 +3,7 @@
 // preview branch and signs an exact URL map. Folder links fail closed before
 // any durable claim is consumed or any Git provider request can occur.
 const clean = value => String(value == null ? "" : value).trim();
+const configuredTrue = value => value === true || (typeof value === "string" && value.trim().toLowerCase() === "true");
 if (!globalThis.crypto?.subtle || typeof TextEncoder !== "function" || typeof Buffer !== "function") {
   throw new Error("ARC1_ASSET_PUBLICATION_INVALID: cryptographic runtime unavailable");
 }
@@ -41,7 +42,7 @@ const verifyHmac = async (key, signature, value) => {
 };
 const sha = value => /^[a-f0-9]{64}$/.test(clean(value));
 const gitSha = value => /^[a-f0-9]{40}$/.test(clean(value));
-const BRIDGE_CONTRACT_SHA256 = "c4ab396bf04464629624dd19a37602755c8d429db0bf729b49bbfdfdba3ae20c";
+const BRIDGE_CONTRACT_SHA256 = "da1bb4fc84f9871bdec1029d90ff21dfbdabd1e92fe14e838779f06578e426c2";
 const OWNER = "arcwebhq-cpu";
 const REPOSITORY = "arc-previews";
 const BASE_BRANCH = "main";
@@ -51,6 +52,7 @@ const CURRENT_BUDGET = "Yes, understands the finished ARC website is a fixed fiv
 const CURRENT_TERMS = "Accepted ARC preview terms, privacy policy, refund policy, and fixed five-page service scope dated 2026-08-25; separate adult checkout acceptance required";
 const EXTENSION = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" };
 const roleOrder = ["hero_image_file", "logo_file", "supporting_image_file"];
+const watermarkMarker = /(?:^|[^a-z0-9])(?:123rf|alamy|bigstock|depositphotos|dreamstime|freepik|getty(?:images)?|istock(?:photo)?|shutterstock|stock[ _-]?preview|vecteezy|watermark(?:ed)?)(?:[^a-z0-9]|$)/i;
 const slugify = value => clean(value).toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
   .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 
@@ -99,11 +101,31 @@ if (clean(inputData.intake_evidence_sha256).toLowerCase() !== intakeEvidenceSha2
 }
 if (!Array.isArray(evidence.asset_manifest) || evidence.asset_manifest.length > 3 ||
     await sha256Text(canonicalJson(evidence.asset_manifest)) !== evidence.asset_manifest_sha256 ||
-    (evidence.asset_manifest.length > 0 && evidence.asset_permission !== "Confirmed")) {
+    (evidence.asset_manifest.length > 0 && evidence.asset_permission !== "Confirmed rights and no visible watermark v1")) {
   throw new Error("ARC1_ASSET_PUBLICATION_INVALID: signed asset permission or manifest");
 }
 if (evidence.asset_manifest.some(manifest => manifest?.kind === "FOLDER_LINK" || manifest?.role === "asset_folder_link")) {
   throw new Error("ARC1_ASSET_PUBLICATION_UNSUPPORTED: folder links require a private provider adapter");
+}
+let assetVisualReviewAuthorityVerified = false;
+let assetVisualReviewKeyId = "";
+let assetVisualReviewReviewerIdSha256 = "";
+if (evidence.asset_manifest.length) {
+  if (!configuredTrue(inputData.asset_visual_review_authority_verified)) {
+    throw new Error("ARC1_ASSET_REVIEW_AUTHORITY_REQUIRED: normalized default-off provider authority gate must be true");
+  }
+  if (!configuredTrue(inputData.asset_visual_review_private_secret_broker_verified) ||
+      !configuredTrue(inputData.asset_visual_review_provider_history_redaction_verified) ||
+      clean(inputData.asset_visual_review_secret_delivery_mode) !== "PRIVATE_INTEGRATION_REDACTED") {
+    throw new Error("ARC1_ASSET_REVIEW_AUTHORITY_REQUIRED: verified private secret broker and redacted provider history are required");
+  }
+  assetVisualReviewKeyId = String(inputData.asset_visual_review_key_id == null ? "" : inputData.asset_visual_review_key_id);
+  assetVisualReviewReviewerIdSha256 = String(inputData.authorized_image_reviewer_id_sha256 == null ? "" :
+    inputData.authorized_image_reviewer_id_sha256);
+  if (!/^[a-f0-9]{2}$/.test(assetVisualReviewKeyId) || !/^[a-f0-9]{64}$/.test(assetVisualReviewReviewerIdSha256)) {
+    throw new Error("ARC1_ASSET_REVIEW_AUTHORITY_REQUIRED: exact protected review key and reviewer authority are required");
+  }
+  assetVisualReviewAuthorityVerified = true;
 }
 let generated;
 try {
@@ -169,12 +191,66 @@ if (clean(inputData.ingress_claim_status).toLowerCase() !== "claimed" ||
     ingressClaimCreatedMs < issuedMs - 5 * 60 * 1000 || ingressClaimCreatedMs > nowMs + 5 * 60 * 1000) {
   throw new Error("ARC1_ASSET_PUBLICATION_BLOCKED: exact create-only ingress claim required");
 }
+if (clean(inputData.ingress_claim_mode).toUpperCase() === "CREATED" &&
+    (receivedMs < nowMs - 24 * 60 * 60 * 1000 || issuedMs < nowMs - 24 * 60 * 60 * 1000 ||
+      claimCreatedMs < nowMs - 24 * 60 * 60 * 1000 || ingressClaimCreatedMs < nowMs - 24 * 60 * 60 * 1000)) {
+  throw new Error("ARC1_ASSET_PUBLICATION_BLOCKED: stale evidence cannot create a public branch");
+}
 
 let payloads;
 const payloadsRaw = clean(inputData.asset_payloads_private_json);
 try { payloads = JSON.parse(payloadsRaw); } catch { throw new Error("ARC1_ASSET_PUBLICATION_INVALID: private payload JSON"); }
 if (!Array.isArray(payloads) || payloads.length !== evidence.asset_manifest.length || canonicalJson(payloads) !== payloadsRaw) {
   throw new Error("ARC1_ASSET_PUBLICATION_INVALID: private payload set");
+}
+let assetVisualReviewRaw = "";
+let assetVisualReviewSha256 = "";
+if (evidence.asset_manifest.length) {
+  const reviewSecret = safeSecret(inputData.asset_visual_review_secret, "visual review");
+  if (new Set([intakeSecret, assetReceiptSecret, publicationSecret, reviewSecret]).size !== 4) {
+    throw new Error("ARC1_ASSET_PUBLICATION_INVALID: visual review secret must be distinct");
+  }
+  assetVisualReviewRaw = clean(inputData.asset_visual_review_private);
+  let review;
+  try { review = JSON.parse(assetVisualReviewRaw); } catch { throw new Error("ARC1_ASSET_REVIEW_REQUIRED: visual review JSON"); }
+  const reviewFields = ["asset_manifest_sha256", "assets", "automated_screening", "automated_screening_version", "decision",
+    "intake_evidence_sha256", "pixel_level_watermark_certainty", "policy_version", "preview_folder", "review_method",
+    "review_key_id", "review_validity", "reviewed_at", "reviewer_id_sha256", "reviewer_type", "scope", "version",
+    "watermark_free_guarantee"];
+  const reviewAssetFields = ["content_type", "filename_screening", "rights_basis", "role", "sha256", "source_host_screening",
+    "stock_preview_screening", "visible_watermark_screening"];
+  const expectedReviewAssets = evidence.asset_manifest.map(asset => ({
+    content_type: asset.content_type,
+    filename_screening: "NOT_AVAILABLE_FROM_FIRST_PARTY_INTAKE",
+    rights_basis: "CUSTOMER_CONFIRMED_OWNERSHIP_OR_LICENSE",
+    role: asset.role,
+    sha256: asset.sha256,
+    source_host_screening: "FIRST_PARTY_RETRIEVAL_ENDPOINT_VERIFIED",
+    stock_preview_screening: "NO_VISIBLE_STOCK_PREVIEW_MARKER_FOUND",
+    visible_watermark_screening: "NO_VISIBLE_WATERMARK_FOUND"
+  }));
+  const reviewedMs = Date.parse(review?.reviewed_at);
+  assetVisualReviewSha256 = await sha256Text(assetVisualReviewRaw);
+  const reviewKey = await importHmac(reviewSecret);
+  if (!exactKeys(review, reviewFields) || canonicalJson(review) !== assetVisualReviewRaw ||
+      review.version !== "arc1-asset-visual-review-v1" || review.scope !== "human-visible-watermark-and-rights-review" ||
+      review.intake_evidence_sha256 !== intakeEvidenceSha256 || review.asset_manifest_sha256 !== evidence.asset_manifest_sha256 ||
+      review.preview_folder !== previewFolder || review.reviewer_type !== "AUTHORIZED_HUMAN" ||
+      review.review_key_id !== assetVisualReviewKeyId || review.reviewer_id_sha256 !== assetVisualReviewReviewerIdSha256 ||
+      review.policy_version !== "arc-image-provenance-policy-v1" || review.review_method !== "HUMAN_VISUAL_INSPECTION_FULL_RESOLUTION" ||
+      review.review_validity !== "CONTENT_DIGEST_BOUND_NO_EXPIRY" || !sha(review.reviewer_id_sha256) ||
+      review.automated_screening !== "PASSED_DETERMINISTIC_INDICATORS_ONLY" || review.decision !== "APPROVED_FOR_PUBLICATION" ||
+      review.automated_screening_version !== "arc-deterministic-image-screen-v1" ||
+      review.pixel_level_watermark_certainty !== false || review.watermark_free_guarantee !== false ||
+      !Number.isFinite(reviewedMs) || new Date(reviewedMs).toISOString() !== review.reviewed_at ||
+      reviewedMs < issuedMs - 5 * 60 * 1000 || reviewedMs > nowMs + 5 * 60 * 1000 ||
+      !Array.isArray(review.assets) || review.assets.some(asset => !exactKeys(asset, reviewAssetFields)) ||
+      canonicalJson(review.assets) !== canonicalJson(expectedReviewAssets) ||
+      clean(inputData.asset_visual_review_sha256).toLowerCase() !== assetVisualReviewSha256 ||
+      !await verifyHmac(reviewKey, clean(inputData.asset_visual_review_hmac_sha256).toLowerCase(),
+        `arc1-asset-visual-review-signature-v1\n${assetVisualReviewKeyId}\n${assetVisualReviewRaw}`)) {
+    throw new Error("ARC1_ASSET_REVIEW_REQUIRED: exact signed authorized-human review is required before publication");
+  }
 }
 const mediaDimensions = bytes => {
   if (bytes.length >= 33 && bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10])) &&
@@ -301,6 +377,9 @@ const rejectEmbeddedMetadata = (bytes, contentType) => {
       const length = bytes.readUInt32LE(offset + 4);
       const next = offset + 8 + length + (length & 1);
       if (next > bytes.length) throw new Error("ARC1_ASSET_PUBLICATION_INVALID: malformed WebP chunk");
+      if (type === "ANIM" || type === "ANMF" || (type === "VP8X" && length === 10 && (bytes[offset + 8] & 2))) {
+        throw new Error("ARC1_ASSET_PUBLICATION_INVALID: animated WebP is not allowed");
+      }
       if (forbidden.has(type)) throw new Error("ARC1_ASSET_PUBLICATION_INVALID: embedded WebP metadata is not allowed");
       if (!allowed.has(type)) throw new Error("ARC1_ASSET_PUBLICATION_INVALID: embedded WebP metadata is not allowed");
       offset = next;
@@ -390,25 +469,23 @@ const validateImageStructure = (bytes, contentType, prefix) => {
   }
   if (contentType === "image/webp") {
     if (bytes.length < 25) invalid("incomplete WebP structure");
-    let offset = 12, first = true, extended = false, animated = false, primary = false;
+    let offset = 12, first = true, extended = false, primary = false;
     while (offset < bytes.length) {
       const type = bytes.subarray(offset, offset + 4).toString("ascii"), length = bytes.readUInt32LE(offset + 4);
       const start = offset + 8, next = start + length + (length & 1), data = bytes.subarray(start, start + length);
       if (next > bytes.length) invalid("malformed WebP chunk");
+      if (type === "ANIM" || type === "ANMF") invalid("animated WebP is not allowed");
       if (type === "VP8X") {
         if (!first || extended || length !== 10 || (data[0] & 193)) invalid("invalid WebP VP8X");
-        extended = true; animated = Boolean(data[0] & 2);
+        if (data[0] & 2) invalid("animated WebP is not allowed");
+        extended = true;
         dimension(1 + data.readUIntLE(4, 3), 1 + data.readUIntLE(7, 3));
       } else if (type === "VP8 ") {
-        if (primary || animated || length < 10 || data[3] !== 157 || data[4] !== 1 || data[5] !== 42) invalid("invalid WebP VP8");
+        if (primary || length < 10 || data[3] !== 157 || data[4] !== 1 || data[5] !== 42) invalid("invalid WebP VP8");
         dimension(data.readUInt16LE(6) & 0x3fff, data.readUInt16LE(8) & 0x3fff); primary = true;
       } else if (type === "VP8L") {
-        if (primary || animated || length < 5 || data[0] !== 47 || (data[4] & 224)) invalid("invalid WebP VP8L");
+        if (primary || length < 5 || data[0] !== 47 || (data[4] & 224)) invalid("invalid WebP VP8L");
         const bits = data.readUInt32LE(1); dimension(1 + (bits & 0x3fff), 1 + ((bits >>> 14) & 0x3fff)); primary = true;
-      } else if (type === "ANIM") {
-        if (!extended || !animated || length !== 6 || primary) invalid("invalid WebP animation");
-      } else if (type === "ANMF") {
-        if (!extended || !animated || length < 16) invalid("invalid WebP frame"); primary = true;
       } else if (type === "ALPH" && (!extended || primary || length < 1)) invalid("invalid WebP alpha");
       offset = next; first = false;
     }
@@ -446,6 +523,9 @@ for (let index = 0; index < evidence.asset_manifest.length; index += 1) {
   validateImageStructure(bytes, manifest.content_type, "ARC1_ASSET_PUBLICATION_INVALID");
   const dimensions = mediaDimensions(bytes);
   const activeMarker = bytes.toString("latin1").toLowerCase();
+  if (watermarkMarker.test(activeMarker)) {
+    throw new Error("ARC1_ASSET_PUBLICATION_INVALID: deterministic stock-preview or watermark marker detected");
+  }
   if (!dimensions || dimensions[0] < 1 || dimensions[1] < 1 || dimensions[0] > 12000 || dimensions[1] > 12000 ||
       dimensions[0] * dimensions[1] > 40000000 ||
       /<(?:script|svg|html|iframe|object|embed)\b|javascript\s*:/.test(activeMarker)) {
@@ -474,6 +554,10 @@ const receipt = {
   intake_state_digest_sha256: evidence.state_digest_sha256,
   asset_manifest_sha256: evidence.asset_manifest_sha256,
   asset_permission: evidence.asset_permission,
+  asset_visual_review_authority_verified: entries.length ? assetVisualReviewAuthorityVerified : false,
+  asset_visual_review_key_id: entries.length ? assetVisualReviewKeyId : "",
+  asset_visual_review_reviewer_id_sha256: entries.length ? assetVisualReviewReviewerIdSha256 : "",
+  asset_visual_review_sha256: entries.length ? assetVisualReviewSha256 : "",
   repository: `${OWNER}/${REPOSITORY}`,
   base_branch: BASE_BRANCH,
   preview_branch: `arc-preview/${evidence.public_folder_prefix}`,
@@ -481,7 +565,7 @@ const receipt = {
   public_folder_prefix: evidence.public_folder_prefix,
   preview_folder: previewFolder,
   entries,
-  status: entries.length ? "VERIFIED_CONTENT_ADDRESSED" : "NO_PUBLIC_UPLOADS"
+  status: entries.length ? "HUMAN_REVIEWED_CONTENT_ADDRESSED" : "NO_PUBLIC_UPLOADS"
 };
 const receiptRaw = canonicalJson(receipt);
 const publicationKey = await importHmac(publicationSecret);
@@ -679,6 +763,15 @@ return {
   recovery_mode: "exact-replay-only",
   publication_mode: publicationMode,
   publication_branch_head_sha: branchHeadSha,
+  asset_visual_review_status: entries.length ? "AUTHORIZED_HUMAN_APPROVED" : "NOT_REQUIRED",
+  asset_visual_review_authority_verified: entries.length ? assetVisualReviewAuthorityVerified : false,
+  asset_visual_review_key_id: entries.length ? assetVisualReviewKeyId : "",
+  asset_visual_review_reviewer_id_sha256: entries.length ? assetVisualReviewReviewerIdSha256 : "",
+  asset_visual_review_sha256: assetVisualReviewSha256,
+  automated_watermark_screening_status: entries.length ? "PASSED_DETERMINISTIC_INDICATORS_ONLY" : "NOT_REQUIRED",
+  automated_watermark_screening_version: "arc-deterministic-image-screen-v1",
+  pixel_level_watermark_certainty: false,
+  watermark_free_guarantee: false,
   public_asset_url_map_json: canonicalJson(urlByRole),
   logo_file_url: urlByRole.logo_file || "",
   hero_image_url: urlByRole.hero_image_file || "",

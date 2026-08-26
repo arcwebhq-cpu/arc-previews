@@ -88,7 +88,9 @@ function makeChain({ kid = "01", selectedSecret = currentSecret, currentKid = "0
     artifact_manifest_sha256: artifact.artifact_manifest_sha256, handoff_artifact_evidence_sha256: sha(artifactPrivate),
     bundle_fingerprint: artifact.bundle_fingerprint, claim_recipient_email_sha256: sha(recipient), payer_email_sha256: sha(payer), livemode: false,
     mode: "payment", status: "complete", payment_status: "paid", currency: "usd", subtotal_amount_minor_units: 500000,
-    tax_amount_minor_units: 50000, amount_total_minor_units: 550000, payment_link_id: "plink_ArcFivePage5000",
+    tax_amount_minor_units: 50000, taxability_reasons: ["standard_rated"],
+    line_item_taxes_sha256: sha(canonical([{ amount_minor_units: 50000, taxability_reason: "standard_rated" }])),
+    amount_total_minor_units: 550000, payment_link_id: "plink_ArcFivePage5000",
     payment_intent_id: "pi_ArcFivePageDelivery", charge_id: "ch_ArcFivePageDelivery", price_id: policy.price_id,
     product_id: policy.product_id, product_tax_code: policy.product_tax_code, price_tax_behavior: "exclusive", automatic_tax_enabled: true,
     automatic_tax_status: "complete", customer_address_status: "verified", tax_registration_status: "historical_precheckout_snapshot",
@@ -157,6 +159,23 @@ const retired = makeChain({ kid: "01", selectedSecret: retiredSecret, currentKid
 assert.equal((await runGate(retired.input)).send_delivery_email, true, "retained v4 checkout keys must remain replay-verifiable");
 
 await assert.rejects(runGate(makeChain({ paymentVersion: "arc2-payment-evidence-v3" }).input), /payment evidence v4 contract/);
+await assert.rejects(runGate(makeChain({ paymentMutator: payment => { delete payment.taxability_reasons; delete payment.line_item_taxes_sha256; return payment; } }).input),
+  /payment evidence v4 contract/, "pre-audit V4 evidence must fail closed even when correctly signed");
+await assert.rejects(runGate(makeChain({ paymentMutator: payment => ({ ...payment, taxability_reasons: ["future_reason"] }) }).input),
+  /payment evidence v4 contract/, "unknown taxability reasons must fail closed at final delivery");
+for (const reason of ["customer_exempt", "reverse_charge"]) {
+  await assert.rejects(runGate(makeChain({ paymentMutator: payment => ({
+    ...payment,
+    tax_amount_minor_units: 0,
+    amount_total_minor_units: 500000,
+    customer_address_state: "OR",
+    taxability_reasons: [reason],
+    line_item_taxes_sha256: sha(canonical([{ amount_minor_units: 0, taxability_reason: reason }]))
+  }) }).input), /payment evidence v4 contract/,
+  `${reason} must remain manual-review-only at the final delivery boundary`);
+}
+await assert.rejects(runGate(makeChain({ paymentMutator: payment => ({ ...payment, line_item_taxes_sha256: "not-a-hash" }) }).input),
+  /payment evidence v4 contract/, "the signed line-item tax digest must have an exact SHA-256 shape");
 await assert.rejects(runGate(makeChain({ artifactVersion: "arc2-handoff-artifact-evidence-v3" }).input), /artifact evidence v4 contract/);
 await assert.rejects(runGate(makeChain({ policyVersion: "arc-private-checkout-policy-v1", policyScope: "one-approved-preview-one-private-payment-link" }).input), /policy v2 binding/);
 await assert.rejects(runGate(makeChain({ paymentMutator: payment => ({ ...payment,

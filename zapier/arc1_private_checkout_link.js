@@ -190,7 +190,7 @@ const validateStarted=async state=>{
   await verifyHex(key,clean(state.state_hmac_sha256).toLowerCase(),`arc-private-checkout-mutation-state-v1\n${mode}\n${canonicalJson(unsigned)}`,"MUTATION_STARTED state");
   return state;
 };
-const receiptFields=["checkout_policy_sha256","checkout_reference_sha256","create_request_sha256","credential_key_id","payment_link_id","payment_link_url_sha256","provider_intent_sha256","readback_sha256","scope","stripe_account_id_sha256","stripe_mode","version"];
+const receiptFields=["checkout_policy_sha256","checkout_reference_sha256","create_request_sha256","credential_key_id","payment_link_id","payment_link_url_sha256","provider_intent_sha256","readback_contract","readback_sha256","scope","stripe_account_id_sha256","stripe_mode","version"];
 const reverseFields=["checkout_policy_private","checkout_policy_sha256","checkout_recipient_reservation_hmac_sha256","checkout_recipient_reservation_private","checkout_reference","checkout_reference_sha256","link_id_hmac_sha256","link_receipt_hmac_sha256","link_receipt_private","link_receipt_sha256","payment_link_id","scope","version"];
 const linkStateFields=[...preparedFields,"link_id_hmac_sha256","link_receipt_hmac_sha256","link_receipt_private","link_receipt_sha256","payment_link_id","reverse_mapping_private","reverse_mapping_sha256"];
 const validateLinkState=async(state,allowedStatuses)=>{
@@ -206,7 +206,7 @@ const validateLinkState=async(state,allowedStatuses)=>{
   if(state.link_receipt_sha256!==await sha256(receiptRaw)||receipt.version!=="arc-private-checkout-link-receipt-v1"||receipt.scope!=="validated-one-use-private-payment-link"||
     receipt.payment_link_id!==linkId||receipt.checkout_reference_sha256!==referenceSha||receipt.checkout_policy_sha256!==policySha||receipt.provider_intent_sha256!==intentSha||
     receipt.create_request_sha256!==createRequestSha||receipt.stripe_mode!==mode||receipt.stripe_account_id_sha256!==offer.stripe_account_id_sha256||
-    receipt.credential_key_id!==prepared.credential_key_id||!/^([a-f0-9]{64})$/.test(receipt.payment_link_url_sha256)||!/^([a-f0-9]{64})$/.test(receipt.readback_sha256))
+    receipt.credential_key_id!==prepared.credential_key_id||receipt.readback_contract!=="product-tax-code-bound-v1"||!/^([a-f0-9]{64})$/.test(receipt.payment_link_url_sha256)||!/^([a-f0-9]{64})$/.test(receipt.readback_sha256))
     throw new Error("ARC_PRIVATE_CHECKOUT_CONFLICT: Link receipt binding");
   await verifyHex(key,clean(state.link_receipt_hmac_sha256).toLowerCase(),`arc-private-checkout-link-receipt-signature-v1\n${mode}\n${receiptRaw}`,"Link receipt");
   const reverseRaw=clean(state.reverse_mapping_private),reverse=parseCanonical(reverseRaw,"embedded reverse state");
@@ -294,10 +294,10 @@ if(phase==="CREATE"){
     link=await fetchJson(`https://api.stripe.com/v1/payment_links/${encodeURIComponent(clean(candidates[0].id))}?expand%5B%5D=line_items.data.price.product`,{method:"GET",headers:stripeHeaders},1000000,"ARC_PRIVATE_CHECKOUT_STRIPE_READBACK");
   }
   await validateLink(link);const linkId=clean(link.id),linkIdHmac=await hmacHex(key,`arc-private-checkout-link-id-key-v1\n${mode}\n${linkId}`),urlSha=await sha256(clean(link.url));
-  const readbackSha=await sha256(canonicalJson({id:linkId,active:link.active,livemode:link.livemode,url_sha256:urlSha,metadata:linkMetadata,completed_sessions_limit:1,price_id:offer.price_id,product_id:offer.product_id}));
+  const readbackSha=await sha256(canonicalJson({id:linkId,active:link.active,livemode:link.livemode,url_sha256:urlSha,metadata:linkMetadata,completed_sessions_limit:1,price_id:offer.price_id,product_id:offer.product_id,product_tax_code:offer.product_tax_code}));
   const receipt=canonicalJson({version:"arc-private-checkout-link-receipt-v1",scope:"validated-one-use-private-payment-link",payment_link_id:linkId,payment_link_url_sha256:urlSha,
     checkout_reference_sha256:referenceSha,checkout_policy_sha256:policySha,provider_intent_sha256:intentSha,create_request_sha256:createRequestSha,stripe_mode:mode,
-    stripe_account_id_sha256:offer.stripe_account_id_sha256,credential_key_id:prepared.credential_key_id,readback_sha256:readbackSha});
+    stripe_account_id_sha256:offer.stripe_account_id_sha256,credential_key_id:prepared.credential_key_id,readback_contract:"product-tax-code-bound-v1",readback_sha256:readbackSha});
   const receiptSha=await sha256(receipt),receiptHmac=await hmacHex(key,`arc-private-checkout-link-receipt-signature-v1\n${mode}\n${receipt}`);
   const reverse=canonicalJson({version:"arc-private-checkout-link-reverse-v1",scope:"private-link-id-to-approved-reference",link_id_hmac_sha256:linkIdHmac,payment_link_id:linkId,
     checkout_reference:checkoutReference,checkout_reference_sha256:referenceSha,checkout_policy_private:policy,checkout_policy_sha256:policySha,

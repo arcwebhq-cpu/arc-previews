@@ -60,7 +60,7 @@ function makePacket(nowMs, suffix = "") {
     completion_endpoint: ARC1_CONSUMER_COMPLETION_ENDPOINT,
     bridge_envelope_json: bridgeEnvelope,
     consumer_schema: "arc1-function-intake-adapter-v1",
-    bridge_contract_sha256: "e9bd5a3be21e0192acdc8b81692dab7bf5b1d0a132325a73011aa03e43674841",
+    bridge_contract_sha256: "c4ab396bf04464629624dd19a37602755c8d429db0bf729b49bbfdfdba3ae20c",
     bridge_delivery_id: actualDeliveryId,
     bridge_evidence_sha256: bridgeEvidenceSha256,
     bridge_evidence_expires_at: expiresAt,

@@ -1,22 +1,23 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-import { fixtures } from "../fixtures/v10_industries.mjs";
-import { renderPreview } from "../scripts/arc_contract.mjs";
+import { fixtures } from "../fixtures/v11_industries.mjs";
+import { renderV11Site } from "../scripts/v11_site_contract.mjs";
 import {
   createSyntheticStripeTestHandoffSimulator,
+  SYNTHETIC_HTML_PATHS,
   SYNTHETIC_STRIPE_API_VERSION,
   SYNTHETIC_SUBTOTAL_MINOR_UNITS
 } from "../scripts/test_mode_e2e_simulator.mjs";
 
-const template = await readFile(new URL("../ARC_MASTER_TEMPLATE.html", import.meta.url), "utf8");
+const template = await readFile(new URL("../ARC_MASTER_TEMPLATE_V11.html", import.meta.url), "utf8");
 const launchFixtures = new Map(fixtures.filter(fixture => fixture.isLaunch).map(fixture => [fixture.expectedProfile, fixture]));
 assert.deepEqual([...launchFixtures.keys()], ["roofing", "hvac", "remodeling", "landscaping", "auto_detailing"]);
 
 const makeHarness = (niche, clockValue = "2026-08-21T18:00:00.000Z", suffix = "") => {
   const fixture = launchFixtures.get(niche);
   const previewFolder = `${niche.replaceAll("_", "-")}-synthetic-${fixture.id}`;
-  const rendered = renderPreview(template, fixture.content, {
+  const rendered = renderV11Site(template, fixture.content, {
     trustedEventPrefix: fixture.id,
     customerEmail: fixture.customerEmail,
     leadNotificationEmail: `verified-${niche}@example.test`
@@ -25,7 +26,10 @@ const makeHarness = (niche, clockValue = "2026-08-21T18:00:00.000Z", suffix = ""
   const simulator = createSyntheticStripeTestHandoffSimulator({
     niche,
     previewFolder,
-    previewHtml: rendered.html,
+    previewPages: SYNTHETIC_HTML_PATHS.map(path => {
+      const page = rendered.pages.find(item => item.path === path);
+      return { path: page.path, html: page.html };
+    }),
     clock: () => new Date(currentTime)
   });
   return {
@@ -40,6 +44,10 @@ const makeHarness = (niche, clockValue = "2026-08-21T18:00:00.000Z", suffix = ""
 const linkConfiguration = ({ linkId, activatedAt = "2026-08-21T17:55:00.000Z", expiresAt = "2026-08-22T17:55:00.000Z", generation = 0 }) => ({
   payment_link_id: linkId,
   generation,
+  checkout_policy_version: "arc-private-checkout-policy-v2",
+  offer_contract_id: "arc-fixed-five-page-offer-v1",
+  deliverable: "fixed-five-page-marketing-website-v1",
+  page_count: 5,
   payment_method_selection: "dynamic",
   automatic_tax_enabled: true,
   tax_settings_status: "active",
@@ -98,8 +106,20 @@ const reversalEvent = ({ id, type, session }) => ({
   assert.equal(handoff.synthetic, true);
   assert.equal(handoff.external_provider_proof, false);
   assert.equal(handoff.niche, "roofing");
+  assert.equal(handoff.version, "arc-synthetic-five-page-test-handoff-v2");
+  assert.equal(handoff.offer_contract_id, "arc-fixed-five-page-offer-v1");
+  assert.equal(handoff.deliverable, "fixed-five-page-marketing-website-v1");
+  assert.equal(handoff.page_count, 5);
+  assert.deepEqual(handoff.preview_paths, SYNTHETIC_HTML_PATHS.map(path => `${harness.previewFolder}/${path}`));
+  assert.match(handoff.production_content_sha256, /^[a-f0-9]{64}$/);
   assert.equal(harness.simulator.snapshot().handoffCount, 1);
 }
+
+assert.throws(() => createSyntheticStripeTestHandoffSimulator({
+  niche: "roofing",
+  previewFolder: "roofing-synthetic-a1000001",
+  previewHtml: "<!doctype html>ARC Client Master Template v10.0"
+}), /exact ordered inert ARC five-page v11 bundle required/, "fresh synthetic handoffs must reject the singular v10 input");
 
 // HVAC: exact Stripe and handoff replays remain idempotent and create nothing twice.
 {

@@ -50,7 +50,7 @@ const assertNoCheckoutCapability = (markup, label) => {
   const decoded = recursivelyDecodePrivacyValue(markup).toLowerCase();
   const compact = decoded.replace(/[\s\u0000-\u001f\u007f]+/g, "");
   const nonScriptMarkup=String(markup).replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi,"");
-  const forbidden=/buy\.stripe\.com|\bplink_[a-z0-9]+|client_reference_id|arc-checkout-config|v3_[a-z0-9_-]{135}|arc-checkout-offer-snapshot-v1|arc1-checkout-recipient-reservation-v1|arc1-preview-readiness-(?:core|observation)-v1|arc-private-checkout-(?:policy|link-intent|link-receipt|link-reverse)-v1|checkout_(?:binding|offer|recipient|readiness)|link_receipt_(?:private|hmac|sha256)/i;
+  const forbidden=/buy\.stripe\.com|\bplink_[a-z0-9]+|client_reference_id|arc-checkout-config|v[34]_[a-z0-9_-]{135}|arc-checkout-offer-snapshot-v[12]|arc1-checkout-recipient-reservation-v[12]|arc1-preview-readiness-(?:core|observation)-v[12]|arc-private-checkout-(?:policy|link-intent|link-receipt|link-reverse)-v[12]|checkout_(?:binding|offer|recipient|readiness)|link_receipt_(?:private|hmac|sha256)/i;
   if (/&(?!(?:amp|quot|apos|lt|gt);)[a-z][a-z0-9]+;/i.test(nonScriptMarkup) || /\p{Default_Ignorable_Code_Point}/u.test(nonScriptMarkup) || forbidden.test(decoded) || forbidden.test(compact) || /<[A-Za-z][^>]*(?:\s|\/)on[a-z0-9_-]+\s*=/i.test(String(markup))) {
     throw new Error(`ARC_CHECKOUT_CAPABILITY_INVALID: ${label}`);
   }
@@ -143,13 +143,13 @@ const assertNoRemoteRuntimeDependencies = (markup, exactReceiptUrls) => {
     throw new Error("ARC_REMOTE_DEPENDENCY_INVALID: executable network or dynamic resource primitive");
   }
 };
-const trustedScriptHashes=["55335153318fa5a489d033599208d42c1c3c8b25f4a07f6e0a4f17fb5be60937","596ddd07b7b1525a0c2ec32411fa73e34121f8c320687a7249b9f793d8cf2870","98cbb58e3ec829ddaec61983333a8bb500b91558625a346350bfc8fe4842b860"];
-const trustedScriptManifestSha256="8ff6073533b7b631ab6657461d3631a2f00ca4a70ed0b79c2c016647948aae7b";
+const trustedScriptHashes=["36441ce93ccc1f13622e64f34ba6e43a039cdb453e1f40010dd8c399c97751f4"];
+const trustedScriptManifestSha256="1ef7f0088cdcf042b1593fbc11d7ea2d3c47e9ff92c94caf2f578179e3993685";
 const assertTrustedScripts=async markup=>{
   const scripts=markup.match(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi)||[];
   const hashes=[];for(const script of scripts)hashes.push(await sha256Text(script));hashes.sort();
   if((markup.match(/<script\b/gi)||[]).length!==scripts.length||(markup.match(/<\/script\b/gi)||[]).length!==scripts.length||
-    scripts.length!==3||JSON.stringify(hashes)!==JSON.stringify([...trustedScriptHashes].sort())||await sha256Text(hashes.join("\n"))!==trustedScriptManifestSha256){
+    scripts.length!==trustedScriptHashes.length||JSON.stringify(hashes)!==JSON.stringify([...trustedScriptHashes].sort())||await sha256Text(hashes.join("\n"))!==trustedScriptManifestSha256){
     throw new Error("ARC_SCRIPT_MANIFEST_INVALID: public preview scripts differ from the reviewed template allowlist");
   }
 };
@@ -497,6 +497,215 @@ const sanitizeMarkup = (key,markup,approved) => {
   return output;
 };
 
+// BEGIN GENERATED ARC1 V11 RENDER RUNTIME — DO NOT EDIT
+const ARC1_V11_RUNTIME_VERSION = "arc1-inject-v11-render-runtime-v1";
+const ARC1_V11_SITE_CONTRACT_VERSION = "arc-five-page-site-v1";
+const ARC1_V11_TEMPLATE_VERSION = "11.0";
+const ARC1_V11_APPROVAL_MANIFEST_VERSION = "arc-v11-approval-bundle-v1";
+
+const ARC1_V11_PAGES = Object.freeze([
+  Object.freeze({ key: "home", label: "Home", path: "index.html" }),
+  Object.freeze({ key: "services", label: "Services", path: "services/index.html" }),
+  Object.freeze({ key: "about", label: "About", path: "about/index.html" }),
+  Object.freeze({ key: "process", label: "Process", path: "process/index.html" }),
+  Object.freeze({ key: "contact", label: "Contact", path: "contact/index.html" })
+]);
+
+const ARC1_V11_PRODUCTION_PATHS = Object.freeze([
+  "about/index.html",
+  "contact/index.html",
+  "process/index.html",
+  "services/index.html",
+  "index.html"
+]);
+
+const arc1V11ProfileLayouts = Object.freeze({
+  roofing: ["impact", 0], hvac: ["trusted", 1], remodeling: ["editorial", 2], landscaping: ["balanced", 1],
+  auto_detailing: ["impact", 2], dental: ["trusted", 0], plumbing: ["impact", 0], home_services: ["balanced", 1],
+  medical_spa: ["editorial", 2], healthcare: ["trusted", 0], restaurant: ["editorial", 2], real_estate: ["editorial", 1],
+  fitness: ["impact", 2], legal: ["trusted", 0], finance: ["trusted", 1], web_design: ["editorial", 2],
+  technology: ["balanced", 1], beauty: ["editorial", 2], general: ["balanced", 0]
+});
+
+const arc1V11TemplateKeys = Object.freeze([
+  "ACCENT_COLOR", "BACKGROUND_COLOR", "BODY_LAYOUT", "BODY_VARIANT", "BRAND_HREF", "BRAND_MARK_HTML",
+  "BUSINESS_NAME", "EXPECTED_MEDIA_PROFILE", "FOOTER_LINKS_HTML", "HEADER_CTA_HREF", "LOCATION", "MAIN_HTML",
+  "MUTED_COLOR", "NAV_HTML", "PAGE_DESCRIPTION", "PAGE_KEY", "PAGE_PATH", "PAGE_TITLE", "PRIMARY_BUTTON_TEXT",
+  "PRIMARY_COLOR", "PRIMARY_CTA_LABEL", "STYLE_MODE", "SURFACE_COLOR", "TEXT_COLOR"
+]);
+
+const arc1V11PreviewToolbar = '<aside class="arc-preview-toolbar" aria-label="ARC preview status"><span><strong>ARC preview</strong>Five-page website concept for this business.</span><span data-arc-checkout-private>Checkout is available only through the private approval email.</span></aside>';
+const arc1V11PageByKey = new Map(ARC1_V11_PAGES.map(page => [page.key, page]));
+
+const arc1V11Clean = value => String(value == null ? "" : value).trim();
+const arc1V11EscapeHtml = value => String(value == null ? "" : value)
+  .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+
+const arc1V11PlainText = value => arc1V11Clean(value)
+  .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
+  .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
+  .replace(/<\/(?:address|article|aside|blockquote|button|details|div|figcaption|footer|form|h[1-6]|header|label|li|main|nav|p|section|small|span|strong|summary)>/gi, ". ")
+  .replace(/<br\s*\/?>/gi, ". ").replace(/<[^>]+>/g, " ")
+  .replace(/&(?:nbsp|amp|lt|gt|quot|apos|#39);/gi, " ").replace(/&#(?:x[0-9a-f]+|\d+);?/gi, " ")
+  .replace(/\s+/g, " ").trim();
+
+const arc1V11RelativeHref = (fromKey, toKey) => {
+  const from = arc1V11PageByKey.get(fromKey), to = arc1V11PageByKey.get(toKey);
+  if (!from || !to) throw new Error("ARC_V11_ROUTE_INVALID: unsupported page key");
+  if (from.key === "home") return to.key === "home" ? "./" : `./${to.key}/`;
+  if (to.key === "home") return "../";
+  if (to.key === from.key) return "./";
+  return `../${to.key}/`;
+};
+
+const arc1V11Hrefs = pageKey => Object.fromEntries(ARC1_V11_PAGES.map(page => [page.key, arc1V11RelativeHref(pageKey, page.key)]));
+const arc1V11Navigation = (pageKey, className = "nav-links") =>
+  `<nav class="${className}" aria-label="${className === "nav-links" ? "Main menu" : "Footer menu"}">${ARC1_V11_PAGES.map(page =>
+    `<a href="${arc1V11RelativeHref(pageKey, page.key)}"${page.key === pageKey ? ' aria-current="page"' : ""}>${page.label}</a>`
+  ).join("")}</nav>`;
+
+const arc1V11BoundedText = (value, maximum, fallback) => {
+  const normalized = arc1V11PlainText(value).replace(/\s+/g, " ").trim() || fallback;
+  if (normalized.length <= maximum) return normalized;
+  const slice = normalized.slice(0, maximum - 1), boundary = slice.lastIndexOf(" ");
+  return `${slice.slice(0, boundary >= maximum * 0.65 ? boundary : slice.length).replace(/[\s,;:.-]+$/g, "")}…`;
+};
+
+const arc1V11Metadata = (pageKey, content) => {
+  const business = arc1V11PlainText(content.BUSINESS_NAME);
+  const titles = {
+    home: arc1V11PlainText(content.SEO_TITLE), services: `Services | ${business}`, about: `About | ${business}`,
+    process: `Process | ${business}`, contact: `Contact | ${business}`
+  };
+  const descriptions = {
+    home: content.SEO_DESCRIPTION,
+    services: `${arc1V11PlainText(content.SERVICES_INTRO)} Explore the service path from ${business}.`,
+    about: `${arc1V11PlainText(content.ABOUT_BODY)} Learn what shapes the experience at ${business}.`,
+    process: `${arc1V11PlainText(content.PROCESS_INTRO)} See how ${business} moves from first conversation to a clear next step.`,
+    contact: `${arc1V11PlainText(content.CONTACT_BODY)} Contact ${business} to begin the conversation.`
+  };
+  return {
+    title: arc1V11BoundedText(titles[pageKey], 70, `${arc1V11PageByKey.get(pageKey).label} | ${business}`),
+    description: arc1V11BoundedText(descriptions[pageKey], 170, `${arc1V11PageByKey.get(pageKey).label} information for ${business}.`)
+  };
+};
+
+const arc1V11VisualStage = (content, profile) => {
+  const supplied = arc1V11Clean(content.HERO_MEDIA_HTML);
+  return `<div class="visual-stage" data-profile-label="${arc1V11EscapeHtml(profile.replaceAll("_", " "))}" aria-label="Visual direction for ${content.BUSINESS_NAME}">${supplied || '<span class="visual-orbit" aria-hidden="true"></span><span class="visual-core" aria-hidden="true"></span>'}<div class="visual-caption"><small>${content.INDUSTRY_LABEL}</small><strong>${content.VISUAL_HEADLINE}</strong><div class="chip-row">${content.HERO_CHIPS_HTML}</div></div></div>`;
+};
+
+const arc1V11ContactMarkup = content => {
+  const markup = arc1V11Clean(content.CONTACT_ACTION_HTML);
+  if (!/<form\b/i.test(markup)) return markup;
+  const replaced = markup.replace('action="/?submitted=1"', 'action="./?submitted=1"');
+  if (replaced === markup || (replaced.match(/action="\.\/\?submitted=1"/g) || []).length !== 1) {
+    throw new Error("ARC_V11_FORM_INVALID: contact form action could not be made contact-page relative");
+  }
+  return replaced;
+};
+
+const arc1V11MainHtml = (pageKey, content, profile) => {
+  const hrefs = arc1V11Hrefs(pageKey);
+  const contactButton = `<a class="btn btn-primary" href="${hrefs.contact}">${content.PRIMARY_CTA_LABEL}<span aria-hidden="true">→</span></a>`;
+  if (pageKey === "home") return `<section class="hero page-hero"><div class="wrap hero-grid"><div class="hero-copy"><p class="eyebrow">${content.EYEBROW}</p><h1>${content.HEADLINE}</h1><p class="lede">${content.SUBHEADLINE}</p><div class="actions">${contactButton}<a class="btn btn-secondary" href="${hrefs.services}">${content.SECONDARY_CTA_LABEL}</a></div><div class="trust-line">${content.TRUST_LINE_HTML}</div></div>${arc1V11VisualStage(content, profile)}</div></section><div class="ticker" aria-label="Service highlights"><div>${content.TICKER_HTML}</div></div><section class="section section-dark"><div class="wrap"><p class="eyebrow">Why this approach</p><div class="section-heading"><h2>${content.WHY_HEADING}</h2><p>${content.WHY_INTRO}</p></div><div class="card-grid">${content.DIFFERENTIATORS_HTML}</div></div></section><section class="section"><div class="wrap split-callout"><div><p class="eyebrow">Services</p><h2>${content.SERVICES_HEADING}</h2><p>${content.SERVICES_INTRO}</p></div><a class="text-link" href="${hrefs.services}">Explore every service <span aria-hidden="true">→</span></a></div></section>`;
+  if (pageKey === "services") return `<section class="inner-hero"><div class="wrap"><p class="eyebrow">${content.INDUSTRY_LABEL}</p><h1>${content.SERVICES_HEADING}</h1><p class="lede">${content.SERVICES_INTRO}</p><div class="metric-line"><span>Primary focus</span><strong>${content.HIGHEST_PROFIT_SERVICE}</strong></div></div></section><section class="section"><div class="wrap"><div class="card-grid service-grid">${content.SERVICES_HTML}</div></div></section><section class="section section-dark"><div class="wrap split-callout"><div><p class="eyebrow">Next step</p><h2>${content.CONTACT_HEADING}</h2><p>${content.CONTACT_BODY}</p></div>${contactButton}</div></section>`;
+  if (pageKey === "about") return `<section class="inner-hero"><div class="wrap about-layout"><div><p class="eyebrow">${content.ABOUT_EYEBROW}</p><h1>${content.ABOUT_TITLE}</h1><div class="lede prose">${content.ABOUT_BODY}</div><blockquote>${content.ABOUT_QUOTE}</blockquote></div><div class="about-visual">${content.ABOUT_MEDIA_HTML || `<span aria-hidden="true">${content.BUSINESS_NAME.slice(0, 1)}</span>`}</div></div></section><section class="section"><div class="wrap"><div class="stats">${content.ABOUT_STATS_HTML}</div><div class="section-heading"><p class="eyebrow">Credibility</p><h2>${content.PROOF_HEADING}</h2><p>${content.PROOF_INTRO}</p></div><div class="card-grid proof-grid">${content.PROOF_HTML}</div></div></section><section class="section section-accent"><div class="wrap split-callout"><div><h2>${content.WHY_HEADING}</h2><p>${content.WHY_INTRO}</p></div>${contactButton}</div></section>`;
+  if (pageKey === "process") {
+    const gallery = arc1V11Clean(content.GALLERY_HTML) || '<div class="visual-tile" aria-hidden="true"></div><div class="visual-tile" aria-hidden="true"></div><div class="visual-tile" aria-hidden="true"></div>';
+    return `<section class="inner-hero"><div class="wrap"><p class="eyebrow">How it works</p><h1>${content.PROCESS_HEADING}</h1><p class="lede">${content.PROCESS_INTRO}</p></div></section><section class="section section-dark"><div class="wrap"><div class="process-grid">${content.PROCESS_HTML}</div></div></section><section class="section"><div class="wrap"><div class="section-heading"><p class="eyebrow">Visual direction</p><h2>${content.GALLERY_HEADING}</h2><p>${content.GALLERY_INTRO}</p></div><div class="gallery-grid">${gallery}</div></div></section><section class="section section-accent"><div class="wrap split-callout"><div><h2>${content.CONTACT_HEADING}</h2><p>${content.CONTACT_BODY}</p></div>${contactButton}</div></section>`;
+  }
+  if (pageKey === "contact") return `<section class="inner-hero contact-hero"><div class="wrap"><p class="eyebrow">Start here</p><h1>${content.CONTACT_HEADING}</h1><p class="lede">${content.CONTACT_BODY}</p></div></section><section class="section"><div class="wrap contact-layout"><div class="contact-panel"><p class="eyebrow">Request details</p>${arc1V11ContactMarkup(content)}</div><aside class="contact-details"><p class="eyebrow">Contact context</p>${content.CONTACT_DETAILS_HTML}</aside></div></section><section class="section section-soft"><div class="wrap faq-layout"><div class="section-heading"><p class="eyebrow">FAQ</p><h2>${content.FAQ_HEADING}</h2><p>${content.FAQ_INTRO}</p></div><div class="faq-list">${content.FAQ_HTML}</div></div></section>`;
+  throw new Error("ARC_V11_ROUTE_INVALID: page renderer is missing");
+};
+
+const arc1V11RenderTemplate = (template, values) => {
+  const observed = [...new Set([...template.matchAll(/\[\[([A-Z0-9_]+)\]\]/g)].map(match => match[1]))].sort();
+  if (JSON.stringify(observed) !== JSON.stringify([...arc1V11TemplateKeys].sort())) {
+    throw new Error(`ARC_V11_TEMPLATE_INVALID: placeholder contract mismatch (${observed.join(",")})`);
+  }
+  let html = template;
+  for (const key of arc1V11TemplateKeys) {
+    if (!Object.prototype.hasOwnProperty.call(values, key)) throw new Error(`ARC_V11_TEMPLATE_INVALID: missing render value ${key}`);
+    html = html.split(`[[${key}]]`).join(String(values[key]));
+  }
+  if (/\[\[[A-Z0-9_]+\]\]/.test(html)) throw new Error("ARC_V11_TEMPLATE_INVALID: unresolved placeholder");
+  return `${html.trim()}\n`;
+};
+
+const arc1V11InjectToolbar = html => {
+  if (!html.endsWith("</body>\n</html>\n")) throw new Error("ARC_V11_TEMPLATE_INVALID: canonical document ending");
+  return html.replace("</body>\n</html>\n", `${arc1V11PreviewToolbar}\n</body>\n</html>\n`);
+};
+
+async function arc1RenderV11Site(template, content, renderContent, options, runtime) {
+  const { canonicalJson, sha256Text } = runtime;
+  const profile = options.expectedMediaProfile;
+  const layout = arc1V11ProfileLayouts[profile] || arc1V11ProfileLayouts.general;
+  const businessInitial = arc1V11EscapeHtml(arc1V11PlainText(content.BUSINESS_NAME).slice(0, 1).toUpperCase() || "A");
+  const approvalPages = ARC1_V11_PAGES.map(page => {
+    const metadata = arc1V11Metadata(page.key, content), hrefs = arc1V11Hrefs(page.key);
+    const approvalHtml = arc1V11RenderTemplate(template, {
+      ACCENT_COLOR: renderContent.ACCENT_COLOR, BACKGROUND_COLOR: renderContent.BACKGROUND_COLOR,
+      BODY_LAYOUT: layout[0], BODY_VARIANT: String(layout[1]), BRAND_HREF: hrefs.home,
+      BRAND_MARK_HTML: renderContent.LOGO_HTML || `<span class="brand-monogram" aria-hidden="true">${businessInitial}</span>`,
+      BUSINESS_NAME: renderContent.BUSINESS_NAME, EXPECTED_MEDIA_PROFILE: profile,
+      FOOTER_LINKS_HTML: arc1V11Navigation(page.key, "footer-links"), HEADER_CTA_HREF: hrefs.contact,
+      LOCATION: renderContent.LOCATION, MAIN_HTML: arc1V11MainHtml(page.key, renderContent, profile),
+      MUTED_COLOR: renderContent.MUTED_COLOR, NAV_HTML: arc1V11Navigation(page.key),
+      PAGE_DESCRIPTION: arc1V11EscapeHtml(metadata.description), PAGE_KEY: page.key, PAGE_PATH: page.path,
+      PAGE_TITLE: arc1V11EscapeHtml(metadata.title), PRIMARY_BUTTON_TEXT: renderContent.PRIMARY_BUTTON_TEXT,
+      PRIMARY_COLOR: renderContent.PRIMARY_COLOR, PRIMARY_CTA_LABEL: renderContent.PRIMARY_CTA_LABEL,
+      STYLE_MODE: renderContent.STYLE_MODE, SURFACE_COLOR: renderContent.SURFACE_COLOR, TEXT_COLOR: renderContent.TEXT_COLOR
+    });
+    return { ...page, approvalHtml };
+  });
+  const formPages = approvalPages.flatMap(page => (page.approvalHtml.match(/<form\b/gi) || []).map(() => page.path));
+  if (formPages.length > 1 || formPages.some(path => path !== "contact/index.html")) {
+    throw new Error("ARC_V11_FORM_INVALID: at most one Contact-only form is allowed");
+  }
+  for (const page of approvalPages) {
+    if ((page.approvalHtml.match(/<h1\b/gi) || []).length !== 1 ||
+        (page.approvalHtml.match(/<nav class="nav-links"/g) || []).length !== 1 ||
+        (page.approvalHtml.match(/<meta name="robots" content="noindex,nofollow,noarchive,nosnippet">/g) || []).length !== 1) {
+      throw new Error(`ARC_V11_BUNDLE_INVALID: ${page.path} structure`);
+    }
+  }
+  const approvalPagesWithDigests = [];
+  for (const page of approvalPages) approvalPagesWithDigests.push({
+    ...page,
+    approvalSha256: await sha256Text(page.approvalHtml),
+    approvalSize: new TextEncoder().encode(page.approvalHtml).byteLength,
+    publishedHtml: arc1V11InjectToolbar(page.approvalHtml)
+  });
+  const pages = [];
+  for (const page of approvalPagesWithDigests) pages.push({
+    ...page,
+    publishedSha256: await sha256Text(page.publishedHtml),
+    publishedSize: new TextEncoder().encode(page.publishedHtml).byteLength,
+    filePath: `${options.previewFolder}/${page.path}`,
+    url: `${options.pagesBaseUrl}/${options.previewFolder}/${page.path === "index.html" ? "" : page.path.replace(/index\.html$/, "")}`
+  });
+  const approvalManifest = {
+    version: ARC1_V11_APPROVAL_MANIFEST_VERSION,
+    pages: pages.map(page => ({ path: page.path, sha256: page.approvalSha256, size: page.approvalSize }))
+  };
+  const approvalManifestJson = canonicalJson(approvalManifest);
+  return {
+    runtimeVersion: ARC1_V11_RUNTIME_VERSION,
+    contractVersion: ARC1_V11_SITE_CONTRACT_VERSION,
+    templateVersion: ARC1_V11_TEMPLATE_VERSION,
+    folder: options.previewFolder,
+    pageCount: pages.length,
+    pages,
+    approvalManifest,
+    approvalManifestJson,
+    approvalBundleSha256: await sha256Text(approvalManifestJson),
+    hasLeadForm: formPages.length === 1
+  };
+}
+// END GENERATED ARC1 V11 RENDER RUNTIME
+
 const template = clean(inputData.template_content || inputData.template_html);
 const rawJson = clean(inputData.raw_json || inputData.generated_json)
   .replace(/^```json\s*/i, "")
@@ -548,12 +757,12 @@ if(!intakeEvidence||typeof intakeEvidence!=="object"||Array.isArray(intakeEviden
 }
 const legacyEvidenceFields=[
   "version","scope","site_id","site_url","form_id","form_name","submission_id","received_at",
-  "intake_version","budget_confirmed","terms_accepted","public_folder_prefix","submission_data_sha256",
+  "intake_version","offer_contract_id","budget_confirmed","terms_accepted","public_folder_prefix","submission_data_sha256",
   "asset_manifest","asset_manifest_sha256","total_asset_bytes","state_key","state_digest_sha256","claim_required_before_build","issued_at"
 ];
 const functionEvidenceFields=[
   "version","scope","bridge_contract_sha256","site_id_sha256","source_schema","source_form_name","source_key_hmac_sha256",
-  "delivery_id","submission_id","received_at","intake_version","budget_confirmed","terms_accepted","asset_permission","public_folder_prefix",
+  "delivery_id","submission_id","received_at","intake_version","offer_contract_id","budget_confirmed","terms_accepted","asset_permission","public_folder_prefix",
   "submission_data_sha256","asset_manifest","asset_manifest_sha256","total_asset_bytes","state_key","state_digest_sha256",
   "claim_required_before_build","issued_at"
 ];
@@ -566,9 +775,10 @@ const externalId=value=>/^(?:[a-f0-9]{24}|[a-f0-9]{40}|[a-f0-9]{8}-[a-f0-9]{4}-[
 const expectedSiteId=clean(inputData.expected_netlify_site_id).toLowerCase();
 const expectedFormId=clean(inputData.expected_netlify_form_id).toLowerCase();
 const expectedFormName=clean(inputData.expected_netlify_form_name);
-const bridgeContractSha256="e9bd5a3be21e0192acdc8b81692dab7bf5b1d0a132325a73011aa03e43674841";
-const requiredBudgetConfirmation="Yes, understands the finished ARC website subtotal is $5,000 plus applicable sales tax only after preview approval";
-const requiredTermsAcceptance="Accepted ARC preview terms, privacy policy, refund policy, and service scope dated 2026-08-12; separate adult checkout acceptance required";
+const bridgeContractSha256="c4ab396bf04464629624dd19a37602755c8d429db0bf729b49bbfdfdba3ae20c";
+const requiredOfferContractId="arc-fixed-five-page-offer-v1";
+const requiredBudgetConfirmation="Yes, understands the finished ARC website is a fixed five-page website with a $5,000 subtotal plus applicable sales tax only after preview approval";
+const requiredTermsAcceptance="Accepted ARC preview terms, privacy policy, refund policy, and fixed five-page service scope dated 2026-08-25; separate adult checkout acceptance required";
 const receivedAt=clean(intakeEvidence.received_at),issuedAt=clean(intakeEvidence.issued_at);
 const receivedMs=Date.parse(receivedAt),issuedMs=Date.parse(issuedAt),nowMs=Date.now();
 const expectedSiteIdSha256=await sha256Text(expectedSiteId);
@@ -590,7 +800,8 @@ const functionIdentityValid=isFunctionEvidence&&intakeEvidence.scope==="authorit
   intakeEvidence.asset_permission===(intakeEvidence.asset_manifest?.length?"Confirmed":"")&&
   clean(intakeEvidence.state_key)===`arc1-intake-claim-v2:${clean(intakeEvidence.state_digest_sha256)}`;
 if(
-  !externalId(expectedSiteId)||(!legacyIdentityValid&&!functionIdentityValid)||intakeEvidence.intake_version!=="arc-intake-v7"||
+  !externalId(expectedSiteId)||(!legacyIdentityValid&&!functionIdentityValid)||intakeEvidence.intake_version!=="arc-intake-v8"||
+  intakeEvidence.offer_contract_id!==requiredOfferContractId||
   intakeEvidence.budget_confirmed!==requiredBudgetConfirmation||intakeEvidence.terms_accepted!==requiredTermsAcceptance||
   clean(intakeEvidence.public_folder_prefix)!==derivedPublicFolderPrefix||
   !/^[a-f0-9]{64}$/.test(clean(intakeEvidence.submission_data_sha256))||
@@ -812,7 +1023,7 @@ if(paymentLinkEvidence.version!=="arc1-checkout-offer-template-evidence-v1"||
   !/^[a-f0-9]{64}$/.test(clean(paymentLinkEvidence.tax_registrations_sha256))||
   paymentLinkEvidence.adult_acknowledgement_key!=="adultpurchaserack"||paymentLinkEvidence.name_collection_required!==true||
   paymentLinkEvidence.submit_type!=="auto"||paymentLinkEvidence.checkout_redirect_url!=="https://arcweb.onl/payment-success/?session_id={CHECKOUT_SESSION_ID}"||
-  paymentLinkEvidence.stripe_api_version!=="2026-06-24.dahlia"||
+  paymentLinkEvidence.stripe_api_version!=="2026-07-29.dahlia"||
   !/^[a-f0-9]{64}$/.test(clean(paymentLinkEvidence.configuration_sha256))||
   !Number.isFinite(paymentLinkEvidenceIssuedMs)||new Date(paymentLinkEvidenceIssuedMs).toISOString()!==paymentLinkEvidenceIssuedAt||
   paymentLinkEvidenceIssuedMs<Date.now()-5*60*1000||paymentLinkEvidenceIssuedMs>Date.now()+5*60*1000){
@@ -886,164 +1097,235 @@ if (/buy\.stripe\.com/i.test(clean(generated.PRIMARY_CTA_HREF))) {
   throw new Error("ARC_CTA_INVALID: business CTA cannot be an ARC checkout URL");
 }
 
-const templateKeys = [...new Set([...template.matchAll(/\[\[([A-Z0-9_]+)\]\]/g)].map(match => match[1]))];
-if (templateKeys.length !== 58 || templateKeys.some(key => !requiredKeys.includes(key))) {
-  throw new Error("ARC_TEMPLATE_INVALID: template no longer matches the exact 58-key contract");
-}
-let html = template;
-for (const key of requiredKeys) html = html.split(`[[${key}]]`).join(renderValues[key]);
 const semanticPlainText = value => clean(value).replace(/<[^>]+>/g," ").replace(/\s+/g," ").toLowerCase();
 const semanticText = [generated.INDUSTRY_LABEL,generated.BUSINESS_NAME,generated.SERVICES_HEADING,generated.SERVICES_INTRO,generated.SERVICES_HTML].map(semanticPlainText).join(" ");
 const mediaRules = [
   ["roofing",/\b(roof(?:er|ing)?|shingles?|siding|gutters?|(?:home|residential) exteriors?)\b/i],["hvac",/\b(hvac|air conditioning|air conditioner|heating|furnace|heat pump|climate control)\b/i],["remodeling",/\b(remodel(?:ing|er)?|renovat(?:e|ion|ing)?|kitchen|bathroom|home improvement)\b/i],["landscaping",/\b(landscap(?:e|er|ing)?|lawn care|gardener|gardening|hardscape|yard care|tree service)\b/i],["auto_detailing",/\b(auto detailing|car detailing|detailer|ceramic coating|paint correction|car wash)\b/i],["dental",/\b(dent(?:al|ist|istry)|orthodont(?:ic|ics|ist)|oral surgery)\b/i],["plumbing",/\b(plumb(?:er|ing)?|drain service|water heater|boiler repair)\b/i],["home_services",/\b(contractor|construction|home service|specialty contractor|handyman|painting contractor)\b/i],["medical_spa",/\b(med(?:ical)? spa|medspa|aesthetic(?:s)?|injectables?|botox|facial treatment|skin rejuvenation)\b/i],["healthcare",/\b(medical|health(?:care)?|clinic|doctor|physician|chiropract(?:ic|or)|physical therapy|therapist|urgent care)\b/i],["restaurant",/\b(restaurant|food|hospitality|cafe|bakery|cater(?:er|ing)?)\b/i],["real_estate",/\b(real estate|realtor|property|brokerage|home builder|architect(?:ure)?)\b/i],["fitness",/\b(fitness|gym|wellness|personal trainer|yoga|strength club)\b/i],["legal",/\b(law|legal|attorney|lawyer|law firm)\b/i],["finance",/\b(account(?:ant|ing)?|cpa|finance|financial|insurance|bookkeep(?:er|ing)?|tax)\b/i],["web_design",/\b(web design|web designer|website design|web development|digital studio|digital agency|creative agency|ui\/ux|ux design|product design|ecommerce design)\b/i],["technology",/\b(software|technology|saas|consulting|it services?|tech company)\b/i],["beauty",/\b(beauty|salon|barber|spa|cosmetic|skincare|skin care)\b/i]
 ];
 const expectedMediaProfile = mediaRules.find(([,pattern])=>pattern.test(semanticText))?.[0] || "general";
-html = html.replace(/<body\b/i, `<body data-arc-expected-media-profile="${expectedMediaProfile}"`);
-if(isFunctionEvidence){
-  const receiptUrls=new Set(Object.values(publicAssetUrlMap));
-  html=html.replace(/<(?:img|source)\b[^>]*>/gi,tag=>{
-    const rawValues=[...tag.matchAll(/\b(?:src|srcset)\s*=\s*["']([^"']+)["']/gi)].flatMap(match=>
-      match[0].toLowerCase().startsWith("srcset")?match[1].split(",").map(item=>clean(item).split(/\s+/,1)[0]):[clean(match[1])]
-    );
-    if(!rawValues.some(value=>receiptUrls.has(decodeUrlEntities(value))))return tag;
-    if(/\bdata-arc-media-provider\s*=/i.test(tag))throw new Error("ARC1_ASSET_PUBLICATION_INVALID: duplicate media provenance marker");
-    return tag.replace(/\s*\/?\s*>$/,ending=>` data-arc-media-provider="customer-upload"${ending}`);
-  });
+const offerContractId="arc-fixed-five-page-offer-v1";
+const deliverable="fixed-five-page-marketing-website-v1";
+const pagesBaseUrl=clean(inputData.pages_base_url||"https://arcwebhq-cpu.github.io/arc-previews").replace(/\/+$/,"");
+const assetExtensions={"image/png":"png","image/jpeg":"jpg","image/webp":"webp"};
+const verifiedAssetUrlMap={};
+const productionAssetPathByUrl=new Map();
+for(const entry of evidenceManifest){
+  const url=clean(assetInputs[entry.role]),extension=assetExtensions[entry.content_type];
+  if(!url||!extension||Object.prototype.hasOwnProperty.call(verifiedAssetUrlMap,entry.role)||productionAssetPathByUrl.has(url)){
+    throw new Error("ARC1_ASSET_INVALID: exact role URL and production path mapping required");
+  }
+  verifiedAssetUrlMap[entry.role]=url;
+  productionAssetPathByUrl.set(url,`/assets/${entry.sha256}.${extension}`);
 }
-const hasRenderedLeadForm=/<form\b[^>]*\bdata-netlify\s*=\s*["']true["']/i.test(html);
+if(manifestTotal>3000000||evidenceManifest.some(entry=>entry.size_bytes>1250000)||new Set(productionAssetPathByUrl.values()).size!==evidenceManifest.length){
+  throw new Error("ARC1_ASSET_INVALID: production-safe asset caps or content-addressed paths");
+}
+if(isFunctionEvidence&&canonicalJson(verifiedAssetUrlMap)!==canonicalJson(publicAssetUrlMap)){
+  throw new Error("ARC1_ASSET_PUBLICATION_INVALID: verified render asset map differs from publication receipt");
+}
+const receiptUrls=new Set(Object.values(verifiedAssetUrlMap));
+const markUploadedMedia=markup=>String(markup).replace(/<(?:img|source)\b[^>]*>/gi,tag=>{
+  const values=[...tag.matchAll(/\b(?:src|srcset)\s*=\s*["']([^"']+)["']/gi)].flatMap(match=>
+    match[0].toLowerCase().startsWith("srcset")?match[1].split(",").map(item=>clean(item).split(/\s+/,1)[0]):[clean(match[1])]
+  ).map(decodeUrlEntities);
+  if(!values.some(value=>receiptUrls.has(value)))return tag;
+  if(/\bdata-arc-media-provider\s*=/i.test(tag))throw new Error("ARC1_ASSET_PUBLICATION_INVALID: duplicate media provenance marker");
+  return tag.replace(/\s*\/?\s*>$/,ending=>` data-arc-media-provider="customer-upload"${ending}`);
+});
+for(const key of ["LOGO_HTML","HERO_MEDIA_HTML","ABOUT_MEDIA_HTML","GALLERY_HTML"]){
+  renderValues[key]=markUploadedMedia(renderValues[key]);
+}
+const renderedSite=await arc1RenderV11Site(template,generated,renderValues,{
+  expectedMediaProfile,previewFolder,pagesBaseUrl
+},{canonicalJson,sha256Text});
+if(renderedSite.pageCount!==5||renderedSite.contractVersion!=="arc-five-page-site-v1"||renderedSite.templateVersion!=="11.0"){
+  throw new Error("ARC_V11_BUNDLE_INVALID: exact five-page render contract required");
+}
+const logicalPagePaths=ARC1_V11_PAGES.map(page=>page.path);
+const previewPaths=ARC1_V11_PRODUCTION_PATHS.map(path=>`${previewFolder}/${path}`);
+const renderedReceiptUrls=new Set();
+const privateValues=[
+  {label:"requester email",value:inputData.customer_email},
+  {label:"lead recipient",value:inputData.private_lead_notification_email||inputData.verified_lead_notification_email},
+  {label:"claim recipient",value:inputData.private_claim_recipient_email},
+  {label:"contact phone",value:inputData.private_contact_phone},
+  {label:"contact address",value:inputData.private_contact_address}
+];
+let approvalTotalBytes=0,publishedTotalBytes=0;
+for(const page of renderedSite.pages){
+  approvalTotalBytes+=page.approvalSize;publishedTotalBytes+=page.publishedSize;
+  if(page.approvalSize<1||page.approvalSize>150000||page.publishedSize<1||page.publishedSize>150000){
+    throw new Error(`ARC_PREVIEW_SIZE_INVALID: ${page.path} exceeds the 150000-byte page cap`);
+  }
+  for(const html of [page.approvalHtml,page.publishedHtml]){
+    const unresolved=html.match(/\[\[[A-Z0-9_]+\]\]/g)||[];
+    if(unresolved.length)throw new Error(`ARC_INJECTION_FAILED: unresolved=${[...new Set(unresolved)].join(",")}`);
+    assertNoRemoteRuntimeDependencies(html,receiptUrls);
+    await assertTrustedScripts(html);
+    assertNoCheckoutCapability(html,`${page.path} contains a decoded checkout capability or private offer marker`);
+    assertPrivateValuesAbsent(html,privateValues,`${page.path} rendered preview HTML`);
+    const decoded=decodeUrlEntities(html);
+    for(const match of decoded.matchAll(/\b(?:src|srcset)\s*=\s*["']([^"']+)["']/gi)){
+      const candidates=match[0].toLowerCase().startsWith("srcset")?match[1].split(",").map(item=>clean(item).split(/\s+/,1)[0]):[clean(match[1])];
+      for(const candidate of candidates)if(receiptUrls.has(candidate))renderedReceiptUrls.add(candidate);
+    }
+  }
+}
+if(approvalTotalBytes>500000||publishedTotalBytes>500000){
+  throw new Error("ARC_PREVIEW_SIZE_INVALID: five-page aggregate exceeds 500000 UTF-8 bytes");
+}
+if(renderedReceiptUrls.size!==receiptUrls.size||[...receiptUrls].some(url=>!renderedReceiptUrls.has(url))){
+  throw new Error("ARC1_ASSET_PUBLICATION_INVALID: five-page rendered URL union differs from signed assets");
+}
+const productionCsp="default-src 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; script-src-attr 'none'; connect-src 'none'; font-src 'self' data:; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
+const replaceOne=(html,pattern,replacement,label)=>{
+  const matches=html.match(pattern)||[];
+  if(matches.length!==1)throw new Error(`ARC_V11_PRODUCTION_INVALID: ${label}`);
+  return html.replace(pattern,replacement);
+};
+const productionByPath=new Map();
+let productionTotalBytes=0;
+for(const page of renderedSite.pages){
+  let html=replaceOne(page.approvalHtml,/<meta\s+name="robots"\s+content="[^"]*">/gi,
+    '<meta name="robots" content="index,follow,max-image-preview:large">',`${page.path} robots metadata`);
+  html=replaceOne(html,/<meta\s+http-equiv="Content-Security-Policy"\s+content="[^"]*">/gi,
+    `<meta http-equiv="Content-Security-Policy" content="${productionCsp}">`,`${page.path} CSP metadata`);
+  html=replaceOne(html,/data-arc-site-mode="preview"/g,'data-arc-site-mode="production"',`${page.path} site mode`);
+  if(page.path==="contact/index.html"&&renderedSite.hasLeadForm){
+    html=replaceOne(html,/action="\.\/\?submitted=1"/g,'action="/contact/?submitted=1"',"Contact form action");
+  }
+  for(const [sourceUrl,productionPath] of productionAssetPathByUrl){
+    const encodedUrl=sourceUrl.replaceAll("&","&amp;").replaceAll('"',"&quot;").replaceAll("'","&#39;");
+    html=html.split(sourceUrl).join(productionPath).split(encodedUrl).join(productionPath);
+  }
+  if(/https:\/\/arcwebhq-cpu\.github\.io\/arc-previews(?:\/|["'?#]|$)/i.test(html)||/<base\b/i.test(html)){
+    throw new Error(`ARC_V11_PRODUCTION_INVALID: ${page.path} retains preview-only routing`);
+  }
+  const referenced=new Set([...html.matchAll(/(?:^|["'(=\s])(\/assets\/[a-f0-9]{64}\.(?:png|jpg|webp))(?=$|["')\s,<>])/gi)].map(match=>match[1]));
+  if([...referenced].some(path=>![...productionAssetPathByUrl.values()].includes(path))){
+    throw new Error(`ARC_V11_PRODUCTION_INVALID: ${page.path} contains an unbound production asset`);
+  }
+  const size=evidenceEncoder.encode(html).byteLength;
+  if(size<1||size>150000)throw new Error(`ARC_PREVIEW_SIZE_INVALID: production ${page.path} exceeds 150000 bytes`);
+  productionTotalBytes+=size;
+  productionByPath.set(page.path,{html,size,sha256:await sha256Text(html)});
+}
+if(productionTotalBytes>500000)throw new Error("ARC_PREVIEW_SIZE_INVALID: production five-page aggregate exceeds 500000 bytes");
+const productionReferencedUnion=new Set();
+for(const item of productionByPath.values())for(const match of item.html.matchAll(/\/assets\/[a-f0-9]{64}\.(?:png|jpg|webp)/g))productionReferencedUnion.add(match[0]);
+if(productionReferencedUnion.size!==productionAssetPathByUrl.size||[...productionAssetPathByUrl.values()].some(path=>!productionReferencedUnion.has(path))){
+  throw new Error("ARC_V11_PRODUCTION_INVALID: site-wide production asset union differs from signed assets");
+}
+const publishedPreviewManifest={
+  version:"arc-v11-published-preview-bundle-v1",
+  pages:ARC1_V11_PRODUCTION_PATHS.map(path=>{
+    const page=renderedSite.pages.find(item=>item.path===path);
+    return {path,sha256:page.publishedSha256,size:page.publishedSize};
+  })
+};
+const publishedPreviewManifestJson=canonicalJson(publishedPreviewManifest);
+const publishedPreviewBundleSha256=await sha256Text(publishedPreviewManifestJson);
+const productionContentSha256=await sha256Text(ARC1_V11_PRODUCTION_PATHS.map(path=>`${path}\0${productionByPath.get(path).html}\0`).join(""));
+const approvalContentSha256=renderedSite.approvalBundleSha256;
+const leadRouteMode=renderedSite.hasLeadForm?"netlify_form":"not_required";
+const contactHtml=renderedSite.pages.find(page=>page.path==="contact/index.html").approvalHtml;
+const leadRouteFormName=renderedSite.hasLeadForm?(contactHtml.match(/<form\b[^>]*\bname="([A-Za-z][A-Za-z0-9_-]{0,63})"/i)?.[1]||""):"";
+if(renderedSite.hasLeadForm&&!leadRouteFormName)throw new Error("ARC_LEAD_ROUTE_INVALID: Contact form name is unavailable");
+const renderBundleData={
+  version:"arc1-five-page-render-bundle-v1",scope:"private-sanitized-five-page-preview-render",
+  runtime_version:renderedSite.runtimeVersion,site_contract_version:renderedSite.contractVersion,template_version:renderedSite.templateVersion,
+  offer_contract_id:offerContractId,deliverable,preview_folder:previewFolder,page_count:5,
+  logical_page_paths:logicalPagePaths,preview_paths:previewPaths,lead_route_mode:leadRouteMode,lead_route_form_name:leadRouteFormName,
+  pages:renderedSite.pages.map(page=>({
+    key:page.key,label:page.label,path:page.path,repository_path:page.filePath,url:page.url,
+    approval_html:page.approvalHtml,approval_sha256:page.approvalSha256,approval_size:page.approvalSize,
+    published_html:page.publishedHtml,published_sha256:page.publishedSha256,published_size:page.publishedSize,
+    production_sha256:productionByPath.get(page.path).sha256,production_size:productionByPath.get(page.path).size
+  })),
+  approval_manifest:renderedSite.approvalManifest,approval_manifest_sha256:approvalContentSha256,
+  published_preview_manifest:publishedPreviewManifest,published_preview_bundle_sha256:publishedPreviewBundleSha256,
+  production_content_sha256:productionContentSha256
+};
+const renderBundlePrivate=canonicalJson(renderBundleData);
+if(evidenceEncoder.encode(renderBundlePrivate).byteLength>1200000)throw new Error("ARC_PREVIEW_SIZE_INVALID: private render bundle exceeds 1200000 bytes");
+const renderBundleSha256=await sha256Text(renderBundlePrivate);
+const hasRenderedLeadForm=renderedSite.hasLeadForm;
 const boundLeadRecipientEmail=clean(inputData.private_lead_notification_email||inputData.verified_lead_notification_email).toLowerCase();
 const boundClaimRecipientEmail=clean(inputData.private_claim_recipient_email).toLowerCase();
 if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(boundClaimRecipientEmail))throw new Error("ARC_CHECKOUT_RECIPIENT_INVALID: explicit private claim recipient is required");
 const boundClaimRecipientEmailSha256=await sha256Text(boundClaimRecipientEmail);
 let checkoutLeadRecipientHmacSha256="";
 if(hasRenderedLeadForm){
-  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(boundLeadRecipientEmail)){
-    throw new Error("ARC_LEAD_ROUTE_INVALID: exact private lead recipient must be bound before checkout");
-  }
-  checkoutLeadRecipientHmacSha256=bytesToHex(await globalThis.crypto.subtle.sign(
-    "HMAC",checkoutBindingKey,evidenceEncoder.encode(`arc-checkout-lead-recipient-v1\n${checkoutSignatureMode}\n${boundLeadRecipientEmail}`)
-  ));
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(boundLeadRecipientEmail))throw new Error("ARC_LEAD_ROUTE_INVALID: exact private lead recipient must be bound before checkout");
+  checkoutLeadRecipientHmacSha256=bytesToHex(await globalThis.crypto.subtle.sign("HMAC",checkoutBindingKey,
+    evidenceEncoder.encode(`arc-checkout-lead-recipient-v1\n${checkoutSignatureMode}\n${boundLeadRecipientEmail}`)));
 }
 const checkoutAssetPublicationReceiptSha256=assetPublicationReceiptSha256||await sha256Text("arc1-no-publication-receipt-v1");
-const checkoutConfigSnapshot=canonicalJson({
-  version:"arc-checkout-offer-snapshot-v1",
-  scope:"immutable-approved-preview-private-checkout-offer",
-  checkout_binding_key_id:checkoutBindingKeyId,
-  environment:"arc-production",
-  preview_folder:previewFolder,
-  preview_path:`${previewFolder}/index.html`,
-  preview_source_repository:"arcwebhq-cpu/arc-previews",
-  public_folder_prefix:submissionPrefix,
+const checkoutOfferSnapshot=canonicalJson({
+  version:"arc-checkout-offer-snapshot-v2",scope:"immutable-approved-five-page-preview-private-checkout-offer",
+  offer_contract_id:offerContractId,deliverable,page_count:5,preview_folder:previewFolder,preview_paths:previewPaths,
+  preview_source_repository:"arcwebhq-cpu/arc-previews",public_folder_prefix:submissionPrefix,
+  approval_content_sha256:approvalContentSha256,published_preview_bundle_sha256:publishedPreviewBundleSha256,
+  production_content_sha256:productionContentSha256,render_bundle_sha256:renderBundleSha256,
+  lead_route_mode:leadRouteMode,lead_route_form_name:leadRouteFormName,
+  checkout_binding_key_id:checkoutBindingKeyId,environment:"arc-production",
   lead_route_recipient_hmac_sha256:checkoutLeadRecipientHmacSha256,
   asset_publication_receipt_sha256:checkoutAssetPublicationReceiptSha256,
-  ...stableCheckoutConfiguration,
-  configuration_sha256:paymentLinkEvidence.configuration_sha256
+  ...stableCheckoutConfiguration,configuration_sha256:paymentLinkEvidence.configuration_sha256
 });
-const checkoutConfigSnapshotSha256=await sha256Text(checkoutConfigSnapshot);
-const checkoutConfigSnapshotSignatureBytes=await globalThis.crypto.subtle.sign(
-  "HMAC",checkoutBindingKey,evidenceEncoder.encode(`arc-checkout-offer-snapshot-signature-v1\n${checkoutSignatureMode}\n${checkoutConfigSnapshot}`)
-);
-const checkoutConfigSnapshotHmacSha256=bytesToHex(checkoutConfigSnapshotSignatureBytes);
-html=html.trim();
-const approvalContentSha256=await sha256Text(html);
-const toolbar = `<aside class="arc-preview-toolbar" aria-label="ARC preview purchase"><span><strong>ARC preview</strong>Built for this business. Purchase only if approved.</span><span data-arc-checkout-private>Checkout is available only through the private approval email.</span></aside>`;
-if (!/<\/body>/i.test(html)) throw new Error("ARC_TEMPLATE_INVALID: closing body tag is missing");
-html = html.replace(/<\/body>/i, `${toolbar}\n</body>`);
-if(evidenceEncoder.encode(html).byteLength>499500){
-  throw new Error("ARC_PREVIEW_SIZE_INVALID: rendered preview must not exceed 499500 UTF-8 bytes before publication proof");
-}
-const unresolved = html.match(/\[\[[A-Z0-9_]+\]\]/g) || [];
-if (unresolved.length) throw new Error(`ARC_INJECTION_FAILED: unresolved=${[...new Set(unresolved)].join(",")}`);
-if(isFunctionEvidence){
-  const receiptUrls=new Set(Object.values(publicAssetUrlMap));
-  const renderedUrls=new Set();
-  const decodedHtml=decodeUrlEntities(html);
-  for(const match of decodedHtml.matchAll(/\b(?:src|href)\s*=\s*["']([^"']+)["']/gi)){
-    const candidate=clean(match[1]);
-    if(candidate.startsWith("https://arcwebhq-cpu.github.io/arc-previews/"))renderedUrls.add(candidate);
-  }
-  for(const match of decodedHtml.matchAll(/\bsrcset\s*=\s*["']([^"']+)["']/gi)){
-    for(const candidate of match[1].split(",").map(value=>clean(value).split(/\s+/,1)[0]).filter(Boolean)){
-      if(candidate.startsWith("https://arcwebhq-cpu.github.io/arc-previews/"))renderedUrls.add(candidate);
-    }
-  }
-  if(renderedUrls.size!==receiptUrls.size||[...renderedUrls].some(url=>!receiptUrls.has(url))||[...receiptUrls].some(url=>!renderedUrls.has(url))){
-    throw new Error("ARC1_ASSET_PUBLICATION_INVALID: final rendered HTML and signed receipt URL sets differ");
-  }
-}
-assertNoRemoteRuntimeDependencies(html,new Set(isFunctionEvidence?Object.values(publicAssetUrlMap):[]));
-await assertTrustedScripts(html);
-assertNoCheckoutCapability(html,"public rendered preview contains a decoded checkout capability or private offer marker");
-assertPrivateValuesAbsent(html, [
-  { label: "requester email", value: inputData.customer_email },
-  { label: "lead recipient", value: boundLeadRecipientEmail },
-  { label: "claim recipient", value: boundClaimRecipientEmail },
-  { label: "contact phone", value: inputData.private_contact_phone },
-  { label: "contact address", value: inputData.private_contact_address }
-], "rendered preview HTML");
-const renderContentSha256=await sha256Text(html);
+const checkoutOfferSnapshotSha256=await sha256Text(checkoutOfferSnapshot);
+const checkoutOfferSnapshotHmacSha256=bytesToHex(await globalThis.crypto.subtle.sign("HMAC",checkoutBindingKey,
+  evidenceEncoder.encode(`arc-checkout-offer-snapshot-signature-v2\n${checkoutSignatureMode}\n${checkoutOfferSnapshot}`)));
 const checkoutRecipientReservationPrivate=canonicalJson({
-  version:"arc1-checkout-recipient-reservation-v1",scope:"private-lead-recipient-for-approved-checkout",
-  approval_content_sha256:approvalContentSha256,checkout_offer_snapshot_sha256:checkoutConfigSnapshotSha256,
-  checkout_binding_key_id:checkoutBindingKeyId,
-  stripe_mode:checkoutSignatureMode,lead_route_recipient_hmac_sha256:checkoutLeadRecipientHmacSha256,
+  version:"arc1-checkout-recipient-reservation-v2",scope:"private-recipients-for-approved-five-page-checkout",
+  offer_contract_id:offerContractId,deliverable,page_count:5,preview_folder:previewFolder,preview_paths:previewPaths,
+  approval_content_sha256:approvalContentSha256,published_preview_bundle_sha256:publishedPreviewBundleSha256,
+  production_content_sha256:productionContentSha256,checkout_offer_snapshot_sha256:checkoutOfferSnapshotSha256,
+  checkout_binding_key_id:checkoutBindingKeyId,stripe_mode:checkoutSignatureMode,
+  lead_route_mode:leadRouteMode,lead_route_form_name:leadRouteFormName,
+  lead_route_recipient_hmac_sha256:checkoutLeadRecipientHmacSha256,
   lead_notification_email:hasRenderedLeadForm?boundLeadRecipientEmail:"",claim_recipient_email:boundClaimRecipientEmail,
   claim_recipient_email_sha256:boundClaimRecipientEmailSha256
 });
-const checkoutRecipientReservationHmacSha256=bytesToHex(await globalThis.crypto.subtle.sign(
-  "HMAC",checkoutBindingKey,evidenceEncoder.encode(`arc1-checkout-recipient-reservation-signature-v1\n${checkoutSignatureMode}\n${checkoutRecipientReservationPrivate}`)
-));
-const renderEvidence=JSON.stringify({
-  version:"arc1-render-evidence-v1",
-  scope:"signed-sanitized-preview-render",
-  preview_folder:previewFolder,
-  content_sha256:renderContentSha256,
-  intake_evidence_sha256:intakeEvidenceSha256,
-  state_digest_sha256:clean(intakeEvidence.state_digest_sha256),
-  submission_data_sha256:clean(intakeEvidence.submission_data_sha256),
-  asset_manifest_sha256:assetManifestSha256,
-  approval_content_sha256:approvalContentSha256,
-  checkout_offer_snapshot_sha256:checkoutConfigSnapshotSha256,script_manifest_sha256:trustedScriptManifestSha256,
-  ...(isFunctionEvidence?{asset_publication_receipt_sha256:assetPublicationReceiptSha256}:{})
+const checkoutRecipientReservationSha256=await sha256Text(checkoutRecipientReservationPrivate);
+const checkoutRecipientReservationHmacSha256=bytesToHex(await globalThis.crypto.subtle.sign("HMAC",checkoutBindingKey,
+  evidenceEncoder.encode(`arc1-checkout-recipient-reservation-signature-v2\n${checkoutSignatureMode}\n${checkoutRecipientReservationPrivate}`)));
+const renderEvidence=canonicalJson({
+  version:"arc1-render-evidence-v2",scope:"signed-sanitized-five-page-preview-render",
+  offer_contract_id:offerContractId,deliverable,page_count:5,preview_folder:previewFolder,preview_paths:previewPaths,
+  render_bundle_sha256:renderBundleSha256,approval_content_sha256:approvalContentSha256,
+  content_sha256:publishedPreviewBundleSha256,published_preview_bundle_sha256:publishedPreviewBundleSha256,
+  production_content_sha256:productionContentSha256,lead_route_mode:leadRouteMode,lead_route_form_name:leadRouteFormName,
+  intake_evidence_sha256:intakeEvidenceSha256,state_digest_sha256:clean(intakeEvidence.state_digest_sha256),
+  submission_data_sha256:clean(intakeEvidence.submission_data_sha256),asset_manifest_sha256:assetManifestSha256,
+  asset_publication_receipt_sha256:checkoutAssetPublicationReceiptSha256,script_manifest_sha256:trustedScriptManifestSha256,
+  checkout_offer_snapshot_sha256:checkoutOfferSnapshotSha256,
+  checkout_recipient_reservation_sha256:checkoutRecipientReservationSha256
 });
-const renderEvidenceSignatureBytes=await globalThis.crypto.subtle.sign(
-  "HMAC",
-  evidenceKey,
-  evidenceEncoder.encode(`arc1-render-evidence-signature-v1\n${renderEvidence}`)
-);
-const renderEvidenceHmacSha256=bytesToHex(renderEvidenceSignatureBytes);
-const pagesBaseUrl = clean(inputData.pages_base_url || "https://arcwebhq-cpu.github.io/arc-previews").replace(/\/+$/, "");
+const renderEvidenceHmacSha256=bytesToHex(await globalThis.crypto.subtle.sign("HMAC",evidenceKey,
+  evidenceEncoder.encode(`arc1-render-evidence-signature-v2\n${renderEvidence}`)));
 return {
-  html_content: html,
-  raw_json: JSON.stringify(generated),
-  file_path: `${previewFolder}/index.html`,
-  preview_folder: previewFolder,
-  preview_url: `${pagesBaseUrl}/${previewFolder}/`,
-  approval_content_sha256:approvalContentSha256,
-  script_manifest_sha256:trustedScriptManifestSha256,
-  checkout_config_snapshot_private:checkoutConfigSnapshot,
-  checkout_config_snapshot_sha256:checkoutConfigSnapshotSha256,
-  checkout_config_snapshot_hmac_sha256:checkoutConfigSnapshotHmacSha256,
+  raw_json:JSON.stringify(generated),render_bundle_private:renderBundlePrivate,render_bundle_sha256:renderBundleSha256,
+  preview_folder:previewFolder,preview_url:`${pagesBaseUrl}/${previewFolder}/`,preview_paths:previewPaths,
+  preview_paths_json:canonicalJson(previewPaths),logical_page_paths_json:canonicalJson(logicalPagePaths),page_count:5,
+  offer_contract_id:offerContractId,deliverable,approval_manifest_private:renderedSite.approvalManifestJson,
+  approval_content_sha256:approvalContentSha256,published_preview_manifest_private:publishedPreviewManifestJson,
+  published_preview_bundle_sha256:publishedPreviewBundleSha256,production_content_sha256:productionContentSha256,
+  lead_route_mode:leadRouteMode,lead_route_form_name:leadRouteFormName,script_manifest_sha256:trustedScriptManifestSha256,
+  checkout_offer_snapshot_private:checkoutOfferSnapshot,checkout_offer_snapshot_sha256:checkoutOfferSnapshotSha256,
+  checkout_offer_snapshot_hmac_sha256:checkoutOfferSnapshotHmacSha256,
   checkout_recipient_reservation_private:checkoutRecipientReservationPrivate,
+  checkout_recipient_reservation_sha256:checkoutRecipientReservationSha256,
   checkout_recipient_reservation_hmac_sha256:checkoutRecipientReservationHmacSha256,
-  payment_link_evidence_sha256: paymentLinkEvidenceSha256,
-  trusted_event_prefix: submissionPrefix,
-  trusted_netlify_submission_id: clean(intakeEvidence.submission_id).toLowerCase(),
-  trusted_received_at: receivedAt,
-  intake_state_key: clean(intakeEvidence.state_key),
-  intake_state_digest_sha256: clean(intakeEvidence.state_digest_sha256),
-  intake_evidence_sha256: intakeEvidenceSha256,
-  submission_data_sha256: clean(intakeEvidence.submission_data_sha256),
-  asset_manifest_sha256: assetManifestSha256,
-  asset_publication_receipt_sha256: assetPublicationReceiptSha256,
-  public_asset_url_map_json: canonicalJson(publicAssetUrlMap),
-  validated_asset_manifest: canonicalJson(evidenceManifest),
-  render_content_sha256:renderContentSha256,
-  render_evidence_private:renderEvidence,
-  render_evidence_hmac_sha256:renderEvidenceHmacSha256,
-  expected_media_profile: expectedMediaProfile,
-  template_placeholder_count: templateKeys.length,
-  final_placeholder_count: 0,
-  html_character_count: html.length,
-  template_comment: template.match(/ARC Client Master Template v\d+(?:\.\d+)?/i)?.[0] || "unknown"
+  payment_link_evidence_sha256:paymentLinkEvidenceSha256,trusted_event_prefix:submissionPrefix,
+  trusted_netlify_submission_id:clean(intakeEvidence.submission_id).toLowerCase(),trusted_received_at:receivedAt,
+  intake_state_key:clean(intakeEvidence.state_key),intake_state_digest_sha256:clean(intakeEvidence.state_digest_sha256),
+  intake_evidence_sha256:intakeEvidenceSha256,submission_data_sha256:clean(intakeEvidence.submission_data_sha256),
+  asset_manifest_sha256:assetManifestSha256,asset_publication_receipt_sha256:assetPublicationReceiptSha256,
+  public_asset_url_map_json:canonicalJson(verifiedAssetUrlMap),validated_asset_manifest:canonicalJson(evidenceManifest),
+  render_content_sha256:publishedPreviewBundleSha256,render_evidence_private:renderEvidence,
+  render_evidence_hmac_sha256:renderEvidenceHmacSha256,expected_media_profile:expectedMediaProfile,
+  template_placeholder_count:new Set([...template.matchAll(/\[\[([A-Z0-9_]+)\]\]/g)].map(match=>match[1])).size,
+  final_placeholder_count:0,total_published_html_character_count:renderedSite.pages.reduce((total,page)=>total+page.publishedHtml.length,0),
+  template_comment:template.match(/ARC Client Master Template v\d+(?:\.\d+)?/i)?.[0]||"unknown"
 };

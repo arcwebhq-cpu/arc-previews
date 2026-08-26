@@ -15,39 +15,53 @@ const accountId="acct_ArcPrivateCheckout";
 const accountSha=sha(accountId);
 const taxRegistrations=[{country:"US",id:"taxreg_ArcWashington",state:"WA",type:"state_sales_tax"}];
 const taxRegistrationsSha=sha(canonical(taxRegistrations));
+const previewFolder="summit-roofing-a1b2c3d4";
+const previewPaths=["about/index.html","contact/index.html","process/index.html","services/index.html","index.html"].map(path=>`${previewFolder}/${path}`);
+const approvalSha="c".repeat(64),publishedPreviewBundleSha="d".repeat(64),publishedSiteSha="e".repeat(64);
 const stableConfiguration={stripe_account_id_sha256:accountSha,livemode:false,price_id:"price_ArcPrivateCheckout",product_id:"prod_ArcWebsiteService",
-  amount_subtotal_minor_units:500000,currency:"usd",quantity:1,terms_version:"2026-08-12",terms_document_sha256:"a".repeat(64),automatic_tax_enabled:true,
+  amount_subtotal_minor_units:500000,currency:"usd",quantity:1,terms_version:"2026-08-25",terms_document_sha256:"a".repeat(64),automatic_tax_enabled:true,
   customer_address_source:"stripe_checkout_customer_details.address",price_tax_behavior:"exclusive",product_tax_code:"txcd_12345678",tax_contract_version:"arc-tax-v1",
   tax_settings_status:"active",tax_registrations:taxRegistrations,tax_registrations_sha256:taxRegistrationsSha,adult_acknowledgement_key:"adultpurchaserack",
-  name_collection_required:true,submit_type:"auto",checkout_redirect_url:"https://arcweb.onl/payment-success/?session_id={CHECKOUT_SESSION_ID}",stripe_api_version:"2026-06-24.dahlia"};
-const offer=canonical({version:"arc-checkout-offer-snapshot-v1",scope:"immutable-approved-preview-private-checkout-offer",checkout_binding_key_id:kid,
-  environment:"arc-production",preview_folder:"summit-roofing-a1b2c3d4",preview_path:"summit-roofing-a1b2c3d4/index.html",preview_source_repository:"arcwebhq-cpu/arc-previews",
+  name_collection_required:true,submit_type:"auto",checkout_redirect_url:"https://arcweb.onl/payment-success/?session_id={CHECKOUT_SESSION_ID}",stripe_api_version:"2026-07-29.dahlia"};
+const offer=canonical({version:"arc-checkout-offer-snapshot-v2",scope:"immutable-approved-five-page-preview-private-checkout-offer",checkout_binding_key_id:kid,
+  environment:"arc-production",offer_contract_id:"arc-fixed-five-page-offer-v1",deliverable:"fixed-five-page-marketing-website-v1",page_count:5,
+  preview_folder:previewFolder,preview_paths:previewPaths,preview_source_repository:"arcwebhq-cpu/arc-previews",
   public_folder_prefix:"a1b2c3d4",lead_route_recipient_hmac_sha256:mac(secret,"arc-checkout-lead-recipient-v1\ntest\nleads@example.com"),
+  lead_route_mode:"netlify_form",lead_route_form_name:"summit-lead",render_bundle_sha256:"6".repeat(64),
+  approval_content_sha256:approvalSha,published_preview_bundle_sha256:publishedPreviewBundleSha,production_content_sha256:publishedSiteSha,
   asset_publication_receipt_sha256:"b".repeat(64),...stableConfiguration,configuration_sha256:sha(canonical(stableConfiguration))});
-const offerSha=sha(offer),approvalSha="c".repeat(64);
-const recipient=canonical({version:"arc1-checkout-recipient-reservation-v1",scope:"private-lead-recipient-for-approved-checkout",approval_content_sha256:approvalSha,
-  checkout_offer_snapshot_sha256:offerSha,checkout_binding_key_id:kid,stripe_mode:mode,lead_route_recipient_hmac_sha256:JSON.parse(offer).lead_route_recipient_hmac_sha256,
+const offerSha=sha(offer);
+const recipient=canonical({version:"arc1-checkout-recipient-reservation-v2",scope:"private-recipients-for-approved-five-page-checkout",
+  offer_contract_id:"arc-fixed-five-page-offer-v1",deliverable:"fixed-five-page-marketing-website-v1",page_count:5,preview_folder:previewFolder,preview_paths:previewPaths,
+  approval_content_sha256:approvalSha,published_preview_bundle_sha256:publishedPreviewBundleSha,production_content_sha256:publishedSiteSha,
+  checkout_offer_snapshot_sha256:offerSha,checkout_binding_key_id:kid,stripe_mode:mode,lead_route_mode:"netlify_form",lead_route_form_name:"summit-lead",
+  lead_route_recipient_hmac_sha256:JSON.parse(offer).lead_route_recipient_hmac_sha256,
   lead_notification_email:"leads@example.com",claim_recipient_email:"customer@example.com",claim_recipient_email_sha256:sha("customer@example.com")});
 const recipientSha=sha(recipient),email="customer@example.com",emailToken="email-state-token";
-const core=canonical({version:"arc1-preview-readiness-core-v1",scope:"immutable-private-checkout-content-and-recipient-readiness",repository:"arcwebhq-cpu/arc-previews",
-  preview_folder:"summit-roofing-a1b2c3d4",preview_path:"summit-roofing-a1b2c3d4/index.html",preview_url:"https://arcwebhq-cpu.github.io/arc-previews/summit-roofing-a1b2c3d4/",
+const core=canonical({version:"arc1-preview-readiness-core-v2",scope:"immutable-five-page-private-checkout-content-and-recipient-readiness",repository:"arcwebhq-cpu/arc-previews",
+  offer_contract_id:"arc-fixed-five-page-offer-v1",deliverable:"fixed-five-page-marketing-website-v1",page_count:5,
+  preview_folder:previewFolder,preview_paths:previewPaths,preview_url:"https://arcwebhq-cpu.github.io/arc-previews/summit-roofing-a1b2c3d4/",
   approval_content_sha256:approvalSha,asset_publication_receipt_sha256:"b".repeat(64),checkout_offer_snapshot_sha256:offerSha,checkout_recipient_reservation_sha256:recipientSha,
-  content_sha256:"d".repeat(64),published_html_sha256:"e".repeat(64),customer_email_sha256:sha(email),email_state_token_sha256:sha(emailToken),
-  script_manifest_sha256:"8ff6073533b7b631ab6657461d3631a2f00ca4a70ed0b79c2c016647948aae7b",
+  content_sha256:publishedPreviewBundleSha,published_preview_bundle_sha256:publishedPreviewBundleSha,published_site_sha256:publishedSiteSha,
+  render_bundle_sha256:"6".repeat(64),lead_route_mode:"netlify_form",lead_route_form_name:"summit-lead",
+  lead_route_recipient_hmac_sha256:JSON.parse(offer).lead_route_recipient_hmac_sha256,
+  customer_email_sha256:sha(email),email_state_token_sha256:sha(emailToken),
+  script_manifest_sha256:"1ef7f0088cdcf042b1593fbc11d7ea2d3c47e9ff92c94caf2f578179e3993685",
   head_sha:"1".repeat(40),merge_commit_sha:"2".repeat(40),source_tree_sha:"3".repeat(40),merged_at:"2026-08-13T20:00:00.000Z",pr_number:42,
   check_name:"ARC preview quality/preview-quality",check_app_slug:"github-actions",check_app_id:15368});
 const coreSha=sha(core);
-const observationAt=(issuedMs,expiresMs,currentMainSha="4".repeat(40))=>{
-  const raw=canonical({version:"arc1-preview-readiness-observation-v1",scope:"renewable-private-checkout-readiness-observation",readiness_core_sha256:coreSha,
-    current_main_sha:currentMainSha,current_main_html_sha256:"e".repeat(64),pages_content_sha256:"e".repeat(64),
+const observationAt=(issuedMs,expiresMs,currentMainSha="4".repeat(40),currentMainTreeSha="3".repeat(40))=>{
+  const raw=canonical({version:"arc1-preview-readiness-observation-v2",scope:"renewable-five-page-private-checkout-readiness-observation",readiness_core_sha256:coreSha,
+    repository:"arcwebhq-cpu/arc-previews",preview_folder:previewFolder,preview_paths:previewPaths,current_main_sha:currentMainSha,current_main_tree_sha:currentMainTreeSha,
+    current_main_published_preview_bundle_sha256:publishedPreviewBundleSha,pages_published_preview_bundle_sha256:publishedPreviewBundleSha,published_site_sha256:publishedSiteSha,
     issued_at:new Date(issuedMs).toISOString(),expires_at:new Date(expiresMs).toISOString()});
-  return {raw,hmac:mac(secret,`arc1-preview-readiness-observation-signature-v1\n${mode}\n${raw}`)};
+  return {raw,hmac:mac(secret,`arc1-preview-readiness-observation-signature-v2\n${mode}\n${raw}`)};
 };
 const fresh=observationAt(Date.now()-1000,Date.now()+9*60*1000);
 const base={checkout_binding_key_id:kid,checkout_binding_secret:secret,retired_checkout_binding_keys_json:"{}",checkout_offer_snapshot_private:offer,
-  checkout_offer_snapshot_sha256:offerSha,checkout_offer_snapshot_hmac_sha256:mac(secret,`arc-checkout-offer-snapshot-signature-v1\n${mode}\n${offer}`),
-  checkout_recipient_reservation_private:recipient,checkout_recipient_reservation_hmac_sha256:mac(secret,`arc1-checkout-recipient-reservation-signature-v1\n${mode}\n${recipient}`),
-  checkout_readiness_core_private:core,checkout_readiness_core_sha256:coreSha,checkout_readiness_core_hmac_sha256:mac(secret,`arc1-preview-readiness-core-signature-v1\n${mode}\n${core}`),
+  checkout_offer_snapshot_sha256:offerSha,checkout_offer_snapshot_hmac_sha256:mac(secret,`arc-checkout-offer-snapshot-signature-v2\n${mode}\n${offer}`),
+  checkout_recipient_reservation_private:recipient,checkout_recipient_reservation_hmac_sha256:mac(secret,`arc1-checkout-recipient-reservation-signature-v2\n${mode}\n${recipient}`),
+  checkout_readiness_core_private:core,checkout_readiness_core_sha256:coreSha,checkout_readiness_core_hmac_sha256:mac(secret,`arc1-preview-readiness-core-signature-v2\n${mode}\n${core}`),
   checkout_readiness_observation_private:fresh.raw,checkout_readiness_observation_hmac_sha256:fresh.hmac,stripe_credential_key_id:"arc-test-rak-v1",
   stripe_api_key:"rk_test_arc_private_checkout_1234567890",provider_operation_timeout_ms:"20000"};
 
@@ -56,12 +70,77 @@ const prepared=await runStep({...base,phase:"PREPARE",private_checkout_prepare_e
 assert.equal(prepared.status,"PRIVATE_CHECKOUT_INTENT_PREPARE");
 assert.equal(prepared.provider_write_allowed,false);
 assert.equal(prepared.checkout_reference.length,138);
+assert.match(prepared.checkout_reference,/^v4_[A-Za-z0-9_-]{135}$/);
 assert.doesNotMatch(prepared.checkout_policy_private,/buy\.stripe\.com|plink_/i);
-assert.equal(JSON.parse(prepared.checkout_policy_private).payment_method_selection,"dynamic");
-assert.equal(Object.hasOwn(JSON.parse(prepared.checkout_policy_private),"payment_method_types"),false);
+const preparedPolicy=JSON.parse(prepared.checkout_policy_private);
+const packedReference=Buffer.from(prepared.checkout_reference.slice(3),"base64url"),referencePayload=packedReference.subarray(0,69);
+assert.equal(packedReference.length,101);
+assert.equal(referencePayload.subarray(0,1).toString("hex"),kid);
+assert.equal(referencePayload.subarray(1,5).toString("hex"),"a1b2c3d4");
+assert.equal(referencePayload.subarray(5,37).toString("hex"),approvalSha);
+assert.equal(referencePayload.subarray(37,69).toString("hex"),prepared.checkout_policy_sha256);
+assert.deepEqual(packedReference.subarray(69),createHmac("sha256",secret).update(`arc-checkout-reference-v4\narcwebhq-cpu/arc-previews\narc-production\nstripe-${mode}\n`).update(referencePayload).digest());
+assert.equal(preparedPolicy.version,"arc-private-checkout-policy-v2");
+assert.equal(preparedPolicy.scope,"one-approved-five-page-preview-one-private-payment-link");
+assert.deepEqual(preparedPolicy.preview_paths,previewPaths);
+assert.equal(preparedPolicy.offer_contract_id,"arc-fixed-five-page-offer-v1");
+assert.equal(preparedPolicy.deliverable,"fixed-five-page-marketing-website-v1");
+assert.equal(preparedPolicy.page_count,5);
+assert.equal(preparedPolicy.published_site_sha256,publishedSiteSha);
+assert.equal(Object.hasOwn(preparedPolicy,"preview_path"),false);
+assert.equal(Object.hasOwn(preparedPolicy,"published_html_sha256"),false);
+assert.equal(Object.hasOwn(preparedPolicy,"payment_method_types"),false);
+assert.deepEqual(Object.keys(preparedPolicy).sort(),["adult_acknowledgement_key","amount_subtotal_minor_units","approval_content_sha256","asset_publication_receipt_sha256","automatic_tax_enabled","checkout_binding_key_id","checkout_redirect_url","claim_recipient_email_sha256","completed_sessions_limit","content_sha256","currency","customer_address_source","deliverable","lead_route_recipient_hmac_sha256","name_collection_required","offer_contract_id","offer_snapshot_sha256","page_count","preview_folder","preview_paths","preview_source_repository","price_id","price_tax_behavior","product_id","product_tax_code","published_site_sha256","quantity","readiness_core_sha256","recipient_reservation_sha256","scope","source_commit_sha","source_tree_sha","stripe_account_id_sha256","stripe_api_version","stripe_mode","tax_contract_version","tax_registrations","tax_registrations_sha256","terms_document_sha256","terms_version","version"].sort());
+const noFormOffer=canonical({...JSON.parse(offer),lead_route_mode:"not_required",lead_route_form_name:"",lead_route_recipient_hmac_sha256:""});
+const noFormOfferSha=sha(noFormOffer);
+const noFormRecipient=canonical({...JSON.parse(recipient),checkout_offer_snapshot_sha256:noFormOfferSha,lead_route_mode:"not_required",lead_route_form_name:"",
+  lead_route_recipient_hmac_sha256:"",lead_notification_email:""});
+const noFormRecipientSha=sha(noFormRecipient);
+const noFormCore=canonical({...JSON.parse(core),checkout_offer_snapshot_sha256:noFormOfferSha,checkout_recipient_reservation_sha256:noFormRecipientSha,
+  lead_route_mode:"not_required",lead_route_form_name:"",lead_route_recipient_hmac_sha256:""});
+const noFormCoreSha=sha(noFormCore);
+const noFormObservation=canonical({...JSON.parse(fresh.raw),readiness_core_sha256:noFormCoreSha});
+const noFormPrepared=await runStep({...base,phase:"PREPARE",private_checkout_prepare_enabled:"true",checkout_offer_snapshot_private:noFormOffer,
+  checkout_offer_snapshot_sha256:noFormOfferSha,checkout_offer_snapshot_hmac_sha256:mac(secret,`arc-checkout-offer-snapshot-signature-v2\n${mode}\n${noFormOffer}`),
+  checkout_recipient_reservation_private:noFormRecipient,checkout_recipient_reservation_hmac_sha256:mac(secret,`arc1-checkout-recipient-reservation-signature-v2\n${mode}\n${noFormRecipient}`),
+  checkout_readiness_core_private:noFormCore,checkout_readiness_core_sha256:noFormCoreSha,
+  checkout_readiness_core_hmac_sha256:mac(secret,`arc1-preview-readiness-core-signature-v2\n${mode}\n${noFormCore}`),
+  checkout_readiness_observation_private:noFormObservation,
+  checkout_readiness_observation_hmac_sha256:mac(secret,`arc1-preview-readiness-observation-signature-v2\n${mode}\n${noFormObservation}`)},()=>{throw new Error("network");},Buffer);
+assert.equal(JSON.parse(noFormPrepared.checkout_policy_private).lead_route_recipient_hmac_sha256,"");
+let crossPairNetworkCalls=0;
+const legacyOfferObject={...JSON.parse(offer),version:"arc-checkout-offer-snapshot-v1",scope:"immutable-approved-preview-private-checkout-offer"};
+const legacyOffer=canonical(legacyOfferObject);
+await assert.rejects(runStep({...base,phase:"PREPARE",private_checkout_prepare_enabled:"true",checkout_offer_snapshot_private:legacyOffer,
+  checkout_offer_snapshot_sha256:sha(legacyOffer),checkout_offer_snapshot_hmac_sha256:mac(secret,`arc-checkout-offer-snapshot-signature-v1\n${mode}\n${legacyOffer}`)},()=>{crossPairNetworkCalls+=1;throw new Error("network");},Buffer),/offer snapshot/);
+const legacyCoreObject={...JSON.parse(core),version:"arc1-preview-readiness-core-v1"};
+const legacyCore=canonical(legacyCoreObject);
+await assert.rejects(runStep({...base,phase:"PREPARE",private_checkout_prepare_enabled:"true",checkout_readiness_core_private:legacyCore,
+  checkout_readiness_core_sha256:sha(legacyCore),checkout_readiness_core_hmac_sha256:mac(secret,`arc1-preview-readiness-core-signature-v1\n${mode}\n${legacyCore}`)},()=>{crossPairNetworkCalls+=1;throw new Error("network");},Buffer),/readiness core/);
+for(const mismatchedCoreObject of [
+  {...JSON.parse(core),offer_contract_id:"arc-wrong-offer-v1"},
+  {...JSON.parse(core),deliverable:"wrong-deliverable-v1"},
+  {...JSON.parse(core),page_count:1},
+  {...JSON.parse(core),lead_route_recipient_hmac_sha256:"0".repeat(64)}
+]){
+  const mismatchedCore=canonical(mismatchedCoreObject);
+  await assert.rejects(runStep({...base,phase:"PREPARE",private_checkout_prepare_enabled:"true",checkout_readiness_core_private:mismatchedCore,
+    checkout_readiness_core_sha256:sha(mismatchedCore),checkout_readiness_core_hmac_sha256:mac(secret,`arc1-preview-readiness-core-signature-v2\n${mode}\n${mismatchedCore}`)},
+  ()=>{crossPairNetworkCalls+=1;throw new Error("network");},Buffer),/readiness core/);
+}
+const legacyRecipient=canonical({...JSON.parse(recipient),version:"arc1-checkout-recipient-reservation-v1",scope:"private-lead-recipient-for-approved-checkout"});
+await assert.rejects(runStep({...base,phase:"PREPARE",private_checkout_prepare_enabled:"true",checkout_recipient_reservation_private:legacyRecipient,
+  checkout_recipient_reservation_hmac_sha256:mac(secret,`arc1-checkout-recipient-reservation-signature-v1\n${mode}\n${legacyRecipient}`)},()=>{crossPairNetworkCalls+=1;throw new Error("network");},Buffer),/recipient reservation/);
+const reorderedOffer=canonical({...JSON.parse(offer),preview_paths:[...previewPaths].reverse()});
+await assert.rejects(runStep({...base,phase:"PREPARE",private_checkout_prepare_enabled:"true",checkout_offer_snapshot_private:reorderedOffer,
+  checkout_offer_snapshot_sha256:sha(reorderedOffer),checkout_offer_snapshot_hmac_sha256:mac(secret,`arc-checkout-offer-snapshot-signature-v2\n${mode}\n${reorderedOffer}`)},()=>{crossPairNetworkCalls+=1;throw new Error("network");},Buffer),/offer snapshot/);
+assert.equal(crossPairNetworkCalls,0,"all v1/v2 and path-order cross-pairs must fail before provider access");
 const preparedReplay=await runStep({...base,phase:"PREPARE",private_checkout_prepare_enabled:"true",private_checkout_intent_state:prepared.private_checkout_intent_state},()=>{throw new Error("network");},Buffer);
 assert.equal(preparedReplay.status,"PRIVATE_CHECKOUT_INTENT_REUSED");
-const renewedAfterUnrelatedMain=observationAt(Date.now()-500,Date.now()+9*60*1000,"5".repeat(40));
+const v3Intent=canonical({...JSON.parse(prepared.private_checkout_intent_state),checkout_reference:`v3_${prepared.checkout_reference.slice(3)}`});
+await assert.rejects(runStep({...base,phase:"PREPARE",private_checkout_prepare_enabled:"true",private_checkout_intent_state:v3Intent},()=>{crossPairNetworkCalls+=1;throw new Error("network");},Buffer),/replay|CONFLICT/);
+assert.equal(crossPairNetworkCalls,0,"a v3 reference cannot replay against the v4 policy");
+const renewedAfterUnrelatedMain=observationAt(Date.now()-500,Date.now()+9*60*1000,"5".repeat(40),"6".repeat(40));
 const renewedPrepared=await runStep({...base,phase:"PREPARE",private_checkout_prepare_enabled:"true",checkout_readiness_observation_private:renewedAfterUnrelatedMain.raw,
   checkout_readiness_observation_hmac_sha256:renewedAfterUnrelatedMain.hmac,private_checkout_intent_state:prepared.private_checkout_intent_state},()=>{throw new Error("network");},Buffer);
 assert.equal(renewedPrepared.checkout_reference,prepared.checkout_reference,"unrelated main movement must not change the private reference");
@@ -116,9 +195,13 @@ try{created=await runStep({...base,phase:"CREATE",private_checkout_provider_muta
 }
 const createRequest=requests.find(item=>item.method==="POST");
 const params=new URLSearchParams(createRequest.body),metadata={};
+assert.equal(createRequest.headers["Stripe-Version"],"2026-07-29.dahlia");
 assert.equal([...params.keys()].some(name=>name.startsWith("payment_method_types")),false,"Payment Link create must omit payment_method_types so Stripe can use dynamic methods");
 assert.equal(params.get("billing_address_collection"),"required","Payment Link create must require the customer's full billing address");
 for(const [name,value] of params)if(name.startsWith("metadata["))metadata[name.slice(9,-1)]=value;
+assert.equal(metadata.arc_v4_ref,prepared.checkout_reference);
+assert.equal(metadata.arc_v4_ref_sha256,prepared.checkout_reference_sha256);
+assert.equal(Object.hasOwn(metadata,"arc_v3_ref"),false);
 readback={...linkBase,metadata,line_items:{object:"list",has_more:false,data:[{quantity:1,price:{id:stableConfiguration.price_id,product:readbackProduct}}]}};
 reconcileCandidates=[{id:linkBase.id,metadata}];
 requests.length=0;
@@ -191,6 +274,7 @@ const finalized=await runStep(finalInput,finalFetch,Buffer);
 assert.equal(finalized.send_preview_email,true);
 assert.equal(finalized.email_state_write_required_before_email,true);
 assert.equal(finalized.checkout_url_private,linkBase.url);
+assert.equal(finalized.ready_tag,`arc-checkout-ready-v4/${prepared.checkout_reference_sha256}`);
 const claimed=await runStep({...finalInput,email_state:finalized.next_email_state},finalFetch,Buffer);
 assert.equal(claimed.send_preview_email,true);
 assert.equal(claimed.email_state_write_required_before_email,false);

@@ -5,13 +5,16 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { fixtures as v11Fixtures } from "../fixtures/v11_industries.mjs";
 import { buildPagesArtifact } from "../scripts/build_pages_artifact.mjs";
+import { renderV11Site } from "../scripts/v11_site_contract.mjs";
 
 const disclosure = "Fictional ARC design concept — not a real business. Checkout and lead collection are disabled.";
 const customerFolder = "northstar-roofing-acde1234";
 const sha256 = value => createHash("sha256").update(value, "utf8").digest("hex");
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const template=await readFile(path.join(projectRoot,"ARC_MASTER_TEMPLATE.html"),"utf8");
+const templateV11=await readFile(path.join(projectRoot,"ARC_MASTER_TEMPLATE_V11.html"),"utf8");
 const trustedScripts=(template.match(/<script\b[^>]*>[\s\S]*?<\/script>/gi)||[]).join("\n");
 
 async function put(root, relative, content) {
@@ -47,7 +50,9 @@ try {
   await put(root, "showcases/manifest.json", `${JSON.stringify(manifest)}\n`);
   await put(root, "showcases/assets/provenance.json", await readFile(path.join(projectRoot, "showcases/assets/provenance.json"), "utf8"));
   for (const item of manifest) {
-    await put(root,item.file,await readFile(path.join(projectRoot,item.file),"utf8"));
+    for (const page of item.pages) {
+      await put(root,page.file,await readFile(path.join(projectRoot,page.file),"utf8"));
+    }
     const heroBytes = await readFile(path.join(projectRoot,item.heroAsset.file));
     const heroDestination = path.join(root, ...item.heroAsset.file.split("/"));
     await mkdir(path.dirname(heroDestination), { recursive: true });
@@ -60,6 +65,11 @@ try {
   await put(root, `${customerFolder}/index.html`, customerPreview(customerFolder, { assetUrl }));
   await mkdir(path.dirname(path.join(root, assetRelative)), { recursive: true });
   await writeFile(path.join(root, assetRelative), png);
+  const v11Customer = renderV11Site(templateV11, {
+    ...v11Fixtures[0].content,
+    CONTACT_DETAILS_HTML: `${v11Fixtures[0].content.CONTACT_DETAILS_HTML}<p><a href="mailto:hello@ironwood-roofing.example">Email the public business inbox</a></p>`
+  }, { trustedEventPrefix: v11Fixtures[0].id });
+  for (const page of v11Customer.pages) await put(root, `${v11Customer.folder}/${page.path}`, page.html);
 
   // These deliberately contain publishable-looking or sensitive content, but
   // none belongs to one of the two allowed public classes.
@@ -78,15 +88,33 @@ try {
     "index.html",
     assetRelative,
     `${customerFolder}/index.html`,
+    `${v11Customer.folder}/about/index.html`,
+    `${v11Customer.folder}/contact/index.html`,
+    `${v11Customer.folder}/index.html`,
+    `${v11Customer.folder}/process/index.html`,
+    `${v11Customer.folder}/services/index.html`,
     "showcases/assets/1db7b49151bb0a391d616b8658ab15cdd1d6949426d4e8c96eb12787fb553ce7.webp",
     "showcases/assets/3f8f6dcbc44f0bb37c1dccfad999f20a8a80213486c3c31dc438e89d1be887cb.webp",
     "showcases/assets/c99014acba5ec713042002cda67c4efbbf7c0ecffcb4f6044b3a76134496aa5c.webp",
+    "showcases/dental/about/index.html",
+    "showcases/dental/contact/index.html",
     "showcases/dental/index.html",
+    "showcases/dental/process/index.html",
+    "showcases/dental/services/index.html",
+    "showcases/finance/about/index.html",
+    "showcases/finance/contact/index.html",
     "showcases/finance/index.html",
-    "showcases/roofing/index.html"
-  ];
-  assert.deepEqual(result.customerPreviews, [customerFolder]);
+    "showcases/finance/process/index.html",
+    "showcases/finance/services/index.html",
+    "showcases/roofing/about/index.html",
+    "showcases/roofing/contact/index.html",
+    "showcases/roofing/index.html",
+    "showcases/roofing/process/index.html",
+    "showcases/roofing/services/index.html"
+  ].sort();
+  assert.deepEqual(result.customerPreviews, [customerFolder, v11Customer.folder].sort());
   assert.deepEqual(result.showcases, ["dental", "finance", "roofing"]);
+  assert.equal(result.showcasePageCount, 15);
   assert.deepEqual(await listFiles(output), expectedArtifactFiles);
   const pagesIndex = await readFile(path.join(output, "index.html"), "utf8");
   assert.match(pagesIndex, /noindex,nofollow,noarchive,nosnippet/);
@@ -99,6 +127,18 @@ try {
   ]);
   assert.equal((await readFile(path.join(output, customerFolder, "index.html"), "utf8")).includes("PRIVATE"), false);
   assert.deepEqual(await readFile(path.join(output, assetRelative)), png);
+  const v11ProcessPath = path.join(root, v11Customer.folder, "process", "index.html");
+  const v11ProcessHtml = await readFile(v11ProcessPath, "utf8");
+  await rm(v11ProcessPath);
+  await assert.rejects(buildPagesArtifact({ root, output }), /must contain exactly one regular index\.html/,
+    "an active v11 customer folder must fail closed when one route is missing");
+  await writeFile(v11ProcessPath, v11ProcessHtml, "utf8");
+  const v11HomePath = path.join(root, v11Customer.folder, "index.html");
+  const v11HomeHtml = await readFile(v11HomePath, "utf8");
+  await writeFile(v11HomePath, v11HomeHtml.replace("</main>", `<p>v4_${"A".repeat(135)}</p></main>`), "utf8");
+  await assert.rejects(buildPagesArtifact({ root, output }), /private checkout capability/,
+    "v4 private checkout evidence must never enter the Pages artifact");
+  await writeFile(v11HomePath, v11HomeHtml, "utf8");
   const assertRejectedImageAsset = async ({ bytes, extension, label, expected }) => {
     const folder = `invalid-${label}-${createHash("sha256").update(label).digest("hex").slice(0, 8)}`;
     const digest = createHash("sha256").update(bytes).digest("hex");
@@ -300,14 +340,22 @@ try {
   await rm(path.join(root, assetRelative));
   await writeFile(path.join(root, assetRelative), originalAsset);
 
-  const unsafeShowcase = manifest[0].file;
+  const unsafeShowcase = manifest[0].pages[0].file;
   const safeShowcase = await readFile(path.join(root, ...unsafeShowcase.split("/")), "utf8");
-  await put(root, unsafeShowcase, safeShowcase.replace("</body>", '<form data-netlify="true"></form></body>'));
+  const unsafeShowcaseHtml = safeShowcase.replace("</body>", '<form data-netlify="true"></form></body>');
+  const unsafeShowcaseManifest = structuredClone(manifest);
+  const unsafePage = unsafeShowcaseManifest[0].pages[0];
+  unsafePage.bytes = Buffer.byteLength(unsafeShowcaseHtml, "utf8");
+  unsafePage.sha256 = sha256(unsafeShowcaseHtml);
+  unsafeShowcaseManifest[0].total_bytes += unsafePage.bytes - manifest[0].pages[0].bytes;
+  await put(root, unsafeShowcase, unsafeShowcaseHtml);
+  await put(root, "showcases/manifest.json", `${JSON.stringify(unsafeShowcaseManifest)}\n`);
   await assert.rejects(
     buildPagesArtifact({ root, output }),
     /active form or checkout/
   );
   await put(root, unsafeShowcase, safeShowcase);
+  await put(root, "showcases/manifest.json", `${JSON.stringify(manifest)}\n`);
 
   const showcaseHero = manifest[0].heroAsset.file;
   const safeShowcaseHero = await readFile(path.join(root, ...showcaseHero.split("/")));
@@ -334,7 +382,17 @@ try {
   await assert.rejects(buildPagesArtifact({ root, output }), /showcase asset provenance is incomplete/);
   await writeFile(provenancePath, safeProvenance, "utf8");
 
-  await put(root, "showcases/manifest.json", `${JSON.stringify([...manifest, { profile: "extra", file: "showcases/extra/index.html" }])}\n`);
+  const tamperedPageHashManifest = structuredClone(manifest);
+  tamperedPageHashManifest[0].pages[1].sha256 = "0".repeat(64);
+  await put(root, "showcases/manifest.json", `${JSON.stringify(tamperedPageHashManifest)}\n`);
+  await assert.rejects(buildPagesArtifact({ root, output }), /manifest size or digest mismatch/);
+
+  const tamperedPageCountManifest = structuredClone(manifest);
+  tamperedPageCountManifest[0].page_count = 4;
+  await put(root, "showcases/manifest.json", `${JSON.stringify(tamperedPageCountManifest)}\n`);
+  await assert.rejects(buildPagesArtifact({ root, output }), /fixed public allowlist/);
+
+  await put(root, "showcases/manifest.json", `${JSON.stringify([...manifest, { profile: "extra", pages: [] }])}\n`);
   await assert.rejects(
     buildPagesArtifact({ root, output }),
     /exactly three entries/
@@ -348,7 +406,7 @@ const packageJson = JSON.parse(await readFile(path.join(projectRoot, "package.js
 assert.equal(
   packageJson.scripts["build:pages"],
   "npm run build:showcases && node scripts/build_pages_artifact.mjs",
-  "Pages must regenerate v10-derived showcases in its own fresh runner before allowlisting them"
+  "Pages must regenerate v11 five-page showcases in its own fresh runner before allowlisting them"
 );
 assert.match(workflow, /deploy-pages:[\s\S]*if: github\.event_name == 'push' && github\.ref == 'refs\/heads\/main'[\s\S]*needs: preview-quality/);
 assert.match(workflow, /run: npm run build:pages/);
@@ -358,5 +416,5 @@ assert.match(workflow, /uses: actions\/upload-pages-artifact@[^\s]+[^\n]*\n[\s\S
 assert.match(workflow, /uses: actions\/deploy-pages@[^\s]+/);
 assert.doesNotMatch(workflow, /uses: actions\/upload-pages-artifact@[^\s]+[^\n]*\n[\s\S]{0,120}path:\s*["']?\.["']?\s*$/m);
 
-console.log("PASS Pages publish allowlist: only three inert showcases and proof-bound root v10 previews are deployable.");
+console.log("PASS Pages publish allowlist: only 15 pages across three inert v11 showcases and exact v11/proof-bound legacy v10 customer previews are deployable.");
 console.log("PASS Pages workflow contract: deployment waits for quality and uploads only .pages-dist.");

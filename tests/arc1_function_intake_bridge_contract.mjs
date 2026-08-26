@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash, createHmac } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { fixtures } from '../fixtures/v10_industries.mjs';
+import { fixtures } from '../fixtures/v11_industries.mjs';
 import { createTestPaymentLinkEvidence } from './fixtures/payment_link_evidence.mjs';
 
 const verifierSource = await readFile(new URL('../zapier/arc1_verify_function_intake.js', import.meta.url), 'utf8');
@@ -29,8 +29,10 @@ const canonicalJson = value => {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
   return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
 };
+const logicalPagePaths = ['index.html', 'services/index.html', 'about/index.html', 'process/index.html', 'contact/index.html'];
+const artifactPagePaths = ['about/index.html', 'contact/index.html', 'process/index.html', 'services/index.html', 'index.html'];
 
-const contractSha256 = 'e9bd5a3be21e0192acdc8b81692dab7bf5b1d0a132325a73011aa03e43674841';
+const contractSha256 = 'c4ab396bf04464629624dd19a37602755c8d429db0bf729b49bbfdfdba3ae20c';
 const siteId = '8f9d462c-952f-42fc-a3a0-50a2529e8f5d';
 const submissionId = '11111111-1111-4111-8111-111111111111';
 const bridgeSecret = 'bridge-evidence-secret-unique-0123456789';
@@ -45,8 +47,9 @@ const now = Date.now();
 const receivedAt = new Date(now - 60_000).toISOString();
 const evidenceIssuedAt = new Date(now - 30_000).toISOString();
 const evidenceExpiresAt = new Date(now + 60 * 60_000).toISOString();
-const budget = 'Yes, understands the finished ARC website subtotal is $5,000 plus applicable sales tax only after preview approval';
-const terms = 'Accepted ARC preview terms, privacy policy, refund policy, and service scope dated 2026-08-12; separate adult checkout acceptance required';
+const offerContractId = 'arc-fixed-five-page-offer-v1';
+const budget = 'Yes, understands the finished ARC website is a fixed five-page website with a $5,000 subtotal plus applicable sales tax only after preview approval';
+const terms = 'Accepted ARC preview terms, privacy policy, refund policy, and fixed five-page service scope dated 2026-08-25; separate adult checkout acceptance required';
 const data = {
   budget_confirmed: budget,
   business: 'Private Test Roofing',
@@ -54,7 +57,8 @@ const data = {
   email: 'private-owner@example.test',
   goals: ['More calls'],
   industry: 'Roofing',
-  intake_version: 'arc-intake-v7',
+  intake_version: 'arc-intake-v8',
+  offer_contract_id: offerContractId,
   main_call_to_action: 'Request Estimate',
   main_services: 'Roof replacement',
   name: 'Private Test Owner',
@@ -122,7 +126,10 @@ const expectedPublicContent = {
 };
 assert.deepEqual(issued.submission_data, expectedPublicContent);
 assert.equal(issued.submission_data_json, canonicalJson(expectedPublicContent));
-for (const privateField of ['email', 'name', 'lead_notification_email', 'referrer_host', 'utm_source']) {
+for (const privateField of [
+  'budget_confirmed', 'email', 'intake_version', 'name', 'lead_notification_email', 'offer_contract_id',
+  'referrer_host', 'terms_accepted', 'utm_source',
+]) {
   assert.equal(Object.hasOwn(issued.submission_data, privateField), false, `${privateField} must not enter the generator projection.`);
 }
 assert.equal(issued.trusted_netlify_submission_id, submissionId);
@@ -133,6 +140,8 @@ assert.match(issued.ingress_state_key, /^arc1-function-ingress-v1:[a-f0-9]{64}$/
 const downstream = JSON.parse(issued.intake_evidence_private);
 assert.equal(downstream.version, 'arc1-intake-evidence-v2');
 assert.equal(downstream.scope, 'authoritative-first-party-function-intake');
+assert.equal(downstream.intake_version, 'arc-intake-v8');
+assert.equal(downstream.offer_contract_id, offerContractId);
 assert.equal(downstream.budget_confirmed, budget);
 assert.equal(downstream.terms_accepted, terms);
 assert.equal(downstream.site_id_sha256, sha256(siteId));
@@ -144,9 +153,10 @@ assert.equal(
 
 // The existing injector and publisher must accept the exact v2 evidence only
 // after the normal create-only ARC1 claim, without pretending it was a Form.
-const template = await readFile(new URL('../ARC_MASTER_TEMPLATE.html', import.meta.url), 'utf8');
+const template = await readFile(new URL('../ARC_MASTER_TEMPLATE_V11.html', import.meta.url), 'utf8');
 const payment = createTestPaymentLinkEvidence();
 const fixture = fixtures[0];
+assert.equal(Object.keys(fixture.content).length, 58, 'The V11 migration must preserve the exact 58-key generator contract.');
 const claimCreatedAtForBuild = new Date().toISOString();
 const claimInputs = {
   intake_claim_status: 'CLAIMED',
@@ -216,6 +226,43 @@ assert.equal(rendered.asset_publication_receipt_sha256, publishedEmptyAssets.ass
 assert.equal(JSON.parse(rendered.render_evidence_private).asset_publication_receipt_sha256,
   publishedEmptyAssets.asset_publication_receipt_sha256,
   'NO_PUBLIC_UPLOADS must remain exactly bound from publication through render evidence.');
+assert.equal(rendered.page_count, 5);
+assert.deepEqual(rendered.preview_paths, artifactPagePaths.map(path => `${rendered.preview_folder}/${path}`));
+assert.deepEqual(JSON.parse(rendered.render_bundle_private).logical_page_paths, logicalPagePaths);
+for (const legacy of ['html_content', 'file_path', 'preview_path']) {
+  assert.equal(Object.hasOwn(rendered, legacy), false, `V11 injector output must not expose legacy ${legacy}.`);
+}
+
+const previewInputFor = ({ verified, renderedOutput, receiptInputs, claim, assetUrls = {} }) => ({
+  github_token: 'mock-github-token', github_owner: 'arcwebhq-cpu', github_repo: 'arc-previews', github_base_branch: 'main',
+  pages_base_url: 'https://arcwebhq-cpu.github.io/arc-previews', validation_pass: true,
+  trusted_event_prefix: renderedOutput.trusted_event_prefix, preview_folder: renderedOutput.preview_folder,
+  render_bundle_private: renderedOutput.render_bundle_private, render_bundle_sha256: renderedOutput.render_bundle_sha256,
+  render_content_sha256: renderedOutput.render_content_sha256, script_manifest_sha256: renderedOutput.script_manifest_sha256,
+  checkout_offer_snapshot_private: renderedOutput.checkout_offer_snapshot_private,
+  checkout_offer_snapshot_sha256: renderedOutput.checkout_offer_snapshot_sha256,
+  checkout_offer_snapshot_hmac_sha256: renderedOutput.checkout_offer_snapshot_hmac_sha256,
+  checkout_recipient_reservation_private: renderedOutput.checkout_recipient_reservation_private,
+  checkout_recipient_reservation_sha256: renderedOutput.checkout_recipient_reservation_sha256,
+  checkout_recipient_reservation_hmac_sha256: renderedOutput.checkout_recipient_reservation_hmac_sha256,
+  checkout_binding_key_id: '01', checkout_binding_secret: 'checkout-binding-secret-unique-0123456789',
+  retired_checkout_binding_keys_json: '{}', customer_email: fixture.customerEmail,
+  private_claim_recipient_email: fixture.customerEmail, private_lead_notification_email: 'leads@example.test',
+  intake_evidence_secret: intakeSecret, intake_evidence_private: verified.intake_evidence_private,
+  intake_evidence_hmac_sha256: verified.intake_evidence_hmac_sha256,
+  intake_evidence_sha256: renderedOutput.intake_evidence_sha256,
+  intake_state_key: renderedOutput.intake_state_key, intake_state_digest_sha256: renderedOutput.intake_state_digest_sha256,
+  submission_data_sha256: renderedOutput.submission_data_sha256,
+  asset_manifest_sha256: renderedOutput.asset_manifest_sha256,
+  validated_asset_manifest: renderedOutput.validated_asset_manifest,
+  render_evidence_private: renderedOutput.render_evidence_private,
+  render_evidence_hmac_sha256: renderedOutput.render_evidence_hmac_sha256,
+  ...assetUrls, ...receiptInputs, ...claim,
+});
+const emptyPreviewInput = previewInputFor({
+  verified: issued, renderedOutput: rendered, receiptInputs: emptyReceiptInputs, claim: claimInputs,
+  assetUrls: { logo_file_url: '', hero_image_url: '', supporting_image_url: '' },
+});
 
 const encodedPrivacyCases = [
   ['requester email', 'customer_email', fixture.customerEmail],
@@ -227,69 +274,29 @@ for (const [label, inputField, privateValue] of encodedPrivacyCases) {
   await assert.rejects(runInjector({
     ...injectorInputs,
     [inputField]: privateValue,
-    raw_json: JSON.stringify({ ...fixture.content, SECONDARY_CTA_HREF: `https://example.test/path?next=${encoded}#${encoded}` }),
+    raw_json: JSON.stringify({
+      ...fixture.content,
+      ABOUT_BODY: `${fixture.content.ABOUT_BODY}<p><a href="https://example.test/path?next=${encoded}#${encoded}">Details</a></p>`,
+    }),
   }), /ARC_PRIVACY_FAILED/, `${label} must be rejected after recursive URL decoding before render evidence is signed.`);
-
-  let privacyPublisherNetworkCalls = 0;
-  await assert.rejects(runPublisher({
-    github_token: 'mock-github-token',
-    trusted_event_prefix: rendered.trusted_event_prefix,
-    preview_folder: rendered.preview_folder,
-    file_path: rendered.file_path,
-    html_content: rendered.html_content.replace('</body>', `<a href="https://example.test/?next=${encoded}#${encoded}">details</a></body>`),
-    validation_pass: true,
-    [inputField]: privateValue,
-  }, async () => {
-    privacyPublisherNetworkCalls += 1;
-    throw new Error('Privacy rejection must precede GitHub access.');
-  }, Buffer), /ARC_PRIVACY_FAILED/, `${label} must be rejected again at the publication boundary.`);
-  assert.equal(privacyPublisherNetworkCalls, 0, `${label} rejection must make zero GitHub calls.`);
 }
+let privacyPublisherNetworkCalls = 0;
+await assert.rejects(runPublisher({ ...emptyPreviewInput, customer_email: fixture.content.BUSINESS_NAME }, async () => {
+  privacyPublisherNetworkCalls += 1;
+  throw new Error('Privacy rejection must precede GitHub access.');
+}, Buffer), /ARC_PRIVACY_FAILED/, 'The publisher must independently reject private data in any page before GitHub access.');
+assert.equal(privacyPublisherNetworkCalls, 0);
+
 let publisherReachedGitHub = false;
-await assert.rejects(runPublisher({
-  github_token: 'mock-github-token',
-  trusted_event_prefix: rendered.trusted_event_prefix,
-  preview_folder: rendered.preview_folder,
-  file_path: rendered.file_path,
-  html_content: rendered.html_content,
-  validation_pass: true,
-  pages_base_url: 'https://arcwebhq-cpu.github.io/arc-previews',
-  customer_email: fixture.customerEmail,
-  expected_netlify_site_id: siteId,
-  expected_netlify_form_id: '6a483964f58804000839c2de',
-  expected_netlify_form_name: 'arc-preview',
-  intake_evidence_secret: intakeSecret,
-  intake_evidence_private: issued.intake_evidence_private,
-  intake_evidence_hmac_sha256: issued.intake_evidence_hmac_sha256,
-  logo_file_url: '', hero_image_url: '', supporting_image_url: '',
-  ...emptyReceiptInputs,
-  ...claimInputs,
-  intake_state_key: rendered.intake_state_key,
-  intake_state_digest_sha256: rendered.intake_state_digest_sha256,
-  intake_evidence_sha256: rendered.intake_evidence_sha256,
-  submission_data_sha256: rendered.submission_data_sha256,
-  asset_manifest_sha256: rendered.asset_manifest_sha256,
-  validated_asset_manifest: rendered.validated_asset_manifest,
-  render_content_sha256: rendered.render_content_sha256,
-  render_evidence_private: rendered.render_evidence_private,
-  render_evidence_hmac_sha256: rendered.render_evidence_hmac_sha256,
-  approval_content_sha256: rendered.approval_content_sha256,
-  script_manifest_sha256: rendered.script_manifest_sha256,
-  checkout_config_snapshot_private: rendered.checkout_config_snapshot_private,
-  checkout_config_snapshot_sha256: rendered.checkout_config_snapshot_sha256,
-  checkout_config_snapshot_hmac_sha256: rendered.checkout_config_snapshot_hmac_sha256,
-  checkout_recipient_reservation_private: rendered.checkout_recipient_reservation_private,
-  checkout_recipient_reservation_hmac_sha256: rendered.checkout_recipient_reservation_hmac_sha256,
-}, async url => {
+await assert.rejects(runPublisher(emptyPreviewInput, async url => {
   publisherReachedGitHub = true;
   const response = new Response(JSON.stringify({ message: 'expected test stop' }), {
-    status: 500,
-    headers: { 'content-type': 'application/json' },
+    status: 500, headers: { 'content-type': 'application/json' },
   });
   Object.defineProperty(response, 'url', { value: url });
   return response;
 }, Buffer), /ARC_GITHUB_FAILED: 500/);
-assert.equal(publisherReachedGitHub, true, 'Publisher must fully validate v2 evidence before the first GitHub read.');
+assert.equal(publisherReachedGitHub, true, 'Publisher must fully validate the V11 bundle and v2 evidence before the first GitHub read.');
 
 await assert.rejects(runVerifier({ ...input, bridge_destination_bearer: 'wrong-secret-that-is-long-enough-0123456789' }, null, Buffer), /bearer mismatch/);
 await assert.rejects(runVerifier({ ...input, bridge_envelope_json: envelopeRaw.replace('Private Test Roofing', 'Tampered Roofing') }, null, Buffer), /HMAC mismatch/);
@@ -302,6 +309,15 @@ const oldConsentEnvelope = canonicalJson({
 });
 await assert.rejects(runVerifier({ ...input, bridge_envelope_json: oldConsentEnvelope }, null, Buffer), /consent mismatch/,
   'The old tax-omitting disclosure must not be accepted as current consent.');
+const wrongOfferEvidence = { ...evidence, data: { ...data, offer_contract_id: 'arc-fixed-five-page-offer-v0' } };
+wrongOfferEvidence.submission_data_sha256 = sha256(canonicalJson({ data: wrongOfferEvidence.data, asset_manifest: [] }));
+const wrongOfferRaw = canonicalJson(wrongOfferEvidence);
+const wrongOfferEnvelope = canonicalJson({
+  schema: envelope.schema, evidence: wrongOfferEvidence,
+  hmac_sha256: hmac(bridgeSecret, `arc-intake-arc1-bridge-evidence-v1\n${wrongOfferRaw}`),
+});
+await assert.rejects(runVerifier({ ...input, bridge_envelope_json: wrongOfferEnvelope }, null, Buffer), /consent mismatch/,
+  'A different fixed-offer contract must fail closed even when the bridge envelope is correctly signed.');
 
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
 const jpeg = Buffer.from('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD3+iiigD//2Q==', 'base64');
@@ -423,7 +439,8 @@ const makeGitHubMock = () => {
   const nextSha = () => (sequence++).toString(16).padStart(40, '0');
   const state = {
     refs: new Map([['main', baseCommit]]), commits: new Map([[baseCommit, baseTree]]), trees: new Map(), blobs: new Map(),
-    pulls: [], calls: [], extraAsset: false, extraFolderSibling: false, checkRuns: [], prFiles: [], claimRefs: new Map(),
+    pulls: [], calls: [], extraAsset: false, extraFolderSibling: false, checkRuns: [], prFiles: null, claimRefs: new Map(),
+    pagesReadbacks: [], contentReadbacks: [], pagesTamperPath: '', extraRouteFile: '',
   };
   let currentResponseUrl = '';
   const response = (status, body) => {
@@ -443,8 +460,13 @@ const makeGitHubMock = () => {
     }
     for (const tree of state.trees.values()) {
       if (treeSha === tree.folderSha) {
-        const items = [{ path: 'assets', type: 'tree', mode: '040000', sha: tree.assetsSha }];
-        if (tree.index) items.push({ path: 'index.html', type: 'blob', mode: '100644', sha: tree.index.sha, size: tree.index.size });
+        const items = [];
+        if (tree.assets.size) items.push({ path: 'assets', type: 'tree', mode: '040000', sha: tree.assetsSha });
+        for (const name of ['about', 'contact', 'process', 'services']) {
+          if (tree.pages.has(`${name}/index.html`)) items.push({ path: name, type: 'tree', mode: '040000', sha: tree.pageDirectoryShas.get(name) });
+        }
+        const home = tree.pages.get('index.html');
+        if (home) items.push({ path: 'index.html', type: 'blob', mode: '100644', sha: home.sha, size: home.size });
         if (state.extraFolderSibling) items.push({ path: 'unexpected.txt', type: 'blob', mode: '100644', sha: 'e'.repeat(40), size: 1 });
         return { tree: items };
       }
@@ -453,8 +475,29 @@ const makeGitHubMock = () => {
         if (state.extraAsset) items.push({ path: 'unexpected.png', type: 'blob', mode: '100644', sha: 'f'.repeat(40), size: 1 });
         return { tree: items };
       }
+      for (const [name, sha] of tree.pageDirectoryShas) {
+        if (treeSha === sha) {
+          const page = tree.pages.get(`${name}/index.html`);
+          const items = page ? [{ path: 'index.html', type: 'blob', mode: '100644', sha: page.sha, size: page.size }] : [];
+          if (state.extraRouteFile === name) items.push({ path: 'unexpected.html', type: 'blob', mode: '100644', sha: 'd'.repeat(40), size: 1 });
+          return { tree: items };
+        }
+      }
     }
     return null;
+  };
+  const treeForRef = ref => state.trees.get(state.commits.get(state.refs.get(ref) || ref));
+  const pageFor = (tree, repositoryPath) => {
+    if (!tree || !repositoryPath.startsWith(`${tree.previewFolder}/`)) return null;
+    return tree.pages.get(repositoryPath.slice(tree.previewFolder.length + 1)) || null;
+  };
+  const exactPrFiles = () => {
+    const pull = state.pulls[0], tree = treeForRef(pull?.head?.ref || '');
+    if (!tree) return [];
+    return [
+      ...artifactPagePaths.filter(path => tree.pages.has(path)).map(path => ({ filename: `${tree.previewFolder}/${path}`, status: 'added' })),
+      ...[...tree.assets.values()].map(asset => ({ filename: `${tree.previewFolder}/assets/${asset.name}`, status: 'added' })),
+    ];
   };
   const fetch = async (url, options = {}) => {
     currentResponseUrl = url;
@@ -464,15 +507,20 @@ const makeGitHubMock = () => {
     const bodyText = String(options.body || '');
     state.calls.push({ method, url, body: bodyText });
     if (parsed.hostname === 'arcwebhq-cpu.github.io') {
-      const tree = state.trees.get(state.commits.get(state.refs.get('main')));
-      const relative = path.replace(/^\/arc-previews\//, '');
-      if (relative === `${tree?.previewFolder}/`) {
-        const result = new Response(tree.index?.bytes || null, { status: tree?.index ? 200 : 404, headers: { 'content-type': 'text/html' } });
-        Object.defineProperty(result, 'url', { value: url }); return result;
+      const tree = treeForRef('main');
+      let relative = path.replace(/^\/arc-previews\//, '');
+      if (relative.endsWith('/')) relative += 'index.html';
+      const page = pageFor(tree, relative);
+      const assetName = relative.startsWith(`${tree?.previewFolder}/assets/`) ? relative.split('/').at(-1) : '';
+      const asset = assetName ? tree?.assets.get(assetName) : null;
+      let bytes = page?.bytes || (asset && state.blobs.get(asset.sha)) || null;
+      if (page) {
+        const logicalPath = relative.slice(tree.previewFolder.length + 1);
+        state.pagesReadbacks.push(logicalPath);
+        if (state.pagesTamperPath === logicalPath) bytes = Buffer.concat([bytes, Buffer.from('tamper')]);
       }
-      const name = relative.split('/').at(-1), asset = tree?.assets.get(name), bytes = asset && state.blobs.get(asset.sha);
-      const type = name?.endsWith('.png') ? 'image/png' : name?.endsWith('.jpg') ? 'image/jpeg' : 'image/webp';
-      const result = new Response(bytes || null, { status: bytes ? 200 : 404, headers: { 'content-type': type, 'content-length': String(bytes?.length || 0) } });
+      const type = page ? 'text/html' : assetName.endsWith('.png') ? 'image/png' : assetName.endsWith('.jpg') ? 'image/jpeg' : 'image/webp';
+      const result = new Response(bytes, { status: bytes ? 200 : 404, headers: { 'content-type': type, 'content-length': String(bytes?.length || 0) } });
       Object.defineProperty(result, 'url', { value: url }); return result;
     }
     if (method === 'GET' && path.includes('/check-runs')) return response(200, { check_runs: state.checkRuns });
@@ -483,7 +531,7 @@ const makeGitHubMock = () => {
       } } } });
     }
     const filesMatch = path.match(/\/pulls\/(\d+)\/files$/);
-    if (method === 'GET' && filesMatch) return response(200, state.prFiles);
+    if (method === 'GET' && filesMatch) return response(200, state.prFiles || exactPrFiles());
     const mergeMatch = path.match(/\/pulls\/(\d+)\/merge$/);
     if (method === 'PUT' && mergeMatch) {
       const pr = state.pulls[0], body = JSON.parse(bodyText);
@@ -529,7 +577,7 @@ const makeGitHubMock = () => {
       const body = JSON.parse(bodyText);
       const inherited = state.trees.get(body.base_tree);
       const assets = new Map(inherited ? inherited.assets : []);
-      let index = inherited?.index || null;
+      const pages = new Map(inherited ? inherited.pages : []);
       let previewFolder = inherited?.previewFolder || '';
       for (const item of body.tree || []) {
         const parts = String(item.path).split('/');
@@ -537,13 +585,17 @@ const makeGitHubMock = () => {
         if (parts.length === 3 && parts[1] === 'assets') {
           const bytes = state.blobs.get(item.sha);
           assets.set(parts[2], { name: parts[2], sha: item.sha, size: bytes?.length });
-        } else if (parts.length === 2 && parts[1] === 'index.html') {
+        } else {
+          const logicalPath = parts.slice(1).join('/');
           const bytes = state.blobs.get(item.sha);
-          index = { sha: item.sha, size: bytes?.length, bytes };
+          if (artifactPagePaths.includes(logicalPath)) pages.set(logicalPath, { sha: item.sha, size: bytes?.length, bytes });
         }
       }
       const sha = nextSha();
-      state.trees.set(sha, { previewFolder, assets, index, folderSha: nextSha(), assetsSha: nextSha() });
+      state.trees.set(sha, {
+        previewFolder, assets, pages, folderSha: nextSha(), assetsSha: nextSha(),
+        pageDirectoryShas: new Map(['about', 'contact', 'process', 'services'].map(name => [name, nextSha()])),
+      });
       return response(201, { sha });
     }
     if (method === 'POST' && path.endsWith('/git/commits')) {
@@ -565,10 +617,15 @@ const makeGitHubMock = () => {
     }
     if (method === 'GET' && path.includes('/contents/')) {
       const branchOrCommit = parsed.searchParams.get('ref');
-      const commit = state.refs.get(branchOrCommit) || branchOrCommit;
-      const tree = state.trees.get(state.commits.get(commit));
-      if (!tree?.index) return response(404, {});
-      return response(200, { content: tree.index.bytes.toString('base64') });
+      const tree = treeForRef(branchOrCommit);
+      const repositoryPath = path.split('/contents/')[1];
+      const page = pageFor(tree, repositoryPath);
+      const assetName = repositoryPath.startsWith(`${tree?.previewFolder}/assets/`) ? repositoryPath.split('/').at(-1) : '';
+      const asset = assetName ? tree?.assets.get(assetName) : null;
+      const bytes = page?.bytes || (asset && state.blobs.get(asset.sha));
+      state.contentReadbacks.push({ ref: branchOrCommit, repositoryPath });
+      if (!bytes) return response(404, {});
+      return response(200, { content: bytes.toString('base64') });
     }
     if (path.endsWith('/pulls') && method === 'GET') return response(200, state.pulls);
     if (path.endsWith('/pulls') && method === 'POST') {
@@ -614,67 +671,37 @@ assert.equal(emptyPublicationReceipt.status, 'NO_PUBLIC_UPLOADS');
 assert.deepEqual(emptyPublicationReceipt.entries, []);
 assert.equal(emptyPublicationReceipt.asset_permission, '');
 const emptyGitHub = makeGitHubMock();
-const emptyPreview = await runPublisher({
-  github_token: 'mock-github-token', github_owner: 'arcwebhq-cpu', github_repo: 'arc-previews', github_base_branch: 'main',
-  trusted_event_prefix: rendered.trusted_event_prefix, preview_folder: rendered.preview_folder,
-  file_path: rendered.file_path, html_content: rendered.html_content, validation_pass: true,
-  pages_base_url: 'https://arcwebhq-cpu.github.io/arc-previews', customer_email: fixture.customerEmail,
-  expected_netlify_site_id: siteId, expected_netlify_form_id: '6a483964f58804000839c2de', expected_netlify_form_name: 'arc-preview',
-  intake_evidence_secret: intakeSecret, intake_evidence_private: issued.intake_evidence_private,
-  intake_evidence_hmac_sha256: issued.intake_evidence_hmac_sha256,
-  logo_file_url: '', hero_image_url: '', supporting_image_url: '', ...claimInputs, ...emptyReceiptInputs,
-  intake_state_key: rendered.intake_state_key, intake_state_digest_sha256: rendered.intake_state_digest_sha256,
-  intake_evidence_sha256: rendered.intake_evidence_sha256, submission_data_sha256: rendered.submission_data_sha256,
-  asset_manifest_sha256: rendered.asset_manifest_sha256, validated_asset_manifest: rendered.validated_asset_manifest,
-  render_content_sha256: rendered.render_content_sha256, render_evidence_private: rendered.render_evidence_private,
-  render_evidence_hmac_sha256: rendered.render_evidence_hmac_sha256,
-  approval_content_sha256: rendered.approval_content_sha256, script_manifest_sha256: rendered.script_manifest_sha256,
-  checkout_config_snapshot_private: rendered.checkout_config_snapshot_private,
-  checkout_config_snapshot_sha256: rendered.checkout_config_snapshot_sha256,
-  checkout_config_snapshot_hmac_sha256: rendered.checkout_config_snapshot_hmac_sha256,
-  checkout_recipient_reservation_private: rendered.checkout_recipient_reservation_private,
-  checkout_recipient_reservation_hmac_sha256: rendered.checkout_recipient_reservation_hmac_sha256,
-}, emptyGitHub.fetch, Buffer);
+const emptyPreview = await runPublisher(emptyPreviewInput, emptyGitHub.fetch, Buffer);
 assert.equal(emptyPreview.asset_publication_receipt_sha256, publishedEmptyAssets.asset_publication_receipt_sha256);
-emptyGitHub.state.prFiles = [{ filename: rendered.file_path, status: 'added' }];
+assert.deepEqual(emptyPreview.preview_paths, rendered.preview_paths);
+assert.equal(Object.hasOwn(emptyPreview, 'file_path'), false);
+const emptyPageBlobWrites = emptyGitHub.state.calls.filter(call => call.method === 'POST' && new URL(call.url).pathname.endsWith('/git/blobs'));
+assert.equal(emptyPageBlobWrites.length, 5, 'The no-upload publisher must create exactly five page blobs.');
+const emptyPageTreeWrite = emptyGitHub.state.calls.find(call => call.method === 'POST' && new URL(call.url).pathname.endsWith('/git/trees'));
+assert.deepEqual(JSON.parse(emptyPageTreeWrite.body).tree.map(entry => entry.path), rendered.preview_paths,
+  'The page tree write must use the exact artifact-ordered five-page vector.');
 emptyGitHub.state.checkRuns = [{ id: 91, name: 'ARC preview quality/preview-quality', head_sha: emptyPreview.head_sha,
   status: 'completed', conclusion: 'success', app: { slug: 'github-actions', id: 15368 } }];
-const mergedEmpty = await runMerge({
-  github_token: 'mock-github-token', preview_folder: rendered.preview_folder, preview_branch: emptyPreview.preview_branch,
-  file_path: rendered.file_path, content_sha256: emptyPreview.content_sha256, head_sha: emptyPreview.head_sha,
-  pr_number: emptyPreview.pr_number, approval_content_sha256: rendered.approval_content_sha256,
-  checkout_config_snapshot_sha256: rendered.checkout_config_snapshot_sha256, ...emptyReceiptInputs,
-}, emptyGitHub.fetch, Buffer);
+const emptyMergeInput = {
+  ...emptyPreviewInput, preview_branch: emptyPreview.preview_branch, head_sha: emptyPreview.head_sha,
+  head_tree_sha: emptyPreview.head_tree_sha, pr_number: emptyPreview.pr_number,
+};
+const mergedEmpty = await runMerge(emptyMergeInput, emptyGitHub.fetch, Buffer);
 assert.equal(mergedEmpty.status, 'MERGED');
 assert.equal(JSON.parse(mergedEmpty.merge_proof).asset_publication_receipt_sha256,
   publishedEmptyAssets.asset_publication_receipt_sha256);
 const emptyEmailToken = 'private_empty_email_token_1234567890abcdef';
-const emptyEmailCreatedAt = new Date().toISOString();
-const emptyEmailState = {
-  version: 'arc-preview-email-state-v1', status: 'PENDING', token_sha256: sha256(emptyEmailToken),
-  recipient_sha256: sha256(fixture.customerEmail), created_at: emptyEmailCreatedAt,
-  expires_at: new Date(Date.parse(emptyEmailCreatedAt) + 60 * 60_000).toISOString(),
-  preview_folder: rendered.preview_folder, content_sha256: emptyPreview.content_sha256,
-  asset_publication_receipt_sha256: publishedEmptyAssets.asset_publication_receipt_sha256,
-  head_sha: emptyPreview.head_sha, pr_number: emptyPreview.pr_number,
-};
+const pagesReadsBeforeEmptyGate = emptyGitHub.state.pagesReadbacks.length;
 const readyEmptyEmail = await runEmailGate({
-  github_token: 'mock-github-token', preview_folder: rendered.preview_folder, preview_branch: emptyPreview.preview_branch,
-  file_path: rendered.file_path, content_sha256: emptyPreview.content_sha256, head_sha: emptyPreview.head_sha,
-  pr_number: emptyPreview.pr_number, preview_url: emptyPreview.preview_url,
-  pages_base_url: 'https://arcwebhq-cpu.github.io/arc-previews', customer_email: fixture.customerEmail,
-  email_state: JSON.stringify(emptyEmailState), email_state_token: emptyEmailToken, merge_proof: mergedEmpty.merge_proof,
-  approval_content_sha256: rendered.approval_content_sha256,
-  checkout_config_snapshot_private: rendered.checkout_config_snapshot_private,
-  checkout_config_snapshot_sha256: rendered.checkout_config_snapshot_sha256,
-  checkout_config_snapshot_hmac_sha256: rendered.checkout_config_snapshot_hmac_sha256,
-  checkout_recipient_reservation_private: rendered.checkout_recipient_reservation_private,
-  checkout_recipient_reservation_hmac_sha256: rendered.checkout_recipient_reservation_hmac_sha256,
-  checkout_binding_key_id: '01', checkout_binding_secret: 'checkout-binding-secret-unique-0123456789', retired_checkout_binding_keys_json: '{}',
-  ...emptyReceiptInputs,
+  ...emptyMergeInput, preview_url: emptyPreview.preview_url, email_state_token: emptyEmailToken,
+  merge_proof: mergedEmpty.merge_proof,
 }, emptyGitHub.fetch, Buffer);
 assert.equal(readyEmptyEmail.status, 'PRIVATE_CHECKOUT_CONTENT_READY');
 assert.equal(readyEmptyEmail.send_preview_email, false);
+assert.equal(readyEmptyEmail.outbox_write_allowed, false);
+assert.equal(readyEmptyEmail.checkout_url_exposure_allowed, false);
+assert.deepEqual(emptyGitHub.state.pagesReadbacks.slice(pagesReadsBeforeEmptyGate), artifactPagePaths,
+  'The email gate must read back exactly five clean-route Pages artifacts in canonical artifact order.');
 // Simulate a previously signed/bypassed downstream envelope to prove the
 // publisher itself also fails before reading or mutating GitHub. This defense
 // is independent of the primary verifier and retriever rejections above.
@@ -936,8 +963,11 @@ const renderedUpload = await runInjector({
   ingress_claim_asset_receipt_sha256: retrievedUpload.asset_receipt_sha256,
   ...uploadClaim, ...payment.privateInputs,
 });
-assert.match(renderedUpload.html_content, new RegExp(publishedUpload.logo_file_url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
-assert.doesNotMatch(renderedUpload.html_content, /resourcekey=|iVBORw0KGgo|arc1-private-asset-receipt-v1/);
+const renderedUploadBundle = JSON.parse(renderedUpload.render_bundle_private);
+const renderedUploadSite = renderedUploadBundle.pages.map(page => `${page.approval_html}\n${page.published_html}`).join('\n');
+assert.match(renderedUploadSite, new RegExp(publishedUpload.logo_file_url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+assert.doesNotMatch(renderedUploadSite, /resourcekey=|iVBORw0KGgo|arc1-private-asset-receipt-v1/);
+assert.deepEqual(renderedUpload.preview_paths, artifactPagePaths.map(path => `${renderedUpload.preview_folder}/${path}`));
 const contentOmittingSignedUpload = structuredClone(fixture.content);
 contentOmittingSignedUpload.LOGO_HTML = '';
 await assert.rejects(runInjector({
@@ -953,7 +983,7 @@ await assert.rejects(runInjector({
   asset_publication_receipt_sha256: publishedUpload.asset_publication_receipt_sha256,
   ingress_claim_asset_receipt_sha256: retrievedUpload.asset_receipt_sha256,
   ...uploadClaim, ...payment.privateInputs,
-}), /final rendered HTML and signed receipt URL sets differ/,
+}), /five-page rendered URL union differs from signed assets/,
   'Every signed upload must survive sanitization and appear in the final approved HTML before checkout exposure.');
 const tamperedPublication = JSON.parse(publishedUpload.asset_publication_receipt_private);
 tamperedPublication.entries[0].public_url = 'https://evil.example/logo.png';
@@ -971,167 +1001,114 @@ await assert.rejects(runInjector({
   ...uploadClaim, ...payment.privateInputs,
 }), /exact content-addressed URL map/);
 
-const previewPublishInput = {
-  github_token: 'mock-github-token', github_owner: 'arcwebhq-cpu', github_repo: 'arc-previews', github_base_branch: 'main',
-  trusted_event_prefix: renderedUpload.trusted_event_prefix, preview_folder: renderedUpload.preview_folder,
-  file_path: renderedUpload.file_path, html_content: renderedUpload.html_content, validation_pass: true,
-  pages_base_url: 'https://arcwebhq-cpu.github.io/arc-previews', customer_email: fixture.customerEmail,
-  expected_netlify_site_id: siteId, expected_netlify_form_id: '6a483964f58804000839c2de', expected_netlify_form_name: 'arc-preview',
-  intake_evidence_secret: intakeSecret, intake_evidence_private: verifiedAssetEnvelope.intake_evidence_private,
-  intake_evidence_hmac_sha256: verifiedAssetEnvelope.intake_evidence_hmac_sha256,
-  logo_file_url: publishedUpload.logo_file_url, hero_image_url: '', supporting_image_url: '',
-  asset_publication_receipt_secret: assetPublicationSecret,
-  asset_publication_receipt_private: publishedUpload.asset_publication_receipt_private,
-  asset_publication_receipt_hmac_sha256: publishedUpload.asset_publication_receipt_hmac_sha256,
-  asset_publication_receipt_sha256: publishedUpload.asset_publication_receipt_sha256,
-  ingress_claim_asset_receipt_sha256: retrievedUpload.asset_receipt_sha256,
-  ...uploadClaim, intake_state_key: renderedUpload.intake_state_key,
-  intake_state_digest_sha256: renderedUpload.intake_state_digest_sha256,
-  intake_evidence_sha256: renderedUpload.intake_evidence_sha256,
-  submission_data_sha256: renderedUpload.submission_data_sha256,
-  asset_manifest_sha256: renderedUpload.asset_manifest_sha256,
-  validated_asset_manifest: renderedUpload.validated_asset_manifest,
-  render_content_sha256: renderedUpload.render_content_sha256,
-  render_evidence_private: renderedUpload.render_evidence_private,
-  render_evidence_hmac_sha256: renderedUpload.render_evidence_hmac_sha256,
-  approval_content_sha256: renderedUpload.approval_content_sha256, script_manifest_sha256: renderedUpload.script_manifest_sha256,
-  checkout_config_snapshot_private: renderedUpload.checkout_config_snapshot_private,
-  checkout_config_snapshot_sha256: renderedUpload.checkout_config_snapshot_sha256,
-  checkout_config_snapshot_hmac_sha256: renderedUpload.checkout_config_snapshot_hmac_sha256,
-  checkout_recipient_reservation_private: renderedUpload.checkout_recipient_reservation_private,
-  checkout_recipient_reservation_hmac_sha256: renderedUpload.checkout_recipient_reservation_hmac_sha256,
-};
-const publishedPreview = await runPublisher(previewPublishInput, gitHub.fetch, Buffer);
-assert.equal(publishedPreview.status, 'PR_CREATED');
-assert.equal(publishedPreview.preview_branch, `arc-preview/${verifiedAssetEnvelope.public_folder_prefix}`);
-assert.equal(publishedPreview.asset_publication_receipt_sha256, publishedUpload.asset_publication_receipt_sha256);
-const publishedHeadTree = gitHub.state.trees.get(gitHub.state.commits.get(publishedPreview.head_sha));
-assert.ok(publishedHeadTree?.index, 'Atomic preview head must contain the preview index.');
-assert.equal(publishedHeadTree.assets.size, 1, 'Atomic preview head must preserve the exact asset subtree.');
-gitHub.state.prFiles = [
-  { filename: renderedUpload.file_path, status: 'added' },
-  { filename: publishedReceipt.entries[0].repository_path, status: 'added' },
-];
-gitHub.state.checkRuns = [{ id: 93, name: 'ARC preview quality/preview-quality', head_sha: publishedPreview.head_sha,
-  status: 'completed', conclusion: 'success', app: { slug: 'github-actions', id: 15368 } }];
 const assetReceiptInputs = {
   asset_publication_receipt_secret: assetPublicationSecret,
   asset_publication_receipt_private: publishedUpload.asset_publication_receipt_private,
   asset_publication_receipt_hmac_sha256: publishedUpload.asset_publication_receipt_hmac_sha256,
   asset_publication_receipt_sha256: publishedUpload.asset_publication_receipt_sha256,
+  ingress_claim_asset_receipt_sha256: retrievedUpload.asset_receipt_sha256,
 };
-const mergedUpload = await runMerge({
-  github_token: 'mock-github-token', preview_folder: renderedUpload.preview_folder, preview_branch: publishedPreview.preview_branch,
-  file_path: renderedUpload.file_path, content_sha256: publishedPreview.content_sha256, head_sha: publishedPreview.head_sha,
-  pr_number: publishedPreview.pr_number, ...assetReceiptInputs,
-  approval_content_sha256: renderedUpload.approval_content_sha256,
-  checkout_config_snapshot_sha256: renderedUpload.checkout_config_snapshot_sha256,
-}, gitHub.fetch, Buffer);
+const previewPublishInput = previewInputFor({
+  verified: verifiedAssetEnvelope, renderedOutput: renderedUpload, receiptInputs: assetReceiptInputs, claim: uploadClaim,
+  assetUrls: { logo_file_url: publishedUpload.logo_file_url, hero_image_url: '', supporting_image_url: '' },
+});
+const pageBlobWritesBefore = gitHub.state.calls.filter(call => call.method === 'POST' && new URL(call.url).pathname.endsWith('/git/blobs')).length;
+const publishedPreview = await runPublisher(previewPublishInput, gitHub.fetch, Buffer);
+assert.equal(publishedPreview.status, 'PR_CREATED');
+assert.equal(publishedPreview.preview_branch, `arc-preview/${verifiedAssetEnvelope.public_folder_prefix}`);
+assert.equal(publishedPreview.asset_publication_receipt_sha256, publishedUpload.asset_publication_receipt_sha256);
+const publishedHeadTree = gitHub.state.trees.get(gitHub.state.commits.get(publishedPreview.head_sha));
+assert.deepEqual([...publishedHeadTree.pages.keys()].sort(), [...logicalPagePaths].sort(),
+  'Atomic preview head must contain the exact five logical page files.');
+assert.equal(publishedHeadTree.assets.size, 1, 'Atomic preview head must preserve the exact asset subtree.');
+const pageBlobWritesAfter = gitHub.state.calls.filter(call => call.method === 'POST' && new URL(call.url).pathname.endsWith('/git/blobs')).length;
+assert.equal(pageBlobWritesAfter - pageBlobWritesBefore, 5, 'The preview publication step must write exactly five HTML blobs.');
+const exactUploadPrFiles = [
+  ...renderedUpload.preview_paths.map(filename => ({ filename, status: 'added' })),
+  { filename: publishedReceipt.entries[0].repository_path, status: 'added' },
+];
+gitHub.state.prFiles = exactUploadPrFiles;
+gitHub.state.checkRuns = [{ id: 93, name: 'ARC preview quality/preview-quality', head_sha: publishedPreview.head_sha,
+  status: 'completed', conclusion: 'success', app: { slug: 'github-actions', id: 15368 } }];
+
+const secondaryPage = publishedHeadTree.pages.get('services/index.html');
+publishedHeadTree.pages.set('services/index.html', { ...secondaryPage, bytes: Buffer.concat([secondaryPage.bytes, Buffer.from('tamper')]) });
+await assert.rejects(runPublisher(previewPublishInput, gitHub.fetch, Buffer), /services\/index\.html bytes differ/,
+  'A byte change on a secondary page must reject exact replay.');
+publishedHeadTree.pages.set('services/index.html', secondaryPage);
+const aboutPage = publishedHeadTree.pages.get('about/index.html');
+publishedHeadTree.pages.delete('about/index.html');
+await assert.rejects(runPublisher(previewPublishInput, gitHub.fetch, Buffer), /partial five-page branch|extra or missing entries/,
+  'A partial five-page branch must fail closed.');
+publishedHeadTree.pages.set('about/index.html', aboutPage);
+gitHub.state.extraFolderSibling = true;
+await assert.rejects(runPublisher(previewPublishInput, gitHub.fetch, Buffer), /extra or missing entries/,
+  'An extra preview-folder sibling must fail closed.');
+gitHub.state.extraFolderSibling = false;
+
+const uploadMergeInput = {
+  ...previewPublishInput, preview_branch: publishedPreview.preview_branch, head_sha: publishedPreview.head_sha,
+  head_tree_sha: publishedPreview.head_tree_sha, pr_number: publishedPreview.pr_number,
+};
+gitHub.state.prFiles = exactUploadPrFiles.slice(0, -1);
+await assert.rejects(runMerge(uploadMergeInput, gitHub.fetch, Buffer), /exact PR file vector/,
+  'A missing asset or page in the PR file vector must fail closed.');
+gitHub.state.prFiles = [...exactUploadPrFiles, { filename: `${renderedUpload.preview_folder}/unexpected.html`, status: 'added' }];
+await assert.rejects(runMerge(uploadMergeInput, gitHub.fetch, Buffer), /exact PR file vector/,
+  'An extra PR file must fail closed.');
+gitHub.state.prFiles = exactUploadPrFiles;
+const mergedUpload = await runMerge(uploadMergeInput, gitHub.fetch, Buffer);
 assert.equal(mergedUpload.status, 'MERGED');
 const uploadMergeProof = JSON.parse(mergedUpload.merge_proof);
 assert.equal(uploadMergeProof.asset_publication_receipt_sha256, publishedUpload.asset_publication_receipt_sha256);
 const privateEmailToken = 'private_asset_email_token_1234567890abcdef';
-const emailCreatedAt = new Date().toISOString();
-const uploadEmailState = {
-  version: 'arc-preview-email-state-v1', status: 'PENDING', token_sha256: sha256(privateEmailToken),
-  recipient_sha256: sha256(fixture.customerEmail), created_at: emailCreatedAt,
-  expires_at: new Date(Date.parse(emailCreatedAt) + 60 * 60_000).toISOString(),
-  preview_folder: renderedUpload.preview_folder, content_sha256: publishedPreview.content_sha256,
-  asset_publication_receipt_sha256: publishedUpload.asset_publication_receipt_sha256,
-  head_sha: publishedPreview.head_sha, pr_number: publishedPreview.pr_number,
-};
 const uploadGateInput = {
-  github_token: 'mock-github-token', preview_folder: renderedUpload.preview_folder, preview_branch: publishedPreview.preview_branch,
-  file_path: renderedUpload.file_path, content_sha256: publishedPreview.content_sha256, head_sha: publishedPreview.head_sha,
-  pr_number: publishedPreview.pr_number, preview_url: publishedPreview.preview_url,
-  pages_base_url: 'https://arcwebhq-cpu.github.io/arc-previews', customer_email: fixture.customerEmail,
-  email_state: JSON.stringify(uploadEmailState), email_state_token: privateEmailToken, merge_proof: mergedUpload.merge_proof,
-  approval_content_sha256: renderedUpload.approval_content_sha256,
-  checkout_config_snapshot_private: renderedUpload.checkout_config_snapshot_private,
-  checkout_config_snapshot_sha256: renderedUpload.checkout_config_snapshot_sha256,
-  checkout_config_snapshot_hmac_sha256: renderedUpload.checkout_config_snapshot_hmac_sha256,
-  checkout_recipient_reservation_private: renderedUpload.checkout_recipient_reservation_private,
-  checkout_recipient_reservation_hmac_sha256: renderedUpload.checkout_recipient_reservation_hmac_sha256,
-  checkout_binding_key_id: '01', checkout_binding_secret: 'checkout-binding-secret-unique-0123456789', retired_checkout_binding_keys_json: '{}',
-  ...assetReceiptInputs,
+  ...uploadMergeInput, preview_url: publishedPreview.preview_url, email_state_token: privateEmailToken,
+  merge_proof: mergedUpload.merge_proof,
 };
+const pagesReadsBeforeUploadGate = gitHub.state.pagesReadbacks.length;
 const readyUploadEmail = await runEmailGate(uploadGateInput, gitHub.fetch, Buffer);
 assert.equal(readyUploadEmail.status, 'PRIVATE_CHECKOUT_CONTENT_READY');
 assert.equal(readyUploadEmail.send_preview_email, false);
 assert.equal(JSON.parse(readyUploadEmail.checkout_readiness_core_private).asset_publication_receipt_sha256, publishedUpload.asset_publication_receipt_sha256);
+assert.deepEqual(gitHub.state.pagesReadbacks.slice(pagesReadsBeforeUploadGate), artifactPagePaths,
+  'The uploaded-asset chain must still perform exactly five Pages HTML readbacks.');
+gitHub.state.pagesTamperPath = 'process/index.html';
+const secondaryLiveTamper = await runEmailGate({ ...uploadGateInput, email_state_token: `${privateEmailToken}x` }, gitHub.fetch, Buffer);
+assert.equal(secondaryLiveTamper.status, 'WAITING_FOR_PAGES', 'A tampered secondary Pages response must block readiness.');
+gitHub.state.pagesTamperPath = '';
 const assetBytesBeforeTamper = gitHub.state.blobs.get(publishedReceipt.entries[0].git_blob_sha1);
 gitHub.state.blobs.set(publishedReceipt.entries[0].git_blob_sha1, tamperedPng);
-const tamperedLiveEmailState = { ...uploadEmailState, token_sha256: sha256(`${privateEmailToken}x`) };
-const tamperedLiveResult = await runEmailGate({ ...uploadGateInput, email_state_token: `${privateEmailToken}x`,
-  email_state: JSON.stringify(tamperedLiveEmailState) }, gitHub.fetch, Buffer);
+const tamperedLiveResult = await runEmailGate({ ...uploadGateInput, email_state_token: `${privateEmailToken}y` }, gitHub.fetch, Buffer);
 assert.equal(tamperedLiveResult.status, 'WAITING_FOR_PAGES', 'Tampered live asset bytes must block customer email.');
 gitHub.state.blobs.set(publishedReceipt.entries[0].git_blob_sha1, assetBytesBeforeTamper);
 const completedMutationCount = gitHub.state.calls.filter(call => call.method !== 'GET').length;
 const completedAssetReplay = await runAssetPublisher({ ...publicationInput(verifiedAssetEnvelope, retrievedUpload),
   ingress_claim_mode: 'EXACT_REPLAY' }, gitHub.fetch, Buffer);
 assert.equal(completedAssetReplay.status, 'ARC1_FUNCTION_ASSETS_EXACT_REPLAY',
-  'The asset step must accept the exact completed assets + index tree on recovery.');
+  'Asset recovery must recognize the recursively exact completed V11 page tree.');
 assert.equal(gitHub.state.calls.filter(call => call.method !== 'GET').length, completedMutationCount,
-  'Completed-tree asset recovery must perform no mutation.');
+  'Completed-site asset recovery must be read-only.');
+gitHub.state.extraFolderSibling = true;
+await assert.rejects(runAssetPublisher({ ...publicationInput(verifiedAssetEnvelope, retrievedUpload), ingress_claim_mode: 'EXACT_REPLAY' },
+  gitHub.fetch, Buffer), /asset-stage preview folder has extra or missing entries/,
+  'Completed-site asset recovery must reject an extra preview-root entry.');
+gitHub.state.extraFolderSibling = false;
+gitHub.state.extraRouteFile = 'about';
+await assert.rejects(runAssetPublisher({ ...publicationInput(verifiedAssetEnvelope, retrievedUpload), ingress_claim_mode: 'EXACT_REPLAY' },
+  gitHub.fetch, Buffer), /completed five-page route has extra or missing entries/,
+  'Completed-site asset recovery must reject an extra secondary-route file.');
+gitHub.state.extraRouteFile = '';
+const processPage = publishedHeadTree.pages.get('process/index.html');
+publishedHeadTree.pages.delete('process/index.html');
+await assert.rejects(runAssetPublisher({ ...publicationInput(verifiedAssetEnvelope, retrievedUpload), ingress_claim_mode: 'EXACT_REPLAY' },
+  gitHub.fetch, Buffer), /asset-stage preview folder has extra or missing entries/,
+  'Completed-site asset recovery must reject a missing secondary route.');
+publishedHeadTree.pages.set('process/index.html', processPage);
 const completedPreviewReplay = await runPublisher(previewPublishInput, gitHub.fetch, Buffer);
 assert.equal(completedPreviewReplay.status, 'PR_REUSED');
 assert.equal(gitHub.state.calls.filter(call => call.method !== 'GET').length, completedMutationCount,
   'Completed preview recovery must perform no mutation.');
-
-const preMergeMainSha = '1'.repeat(40);
-const squashMergeSha = '9'.repeat(40);
-gitHub.state.commits.set(squashMergeSha, gitHub.state.commits.get(publishedPreview.head_sha));
-gitHub.state.refs.set('main', squashMergeSha);
-gitHub.state.refs.delete(`arc-preview/${verifiedAssetEnvelope.public_folder_prefix}`);
-gitHub.state.pulls[0] = { ...gitHub.state.pulls[0], merged_at: new Date().toISOString(),
-  merge_commit_sha: squashMergeSha, head: { ...gitHub.state.pulls[0].head, sha: publishedPreview.head_sha } };
-const mergedMutationCount = gitHub.state.calls.filter(call => call.method !== 'GET').length;
-const mergedAssetReplay = await runAssetPublisher({ ...publicationInput(verifiedAssetEnvelope, retrievedUpload),
-  ingress_claim_mode: 'EXACT_REPLAY' }, gitHub.fetch, Buffer);
-assert.equal(mergedAssetReplay.status, 'ARC1_FUNCTION_ASSETS_EXACT_REPLAY');
-assert.equal(mergedAssetReplay.publication_branch_head_sha, squashMergeSha,
-  'Merged-main recovery must bind to the exact final main commit.');
-assert.equal(gitHub.state.calls.filter(call => call.method !== 'GET').length, mergedMutationCount,
-  'Merged-main asset recovery must not recreate the deleted branch or write blobs.');
-const mergedPreviewReplay = await runPublisher(previewPublishInput, gitHub.fetch, Buffer);
-assert.equal(mergedPreviewReplay.status, 'PR_REUSED');
-assert.equal(mergedPreviewReplay.head_sha, publishedPreview.head_sha,
-  'Squash-merge recovery must preserve the immutable PR head for downstream proof validation.');
-assert.equal(gitHub.state.calls.filter(call => call.method !== 'GET').length, mergedMutationCount,
-  'Merged PR replay must be read-only.');
-gitHub.state.refs.set('main', preMergeMainSha);
-await assert.rejects(runPublisher(previewPublishInput, gitHub.fetch, Buffer), /current main preview content differs/,
-  'A readable orphaned PR head must not hide a missing or tampered current main preview.');
-gitHub.state.refs.set('main', squashMergeSha);
-
-gitHub.state.refs.set(`arc-preview/${verifiedAssetEnvelope.public_folder_prefix}`, publishedPreview.head_sha);
-gitHub.state.extraFolderSibling = true;
-await assert.rejects(runPublisher({
-  github_token: 'mock-github-token', github_owner: 'arcwebhq-cpu', github_repo: 'arc-previews', github_base_branch: 'main',
-  trusted_event_prefix: renderedUpload.trusted_event_prefix, preview_folder: renderedUpload.preview_folder,
-  file_path: renderedUpload.file_path, html_content: renderedUpload.html_content, validation_pass: true,
-  pages_base_url: 'https://arcwebhq-cpu.github.io/arc-previews', customer_email: fixture.customerEmail,
-  expected_netlify_site_id: siteId, expected_netlify_form_id: '6a483964f58804000839c2de', expected_netlify_form_name: 'arc-preview',
-  intake_evidence_secret: intakeSecret, intake_evidence_private: verifiedAssetEnvelope.intake_evidence_private,
-  intake_evidence_hmac_sha256: verifiedAssetEnvelope.intake_evidence_hmac_sha256,
-  logo_file_url: publishedUpload.logo_file_url, hero_image_url: '', supporting_image_url: '',
-  asset_publication_receipt_secret: assetPublicationSecret, asset_publication_receipt_private: publishedUpload.asset_publication_receipt_private,
-  asset_publication_receipt_hmac_sha256: publishedUpload.asset_publication_receipt_hmac_sha256,
-  asset_publication_receipt_sha256: publishedUpload.asset_publication_receipt_sha256,
-  ingress_claim_asset_receipt_sha256: retrievedUpload.asset_receipt_sha256, ...uploadClaim,
-  intake_state_key: renderedUpload.intake_state_key, intake_state_digest_sha256: renderedUpload.intake_state_digest_sha256,
-  intake_evidence_sha256: renderedUpload.intake_evidence_sha256, submission_data_sha256: renderedUpload.submission_data_sha256,
-  asset_manifest_sha256: renderedUpload.asset_manifest_sha256, validated_asset_manifest: renderedUpload.validated_asset_manifest,
-  render_content_sha256: renderedUpload.render_content_sha256, render_evidence_private: renderedUpload.render_evidence_private,
-  render_evidence_hmac_sha256: renderedUpload.render_evidence_hmac_sha256,
-  approval_content_sha256: renderedUpload.approval_content_sha256, script_manifest_sha256: renderedUpload.script_manifest_sha256,
-  checkout_config_snapshot_private: renderedUpload.checkout_config_snapshot_private,
-  checkout_config_snapshot_sha256: renderedUpload.checkout_config_snapshot_sha256,
-  checkout_config_snapshot_hmac_sha256: renderedUpload.checkout_config_snapshot_hmac_sha256,
-  checkout_recipient_reservation_private: renderedUpload.checkout_recipient_reservation_private,
-  checkout_recipient_reservation_hmac_sha256: renderedUpload.checkout_recipient_reservation_hmac_sha256,
-}, gitHub.fetch, Buffer), /extra or missing entries/);
-gitHub.state.extraFolderSibling = false;
 const publicWriteBodies = gitHub.state.calls.map(call => call.body).join('\n');
 assert.doesNotMatch(publicWriteBodies, /drive\.google\.com|resourcekey=/,
   'A private folder URL may not enter any Git API mutation.');

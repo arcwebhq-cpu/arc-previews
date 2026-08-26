@@ -45,16 +45,23 @@ if([bindingSecret,offerEvidenceSecret,providerEvidenceSecret].some(secret=>encod
 const bindingKey=await importHmac(bindingSecret),offerEvidenceKey=await importHmac(offerEvidenceSecret),providerEvidenceKey=await importHmac(providerEvidenceSecret);
 
 const offerRaw=clean(inputData.checkout_offer_snapshot_private),offer=parseCanonical(offerRaw,"offer snapshot"),offerSha=await sha256(offerRaw);
-const offerFields=["adult_acknowledgement_key","amount_subtotal_minor_units","asset_publication_receipt_sha256","automatic_tax_enabled","checkout_binding_key_id","checkout_redirect_url","configuration_sha256","currency","customer_address_source","environment","lead_route_recipient_hmac_sha256","livemode","name_collection_required","preview_folder","preview_path","preview_source_repository","price_id","price_tax_behavior","product_id","product_tax_code","public_folder_prefix","quantity","scope","stripe_account_id_sha256","stripe_api_version","submit_type","tax_contract_version","tax_registrations","tax_registrations_sha256","tax_settings_status","terms_document_sha256","terms_version","version"];
+const offerFields=["adult_acknowledgement_key","amount_subtotal_minor_units","approval_content_sha256","asset_publication_receipt_sha256","automatic_tax_enabled","checkout_binding_key_id","checkout_redirect_url","configuration_sha256","currency","customer_address_source","deliverable","environment","lead_route_form_name","lead_route_mode","lead_route_recipient_hmac_sha256","livemode","name_collection_required","offer_contract_id","page_count","preview_folder","preview_paths","preview_source_repository","price_id","price_tax_behavior","product_id","product_tax_code","production_content_sha256","public_folder_prefix","published_preview_bundle_sha256","quantity","render_bundle_sha256","scope","stripe_account_id_sha256","stripe_api_version","submit_type","tax_contract_version","tax_registrations","tax_registrations_sha256","tax_settings_status","terms_document_sha256","terms_version","version"];
 exactKeys(offer,offerFields,"offer snapshot");
 const mode=offer.livemode?"live":"test";
-if(offer.version!=="arc-checkout-offer-snapshot-v1"||offer.scope!=="immutable-approved-preview-private-checkout-offer"||offer.environment!=="arc-production"||
+const expectedPreviewPaths=["about/index.html","contact/index.html","process/index.html","services/index.html","index.html"].map(path=>`${offer.preview_folder}/${path}`);
+if(offer.version!=="arc-checkout-offer-snapshot-v2"||offer.scope!=="immutable-approved-five-page-preview-private-checkout-offer"||offer.environment!=="arc-production"||
   offer.checkout_binding_key_id!==clean(inputData.checkout_binding_key_id).toLowerCase()||!/^[a-f0-9]{2}$/.test(offer.checkout_binding_key_id)||
   offer.amount_subtotal_minor_units!==500000||offer.currency!=="usd"||offer.quantity!==1||offer.automatic_tax_enabled!==true||offer.price_tax_behavior!=="exclusive"||
   offer.tax_contract_version!=="arc-tax-v1"||offer.tax_settings_status!=="active"||!/^price_[A-Za-z0-9]+$/.test(offer.price_id)||!/^prod_[A-Za-z0-9]+$/.test(offer.product_id)||
-  !/^txcd_[0-9]{8}$/.test(offer.product_tax_code)||!/^[a-f0-9]{64}$/.test(offer.stripe_account_id_sha256)||!/^[a-f0-9]{64}$/.test(offer.configuration_sha256)||
+  !/^txcd_[0-9]{8}$/.test(offer.product_tax_code)||offer.terms_version!=="2026-08-25"||offer.stripe_api_version!=="2026-07-29.dahlia"||
+  offer.offer_contract_id!=="arc-fixed-five-page-offer-v1"||offer.deliverable!=="fixed-five-page-marketing-website-v1"||offer.page_count!==5||
+  offer.preview_source_repository!=="arcwebhq-cpu/arc-previews"||!offer.preview_folder.endsWith(`-${offer.public_folder_prefix}`)||canonicalJson(offer.preview_paths)!==canonicalJson(expectedPreviewPaths)||
+  ![offer.stripe_account_id_sha256,offer.configuration_sha256,offer.approval_content_sha256,offer.published_preview_bundle_sha256,offer.production_content_sha256,offer.render_bundle_sha256].every(value=>/^[a-f0-9]{64}$/.test(value))||
+  !new Set(["netlify_form","not_required"]).has(offer.lead_route_mode)||
+  (offer.lead_route_mode==="netlify_form"?(!/^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(offer.lead_route_form_name)||!/^[a-f0-9]{64}$/.test(offer.lead_route_recipient_hmac_sha256))
+    :offer.lead_route_form_name!==""||offer.lead_route_recipient_hmac_sha256!=="")||
   clean(inputData.checkout_offer_snapshot_sha256).toLowerCase()!==offerSha)throw new Error("ARC_PRIVATE_CHECKOUT_LIFECYCLE_INVALID: offer snapshot semantics");
-await verifyHex(bindingKey,inputData.checkout_offer_snapshot_hmac_sha256,`arc-checkout-offer-snapshot-signature-v1\n${mode}\n${offerRaw}`,"offer snapshot");
+await verifyHex(bindingKey,inputData.checkout_offer_snapshot_hmac_sha256,`arc-checkout-offer-snapshot-signature-v2\n${mode}\n${offerRaw}`,"offer snapshot");
 const stableOfferConfiguration=canonicalJson({stripe_account_id_sha256:offer.stripe_account_id_sha256,livemode:offer.livemode,price_id:offer.price_id,product_id:offer.product_id,
   amount_subtotal_minor_units:offer.amount_subtotal_minor_units,currency:offer.currency,quantity:offer.quantity,terms_version:offer.terms_version,
   terms_document_sha256:offer.terms_document_sha256,automatic_tax_enabled:offer.automatic_tax_enabled,customer_address_source:offer.customer_address_source,
@@ -64,10 +71,22 @@ const stableOfferConfiguration=canonicalJson({stripe_account_id_sha256:offer.str
 if(await sha256(stableOfferConfiguration)!==offer.configuration_sha256)throw new Error("ARC_PRIVATE_CHECKOUT_LIFECYCLE_INVALID: offer configuration digest");
 
 const policyRaw=clean(inputData.checkout_policy_private),policy=parseCanonical(policyRaw,"checkout policy"),policySha=await sha256(policyRaw);
-if(policy.version!=="arc-private-checkout-policy-v1"||policy.scope!=="one-approved-preview-one-private-payment-link"||policy.offer_snapshot_sha256!==offerSha||
+const policyFields=["adult_acknowledgement_key","amount_subtotal_minor_units","approval_content_sha256","asset_publication_receipt_sha256","automatic_tax_enabled","checkout_binding_key_id","checkout_redirect_url","claim_recipient_email_sha256","completed_sessions_limit","content_sha256","currency","customer_address_source","deliverable","lead_route_recipient_hmac_sha256","name_collection_required","offer_contract_id","offer_snapshot_sha256","page_count","preview_folder","preview_paths","preview_source_repository","price_id","price_tax_behavior","product_id","product_tax_code","published_site_sha256","quantity","readiness_core_sha256","recipient_reservation_sha256","scope","source_commit_sha","source_tree_sha","stripe_account_id_sha256","stripe_api_version","stripe_mode","tax_contract_version","tax_registrations","tax_registrations_sha256","terms_document_sha256","terms_version","version"];
+exactKeys(policy,policyFields,"checkout policy");
+if(policy.version!=="arc-private-checkout-policy-v2"||policy.scope!=="one-approved-five-page-preview-one-private-payment-link"||policy.offer_snapshot_sha256!==offerSha||
   policy.stripe_mode!==mode||policy.stripe_account_id_sha256!==offer.stripe_account_id_sha256||policy.price_id!==offer.price_id||policy.product_id!==offer.product_id||
-  policy.product_tax_code!==offer.product_tax_code||policy.automatic_tax_enabled!==true||policy.payment_method_selection!=="dynamic"||
-  policy.completed_sessions_limit!==1||!/^[a-f0-9]{64}$/.test(clean(policy.readiness_core_sha256)))
+  policy.product_tax_code!==offer.product_tax_code||policy.automatic_tax_enabled!==true||policy.completed_sessions_limit!==1||
+  policy.checkout_binding_key_id!==offer.checkout_binding_key_id||policy.amount_subtotal_minor_units!==500000||policy.currency!=="usd"||policy.quantity!==1||
+  policy.terms_version!==offer.terms_version||policy.terms_document_sha256!==offer.terms_document_sha256||policy.customer_address_source!==offer.customer_address_source||
+  policy.price_tax_behavior!==offer.price_tax_behavior||policy.tax_contract_version!==offer.tax_contract_version||canonicalJson(policy.tax_registrations)!==canonicalJson(offer.tax_registrations)||
+  policy.tax_registrations_sha256!==offer.tax_registrations_sha256||policy.adult_acknowledgement_key!==offer.adult_acknowledgement_key||policy.name_collection_required!==true||
+  policy.checkout_redirect_url!==offer.checkout_redirect_url||policy.stripe_api_version!==offer.stripe_api_version||policy.offer_contract_id!==offer.offer_contract_id||
+  policy.deliverable!==offer.deliverable||policy.page_count!==5||policy.preview_folder!==offer.preview_folder||canonicalJson(policy.preview_paths)!==canonicalJson(expectedPreviewPaths)||
+  policy.preview_source_repository!==offer.preview_source_repository||policy.approval_content_sha256!==offer.approval_content_sha256||
+  policy.content_sha256!==offer.published_preview_bundle_sha256||policy.published_site_sha256!==offer.production_content_sha256||
+  policy.asset_publication_receipt_sha256!==offer.asset_publication_receipt_sha256||policy.lead_route_recipient_hmac_sha256!==offer.lead_route_recipient_hmac_sha256||
+  ![policy.claim_recipient_email_sha256,policy.readiness_core_sha256,policy.recipient_reservation_sha256].every(value=>/^[a-f0-9]{64}$/.test(clean(value)))||
+  ![policy.source_commit_sha,policy.source_tree_sha].every(value=>/^[a-f0-9]{40}$/.test(clean(value))))
   throw new Error("ARC_PRIVATE_CHECKOUT_LIFECYCLE_INVALID: checkout policy semantics");
 
 const receiptRaw=clean(inputData.active_link_receipt_private),receipt=parseCanonical(receiptRaw,"active Link receipt"),receiptSha=await sha256(receiptRaw);
@@ -98,16 +117,18 @@ const validateOfferEvidence=async(rawValue,hmacValue,minimumIssuedMs=0)=>{
   await verifyHex(offerEvidenceKey,hmacValue,`arc1-checkout-offer-template-evidence-signature-v1\n${raw}`,"renewable offer evidence");
   return{raw,evidence,sha:await sha256(raw),issuedMs,expiresMs:issuedMs+freshnessMs};
 };
-const observationFields=["current_main_html_sha256","current_main_sha","expires_at","issued_at","pages_content_sha256","readiness_core_sha256","scope","version"];
+const observationFields=["current_main_published_preview_bundle_sha256","current_main_sha","current_main_tree_sha","expires_at","issued_at","pages_published_preview_bundle_sha256","preview_folder","preview_paths","published_site_sha256","readiness_core_sha256","repository","scope","version"];
 const validateReadiness=async(rawValue,hmacValue,minimumIssuedMs=0)=>{
   const raw=clean(rawValue),observation=parseCanonical(raw,"renewable readiness observation");exactKeys(observation,observationFields,"renewable readiness observation");
   const issuedMs=exactIso(observation.issued_at,"renewable readiness observation"),expiresMs=exactIso(observation.expires_at,"renewable readiness observation");
-  if(observation.version!=="arc1-preview-readiness-observation-v1"||observation.scope!=="renewable-private-checkout-readiness-observation"||
+  if(observation.version!=="arc1-preview-readiness-observation-v2"||observation.scope!=="renewable-five-page-private-checkout-readiness-observation"||
     observation.readiness_core_sha256!==policy.readiness_core_sha256||!/^[a-f0-9]{40}$/.test(observation.current_main_sha)||
-    !/^[a-f0-9]{64}$/.test(observation.current_main_html_sha256)||observation.current_main_html_sha256!==observation.pages_content_sha256||
+    !/^[a-f0-9]{40}$/.test(observation.current_main_tree_sha)||observation.repository!==policy.preview_source_repository||observation.preview_folder!==policy.preview_folder||
+    canonicalJson(observation.preview_paths)!==canonicalJson(policy.preview_paths)||observation.current_main_published_preview_bundle_sha256!==policy.content_sha256||
+    observation.pages_published_preview_bundle_sha256!==policy.content_sha256||observation.published_site_sha256!==policy.published_site_sha256||
     issuedMs<now-freshnessMs||issuedMs>now+clockSkewMs||issuedMs<minimumIssuedMs-5000||expiresMs<=now||expiresMs<=issuedMs||expiresMs-issuedMs>600000)
     throw new Error("ARC_PRIVATE_CHECKOUT_LIFECYCLE_WAIT: rerun preview readiness immediately before this renewal transition");
-  await verifyHex(bindingKey,hmacValue,`arc1-preview-readiness-observation-signature-v1\n${mode}\n${raw}`,"renewable readiness observation");
+  await verifyHex(bindingKey,hmacValue,`arc1-preview-readiness-observation-signature-v2\n${mode}\n${raw}`,"renewable readiness observation");
   return{raw,observation,sha:await sha256(raw),issuedMs,expiresMs};
 };
 

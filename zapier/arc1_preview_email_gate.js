@@ -1,492 +1,60 @@
-// ARC1 polling/status step — fail closed until CI, merge, Pages, and private email state all prove ready.
-// A token-bound Git ref is the atomic one-time claim; persist next_email_state before invoking email for auditability.
-const clean = value => String(value == null ? "" : value).trim();
-const decodeCheckoutSurface=value=>{let current=String(value==null?"":value);for(let pass=0;pass<5;pass+=1){let next=current.replace(/&#(\d+);?/g,(_,code)=>String.fromCodePoint(Number(code))).replace(/&#x([0-9a-f]+);?/gi,(_,code)=>String.fromCodePoint(Number.parseInt(code,16))).replace(/&(amp|period|colon|sol|percnt|num|tab|newline);/gi,(_,name)=>({amp:"&",period:".",colon:":",sol:"/",percnt:"%",num:"#",tab:"\t",newline:"\n"})[name.toLowerCase()]).replace(/\/\*[\s\S]*?\*\//g,"").replace(/\\x([0-9a-f]{2})/gi,(_,hex)=>String.fromCodePoint(Number.parseInt(hex,16))).replace(/\\u\{([0-9a-f]{1,6})\}/gi,(_,hex)=>String.fromCodePoint(Number.parseInt(hex,16))).replace(/\\u([0-9a-f]{4})/gi,(_,hex)=>String.fromCodePoint(Number.parseInt(hex,16))).replace(/\\([0-9a-f]{1,6})\s?/gi,(_,hex)=>String.fromCodePoint(Number.parseInt(hex,16))).replace(/[\u3002\uff0e\uff61]/g,".").replace(/(?:%[0-9a-f]{2})+/gi,encoded=>{try{return decodeURIComponent(encoded);}catch{return encoded.replace(/%([0-9a-f]{2})/gi,(_,hex)=>String.fromCharCode(Number.parseInt(hex,16)));}});if(next===current)break;current=next;}return current.normalize("NFKC").toLowerCase();};
-const hasCheckoutCapability=value=>{const raw=String(value==null?"":value),decoded=decodeCheckoutSurface(raw),compact=decoded.replace(/[\s\u0000-\u001f\u007f]+/g,""),forbidden=/buy\.stripe\.com|\bplink_[a-z0-9]+|client_reference_id|arc-checkout-config|v3_[a-z0-9_-]{135}|arc-checkout-offer-snapshot-v1|arc1-checkout-recipient-reservation-v1|arc1-preview-readiness-(?:core|observation)-v1|arc-private-checkout-(?:policy|link-intent|link-receipt|link-reverse)-v1|checkout_(?:binding|offer|recipient|readiness)|link_receipt_(?:private|hmac|sha256)/i;if(forbidden.test(decoded)||forbidden.test(compact)||/<[A-Za-z][^>]*\son[a-z0-9_-]+\s*=/i.test(raw)||(raw.match(/<script\b/gi)||[]).length!==3||(raw.match(/<\/script\b/gi)||[]).length!==3||/<\/script\s+>/i.test(raw))return true;for(const match of raw.matchAll(/\b(?:href|xlink:href|action|formaction|src|srcset|poster|data|content)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/gi)){const attr=match[1]??match[2]??match[3]??"",normalized=decodeCheckoutSurface(attr);let parsed;try{parsed=new URL(normalized,"https://arc.invalid/");}catch{}const host=parsed?.hostname?.toLowerCase()||"";if(/%(?![0-9a-f]{2})/i.test(attr)||/&(?!(?:amp|quot|apos|lt|gt);)[a-z][a-z0-9]+;?/i.test(attr)||/\p{Default_Ignorable_Code_Point}/u.test(normalized)||host==="buy.stripe.com"||host.endsWith(".buy.stripe.com")||/^(?:javascript|vbscript):/i.test(normalized)||forbidden.test(normalized)||forbidden.test(normalized.replace(/[\s\u0000-\u001f\u007f]+/g,"")))return true;}return false;};
-const hasUnsafeBrowserMarkup=value=>{const raw=String(value==null?"":value),decoded=decodeCheckoutSurface(raw),nonScript=decoded.replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi,"");return /&(?!(?:amp|quot|apos|lt|gt);)[a-z][a-z0-9]+;/i.test(raw)||/\p{Default_Ignorable_Code_Point}/u.test(nonScript)||/<[A-Za-z][^>]*(?:\s|\/)on[a-z0-9_-]+\s*=/i.test(raw)||/<style\b[^>]*>[\s\S]*?\\[\s\S]*?<\/style\s*>/i.test(decoded)||/\bstyle\s*=\s*(?:"[^"]*\\|'[^']*\\)/i.test(decoded);};
-const owner = clean(inputData.github_owner || "arcwebhq-cpu");
-const repository = clean(inputData.github_repo || "arc-previews");
-const baseBranch = clean(inputData.github_base_branch || "main");
-const token = clean(inputData.github_token);
-const previewFolder = clean(inputData.preview_folder).replace(/^\/+|\/+$/g, "").toLowerCase();
-const previewBranch = clean(inputData.preview_branch);
-const filePath = clean(inputData.file_path).replace(/^\/+/, "");
-const contentSha256 = clean(inputData.content_sha256).toLowerCase();
-const expectedHeadSha = clean(inputData.head_sha).toLowerCase();
-const prNumber = Number(inputData.pr_number);
-const requiredCheckName = "ARC preview quality/preview-quality";
-const requiredCheckAppSlug = "github-actions";
-const requiredCheckAppId = 15368;
-const emailStateToken = clean(inputData.email_state_token);
-const customerEmail = clean(inputData.customer_email).toLowerCase();
-const assetPublicationReceiptSha256 = clean(inputData.asset_publication_receipt_sha256).toLowerCase();
-const checkoutOfferSnapshotRaw = clean(inputData.checkout_config_snapshot_private || inputData.checkout_offer_snapshot_private);
-const checkoutOfferSnapshotSha256 = clean(inputData.checkout_config_snapshot_sha256 || inputData.checkout_offer_snapshot_sha256).toLowerCase();
-const checkoutOfferSnapshotHmacSha256 = clean(inputData.checkout_config_snapshot_hmac_sha256 || inputData.checkout_offer_snapshot_hmac_sha256).toLowerCase();
-const checkoutRecipientReservationRaw = clean(inputData.checkout_recipient_reservation_private);
-const checkoutRecipientReservationHmacSha256 = clean(inputData.checkout_recipient_reservation_hmac_sha256).toLowerCase();
+// ARC1 five-page Pages/readiness gate. This is observation-only: it does not
+// claim an outbox, authorize email, expose a checkout URL, or mutate GitHub.
+const clean=value=>String(value==null?"":value).trim(),own=(value,key)=>Object.prototype.hasOwnProperty.call(value,key);
+for(const legacy of ["html_content","file_path","preview_path"]){if(own(inputData,legacy))throw new Error(`ARC_PREVIEW_GATE_INVALID: legacy singular input ${legacy} is forbidden`);}
+if(!globalThis.crypto?.subtle||typeof TextEncoder!=="function"||typeof TextDecoder!=="function"||typeof Buffer!=="function")throw new Error("ARC_PREVIEW_GATE_INVALID: crypto/runtime");
+const encoder=new TextEncoder(),canonicalJson=value=>{if(value===null||typeof value==="string"||typeof value==="boolean")return JSON.stringify(value);if(typeof value==="number"&&Number.isFinite(value))return JSON.stringify(Object.is(value,-0)?0:value);if(Array.isArray(value))return `[${value.map(canonicalJson).join(",")}]`;if(value&&typeof value==="object"&&Object.getPrototypeOf(value)===Object.prototype)return `{${Object.keys(value).sort().map(key=>`${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;throw new Error("ARC_PREVIEW_GATE_INVALID: canonical JSON");};
+const exactKeys=(value,keys,label)=>{if(!value||typeof value!=="object"||Array.isArray(value)||JSON.stringify(Object.keys(value).sort())!==JSON.stringify([...keys].sort()))throw new Error(`ARC_PREVIEW_GATE_INVALID: ${label} fields`);};
+const sha256Bytes=async bytes=>[...new Uint8Array(await crypto.subtle.digest("SHA-256",bytes))].map(byte=>byte.toString(16).padStart(2,"0")).join("");
+const sha256=async value=>sha256Bytes(encoder.encode(value));
+const parseCanonical=(raw,label,maximum=4*1024*1024)=>{if(!raw||encoder.encode(raw).length>maximum)throw new Error(`ARC_PREVIEW_GATE_INVALID: ${label} size`);let value;try{value=JSON.parse(raw);}catch{throw new Error(`ARC_PREVIEW_GATE_INVALID: ${label} JSON`);}if(!value||typeof value!=="object"||Array.isArray(value)||canonicalJson(value)!==raw)throw new Error(`ARC_PREVIEW_GATE_INVALID: ${label} canonical JSON`);return value;};
+const hex40=value=>/^[a-f0-9]{40}$/.test(value),hex64=value=>/^[a-f0-9]{64}$/.test(value),hexBytes=hex=>Uint8Array.from((hex.match(/../g)||[]),byte=>Number.parseInt(byte,16));
+const verifyHmac=async(key,hex,message,label)=>{if(!hex64(hex)||!await crypto.subtle.verify("HMAC",key,hexBytes(hex),encoder.encode(message)))throw new Error(`ARC_PREVIEW_GATE_INVALID: ${label} HMAC`);};
 
-if (!token) throw new Error("ARC_GITHUB_INVALID: github_token is required");
-if (!/^[A-Za-z0-9_.-]+$/.test(owner) || !/^[A-Za-z0-9_.-]+$/.test(repository)) {
-  throw new Error("ARC_GITHUB_INVALID: owner or repository");
-}
-if (baseBranch !== "main") throw new Error("ARC_PREVIEW_GATE_INVALID: base branch must be main");
-const suffix = previewFolder.match(/-([a-f0-9]{8})$/)?.[1] || "";
-if (!suffix || previewBranch !== `arc-preview/${suffix}`) {
-  throw new Error("ARC_PREVIEW_GATE_INVALID: deterministic preview branch mismatch");
-}
-if (filePath !== `${previewFolder}/index.html`) throw new Error("ARC_PREVIEW_GATE_INVALID: exact preview index path required");
-if (!/^[a-f0-9]{64}$/.test(contentSha256)) throw new Error("ARC_PREVIEW_GATE_INVALID: source SHA-256");
-if (!/^[a-f0-9]{40}$/.test(expectedHeadSha)) throw new Error("ARC_PREVIEW_GATE_INVALID: head SHA");
-if (!Number.isInteger(prNumber) || prNumber < 1) throw new Error("ARC_PREVIEW_GATE_INVALID: PR number");
-if (!/^[A-Za-z0-9_-]{32,128}$/.test(emailStateToken)) {
-  throw new Error("ARC_PREVIEW_GATE_INVALID: private email state token");
-}
-if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
-  throw new Error("ARC_PREVIEW_GATE_INVALID: customer email");
-}
+const owner=clean(inputData.github_owner||"arcwebhq-cpu"),repository=clean(inputData.github_repo||"arc-previews"),baseBranch=clean(inputData.github_base_branch||"main"),token=clean(inputData.github_token),expectedHeadSha=clean(inputData.head_sha).toLowerCase(),expectedHeadTreeSha=clean(inputData.head_tree_sha).toLowerCase(),prNumber=Number(inputData.pr_number);
+const requiredCheckName="ARC preview quality/preview-quality",requiredCheckAppSlug="github-actions",requiredCheckAppId=15368;
+if(!token)throw new Error("ARC_GITHUB_INVALID: github_token is required");if(!/^[A-Za-z0-9_.-]+$/.test(owner)||!/^[A-Za-z0-9_.-]+$/.test(repository)||baseBranch!=="main"||!hex40(expectedHeadSha)||!hex40(expectedHeadTreeSha)||!Number.isInteger(prNumber)||prNumber<1)throw new Error("ARC_PREVIEW_GATE_INVALID: repository/head/tree/PR binding");
 
-const sha256Hex = async value => {
-  if (!globalThis.crypto?.subtle) throw new Error("ARC_PREVIEW_GATE_INVALID: SHA-256 runtime unavailable");
-  const bytes = new TextEncoder().encode(value);
-  const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
-  return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("");
-};
-const sha256Bytes = async value => {
-  const digest = await globalThis.crypto.subtle.digest("SHA-256", value);
-  return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("");
-};
-const recipientSha256 = await sha256Hex(customerEmail);
-const canonicalJson = value => {
-  if (value === null || typeof value === "string" || typeof value === "boolean") return JSON.stringify(value);
-  if (typeof value === "number" && Number.isFinite(value)) return JSON.stringify(Object.is(value,-0)?0:value);
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  if (value && typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype) return `{${Object.keys(value).sort().map(key=>`${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
-  throw new Error("ARC_PREVIEW_GATE_INVALID: publication receipt JSON");
-};
-const approvalContentSha256=clean(inputData.approval_content_sha256).toLowerCase();
-let checkoutOfferSnapshot, checkoutRecipientReservation;
-try {
-  checkoutOfferSnapshot = JSON.parse(checkoutOfferSnapshotRaw);
-  checkoutRecipientReservation = JSON.parse(checkoutRecipientReservationRaw);
-} catch { throw new Error("ARC_PREVIEW_GATE_INVALID: private checkout offer/reference/reservation encoding"); }
-if (!/^[a-f0-9]{64}$/.test(approvalContentSha256) || !checkoutOfferSnapshot || canonicalJson(checkoutOfferSnapshot) !== checkoutOfferSnapshotRaw ||
-    checkoutOfferSnapshot.version !== "arc-checkout-offer-snapshot-v1" || checkoutOfferSnapshot.scope !== "immutable-approved-preview-private-checkout-offer" ||
-    checkoutOfferSnapshot.preview_folder !== previewFolder || checkoutOfferSnapshot.preview_path !== filePath ||
-    checkoutOfferSnapshot.preview_source_repository !== `${owner}/${repository}` || checkoutOfferSnapshot.public_folder_prefix !== suffix ||
-    !/^[a-f0-9]{64}$/.test(checkoutOfferSnapshotSha256) || await sha256Hex(checkoutOfferSnapshotRaw) !== checkoutOfferSnapshotSha256 ||
-    !/^[a-f0-9]{64}$/.test(checkoutOfferSnapshotHmacSha256) ||
-    !checkoutRecipientReservation || canonicalJson(checkoutRecipientReservation) !== checkoutRecipientReservationRaw ||
-    checkoutRecipientReservation.version !== "arc1-checkout-recipient-reservation-v1" ||
-    checkoutRecipientReservation.scope !== "private-lead-recipient-for-approved-checkout" ||
-    checkoutRecipientReservation.approval_content_sha256 !== approvalContentSha256 ||
-    checkoutRecipientReservation.checkout_offer_snapshot_sha256 !== checkoutOfferSnapshotSha256 ||
-    checkoutRecipientReservation.checkout_binding_key_id !== checkoutOfferSnapshot.checkout_binding_key_id ||
-    checkoutRecipientReservation.lead_route_recipient_hmac_sha256 !== checkoutOfferSnapshot.lead_route_recipient_hmac_sha256 ||
-    clean(checkoutRecipientReservation.claim_recipient_email).toLowerCase() !== customerEmail ||
-    checkoutRecipientReservation.claim_recipient_email_sha256 !== recipientSha256 ||
-    !/^[a-f0-9]{64}$/.test(checkoutRecipientReservationHmacSha256)) {
-  throw new Error("ARC_PREVIEW_GATE_INVALID: private checkout offer/reference/reservation binding");
-}
-const currentCheckoutBindingKeyId=clean(inputData.checkout_binding_key_id).toLowerCase();
-const currentCheckoutBindingSecret=clean(inputData.checkout_binding_secret);
-const retiredCheckoutBindingKeysRaw=clean(inputData.retired_checkout_binding_keys_json);
-let retiredCheckoutBindingKeys;
-try { retiredCheckoutBindingKeys=JSON.parse(retiredCheckoutBindingKeysRaw); } catch {}
-if(!/^[a-f0-9]{2}$/.test(currentCheckoutBindingKeyId)||currentCheckoutBindingSecret.length<32||currentCheckoutBindingSecret.length>256||
-  !retiredCheckoutBindingKeys||typeof retiredCheckoutBindingKeys!=="object"||Array.isArray(retiredCheckoutBindingKeys)||canonicalJson(retiredCheckoutBindingKeys)!==retiredCheckoutBindingKeysRaw||
-  Object.entries(retiredCheckoutBindingKeys).some(([id,value])=>!/^[a-f0-9]{2}$/.test(id)||id===currentCheckoutBindingKeyId||typeof value!=="string"||value.length<32||value.length>256)){
-  throw new Error("ARC_PREVIEW_GATE_INVALID: checkout binding key registry");
-}
-const selectedCheckoutBindingSecret=checkoutOfferSnapshot.checkout_binding_key_id===currentCheckoutBindingKeyId?currentCheckoutBindingSecret:retiredCheckoutBindingKeys[checkoutOfferSnapshot.checkout_binding_key_id];
-if(!selectedCheckoutBindingSecret)throw new Error("ARC_PREVIEW_GATE_INVALID: checkout binding key is not retained");
-const checkoutMode=checkoutOfferSnapshot.livemode?"live":"test";
-const checkoutKey=await globalThis.crypto.subtle.importKey("raw",new TextEncoder().encode(selectedCheckoutBindingSecret),{name:"HMAC",hash:"SHA-256"},false,["verify","sign"]);
-const hexBytes=hex=>Uint8Array.from(hex.match(/../g)||[],byte=>Number.parseInt(byte,16));
-if(!await globalThis.crypto.subtle.verify("HMAC",checkoutKey,hexBytes(checkoutOfferSnapshotHmacSha256),new TextEncoder().encode(`arc-checkout-offer-snapshot-signature-v1\n${checkoutMode}\n${checkoutOfferSnapshotRaw}`))||
-  !await globalThis.crypto.subtle.verify("HMAC",checkoutKey,hexBytes(checkoutRecipientReservationHmacSha256),new TextEncoder().encode(`arc1-checkout-recipient-reservation-signature-v1\n${checkoutMode}\n${checkoutRecipientReservationRaw}`))){
-  throw new Error("ARC_PREVIEW_GATE_INVALID: private checkout offer/reference/reservation HMAC");
-}
-let publicAssetEntries=[];
-if(assetPublicationReceiptSha256){
-  const secret=String(inputData.asset_publication_receipt_secret==null?"":inputData.asset_publication_receipt_secret),raw=clean(inputData.asset_publication_receipt_private);
-  let receipt;try{receipt=JSON.parse(raw);}catch{throw new Error("ARC_PREVIEW_GATE_INVALID: publication receipt JSON");}
-  const fields=["version","scope","bridge_contract_sha256","delivery_id","bridge_evidence_sha256","private_asset_receipt_sha256","intake_evidence_sha256","intake_state_digest_sha256","asset_manifest_sha256","asset_permission","repository","base_branch","preview_branch","pages_base_url","public_folder_prefix","preview_folder","entries","status"];
-  const entryFields=["asset_id","content_type","git_blob_sha1","public_url","repository_path","role","sha256","size_bytes"];
-  if(new TextEncoder().encode(secret).length<32||new TextEncoder().encode(secret).length>256||!receipt||canonicalJson(receipt)!==raw||JSON.stringify(Object.keys(receipt).sort())!==JSON.stringify(fields.slice().sort())||receipt.version!=="arc1-public-asset-publication-receipt-v1"||receipt.scope!=="github-content-addressed-preview-assets"||receipt.bridge_contract_sha256!=="e9bd5a3be21e0192acdc8b81692dab7bf5b1d0a132325a73011aa03e43674841"||![receipt.delivery_id,receipt.bridge_evidence_sha256,receipt.private_asset_receipt_sha256,receipt.intake_evidence_sha256,receipt.intake_state_digest_sha256,receipt.asset_manifest_sha256].every(value=>/^[a-f0-9]{64}$/.test(value))||receipt.repository!==`${owner}/${repository}`||receipt.base_branch!==baseBranch||receipt.preview_branch!==previewBranch||receipt.preview_folder!==previewFolder||!Array.isArray(receipt.entries)||receipt.entries.length>3||receipt.status!==(receipt.entries.length?"VERIFIED_CONTENT_ADDRESSED":"NO_PUBLIC_UPLOADS")||receipt.asset_permission!==(receipt.entries.length?"Confirmed":"")||await sha256Hex(raw)!==assetPublicationReceiptSha256)throw new Error("ARC_PREVIEW_GATE_INVALID: publication receipt binding");
-  const roles=new Set();let totalBytes=0;
-  for(const entry of receipt.entries){if(!entry||JSON.stringify(Object.keys(entry).sort())!==JSON.stringify(entryFields.slice().sort())||!/^[a-f0-9]{40}$/.test(entry.git_blob_sha1)||!/^[a-f0-9]{64}$/.test(entry.sha256)||!/^[a-f0-9]{64}$/.test(entry.asset_id)||!new Set(["hero_image_file","logo_file","supporting_image_file"]).has(entry.role)||roles.has(entry.role)||entry.repository_path!==`${previewFolder}/assets/${entry.sha256}.${({"image/png":"png","image/jpeg":"jpg","image/webp":"webp"})[entry.content_type]}`||entry.public_url!==`https://${owner}.github.io/${repository}/${entry.repository_path}`||!Number.isSafeInteger(entry.size_bytes)||entry.size_bytes<1||entry.size_bytes>1250000)throw new Error("ARC_PREVIEW_GATE_INVALID: publication receipt entry");roles.add(entry.role);totalBytes+=entry.size_bytes;}if(totalBytes>3000000)throw new Error("ARC_PREVIEW_GATE_INVALID: publication receipt aggregate size");
-  const signature=clean(inputData.asset_publication_receipt_hmac_sha256).toLowerCase(),key=await globalThis.crypto.subtle.importKey("raw",new TextEncoder().encode(secret),{name:"HMAC",hash:"SHA-256"},false,["verify"]);
-  if(!/^[a-f0-9]{64}$/.test(signature)||!await globalThis.crypto.subtle.verify("HMAC",key,Uint8Array.from(signature.match(/../g),b=>Number.parseInt(b,16)),new TextEncoder().encode(`arc1-public-asset-publication-receipt-v1\n${raw}`)))throw new Error("ARC_PREVIEW_GATE_INVALID: publication receipt HMAC");
-  publicAssetEntries=receipt.entries;
-}
-const tokenSha256 = await sha256Hex(emailStateToken);
-let emailState;
-try {
-  emailState = typeof inputData.email_state === "string"
-    ? JSON.parse(inputData.email_state)
-    : inputData.email_state;
-} catch (error) {
-  throw new Error("ARC_PREVIEW_GATE_INVALID: private email_state JSON");
-}
-if (!emailState || typeof emailState !== "object" || Array.isArray(emailState)) {
-  throw new Error("ARC_PREVIEW_GATE_INVALID: private email_state object");
-}
-if (clean(emailState.version) !== "arc-preview-email-state-v1") {
-  throw new Error("ARC_PREVIEW_GATE_INVALID: email state version");
-}
-if (clean(emailState.token_sha256).toLowerCase() !== tokenSha256) {
-  throw new Error("ARC_PREVIEW_GATE_INVALID: email state token does not match");
-}
-if (
-  clean(emailState.preview_folder).toLowerCase() !== previewFolder ||
-  clean(emailState.content_sha256).toLowerCase() !== contentSha256 ||
-  clean(emailState.head_sha).toLowerCase() !== expectedHeadSha ||
-  clean(emailState.recipient_sha256).toLowerCase() !== recipientSha256 ||
-  Number(emailState.pr_number) !== prNumber
-  || (assetPublicationReceiptSha256 && clean(emailState.asset_publication_receipt_sha256).toLowerCase() !== assetPublicationReceiptSha256)
-) {
-  throw new Error("ARC_PREVIEW_GATE_INVALID: email state is not bound to this exact preview");
-}
-const emailStatus = clean(emailState.status).toUpperCase();
-if (!new Set(["PENDING", "CLAIMED", "SENT"]).has(emailStatus)) {
-  throw new Error("ARC_PREVIEW_GATE_INVALID: email state status");
-}
-if (emailStatus !== "PENDING") {
-  return {
-    status: emailStatus === "SENT" ? "ALREADY_EMAILED" : "EMAIL_ALREADY_CLAIMED",
-    send_preview_email: false,
-    preview_folder: previewFolder,
-    head_sha: expectedHeadSha,
-    pr_number: prNumber,
-    email_state_status: emailStatus
-  };
-}
-const emailStateCreatedAt = Date.parse(clean(emailState.created_at));
-const emailStateExpiresAt = Date.parse(clean(emailState.expires_at));
-const now = Date.now();
-if (
-  !Number.isFinite(emailStateCreatedAt) || !Number.isFinite(emailStateExpiresAt) ||
-  emailStateCreatedAt > now + 5 * 60 * 1000 ||
-  emailStateExpiresAt <= now || emailStateExpiresAt <= emailStateCreatedAt
-) {
-  throw new Error("ARC_PREVIEW_GATE_INVALID: email state expired");
-}
-if (emailStateExpiresAt - emailStateCreatedAt > 24 * 60 * 60 * 1000) {
-  throw new Error("ARC_PREVIEW_GATE_INVALID: email state TTL exceeds 24 hours");
-}
+const bundleRaw=clean(inputData.render_bundle_private),bundleSha=clean(inputData.render_bundle_sha256).toLowerCase(),bundle=parseCanonical(bundleRaw,"render bundle",1200000);
+exactKeys(bundle,["approval_manifest","approval_manifest_sha256","deliverable","lead_route_form_name","lead_route_mode","logical_page_paths","offer_contract_id","page_count","pages","preview_folder","preview_paths","production_content_sha256","published_preview_bundle_sha256","published_preview_manifest","runtime_version","scope","site_contract_version","template_version","version"],"render bundle");
+const previewFolder=clean(bundle.preview_folder).toLowerCase(),suffix=previewFolder.match(/-([a-f0-9]{8})$/)?.[1]||"",previewBranch=`arc-preview/${suffix}`,logicalPaths=["index.html","services/index.html","about/index.html","process/index.html","contact/index.html"],artifactPaths=["about/index.html","contact/index.html","process/index.html","services/index.html","index.html"],previewPaths=artifactPaths.map(path=>`${previewFolder}/${path}`),pagesRoot=`https://${owner}.github.io/${repository}`;
+if(await sha256(bundleRaw)!==bundleSha||bundle.version!=="arc1-five-page-render-bundle-v1"||bundle.scope!=="private-sanitized-five-page-preview-render"||bundle.runtime_version!=="arc1-inject-v11-render-runtime-v1"||bundle.site_contract_version!=="arc-five-page-site-v1"||bundle.template_version!=="11.0"||bundle.offer_contract_id!=="arc-fixed-five-page-offer-v1"||bundle.deliverable!=="fixed-five-page-marketing-website-v1"||bundle.page_count!==5||!suffix||clean(inputData.preview_branch)!==previewBranch||canonicalJson(bundle.logical_page_paths)!==canonicalJson(logicalPaths)||canonicalJson(bundle.preview_paths)!==canonicalJson(previewPaths)||![bundle.approval_manifest_sha256,bundle.published_preview_bundle_sha256,bundle.production_content_sha256].every(hex64))throw new Error("ARC_PREVIEW_GATE_INVALID: exact v2 five-page bundle binding");
+const pagesByPath=new Map();if(!Array.isArray(bundle.pages)||bundle.pages.length!==5)throw new Error("ARC_PREVIEW_GATE_INVALID: page count");for(let index=0;index<5;index+=1){const page=bundle.pages[index],path=logicalPaths[index],url=`${pagesRoot}/${previewFolder}/${path==="index.html"?"":path.replace(/index\.html$/,"")}`;if(!page||page.path!==path||page.repository_path!==`${previewFolder}/${path}`||page.url!==url||pagesByPath.has(path)||!hex64(page.published_sha256)||!Number.isSafeInteger(page.published_size)||page.published_size<1||page.published_size>150000||encoder.encode(page.published_html).length!==page.published_size||await sha256(page.published_html)!==page.published_sha256)throw new Error(`ARC_PREVIEW_GATE_INVALID: ${path} page binding`);pagesByPath.set(path,page);}
+const manifestFor=async pages=>{const manifest={version:"arc-v11-published-preview-bundle-v1",pages:[]};for(const path of artifactPaths){const html=pages.get(path);manifest.pages.push({path,sha256:await sha256(html),size:encoder.encode(html).length});}return{manifest,sha256:await sha256(canonicalJson(manifest))};};
+const sourceManifest=await manifestFor(new Map(artifactPaths.map(path=>[path,pagesByPath.get(path).published_html])));if(canonicalJson(bundle.published_preview_manifest)!==canonicalJson(sourceManifest.manifest)||sourceManifest.sha256!==bundle.published_preview_bundle_sha256)throw new Error("ARC_PREVIEW_GATE_INVALID: published bundle digest");
 
-let mergeProof;
-try {
-  mergeProof = typeof inputData.merge_proof === "string"
-    ? JSON.parse(inputData.merge_proof)
-    : inputData.merge_proof;
-} catch (error) {
-  throw new Error("ARC_PREVIEW_GATE_INVALID: merge proof JSON");
-}
-if (!mergeProof || typeof mergeProof !== "object" || Array.isArray(mergeProof)) {
-  throw new Error("ARC_PREVIEW_GATE_INVALID: merge proof object");
-}
-if (
-  clean(mergeProof.version) !== "arc-preview-merge-proof-v1" ||
-  clean(mergeProof.preview_folder).toLowerCase() !== previewFolder ||
-  clean(mergeProof.preview_branch) !== previewBranch ||
-  clean(mergeProof.file_path) !== filePath ||
-  clean(mergeProof.content_sha256).toLowerCase() !== contentSha256 ||
-  clean(mergeProof.head_sha).toLowerCase() !== expectedHeadSha ||
-  Number(mergeProof.pr_number) !== prNumber ||
-  clean(mergeProof.check_name) !== requiredCheckName ||
-  clean(mergeProof.check_app_slug) !== requiredCheckAppSlug ||
-  Number(mergeProof.check_app_id) !== requiredCheckAppId
-  || clean(mergeProof.asset_publication_receipt_sha256).toLowerCase() !== assetPublicationReceiptSha256
-  || clean(mergeProof.checkout_offer_snapshot_sha256).toLowerCase() !== checkoutOfferSnapshotSha256
-  || clean(mergeProof.approval_content_sha256).toLowerCase() !== approvalContentSha256
-) {
-  throw new Error("ARC_PREVIEW_GATE_INVALID: merge proof is not bound to this exact preview");
-}
-const mergeCommitSha = clean(mergeProof.merge_commit_sha).toLowerCase();
-if (!/^[a-f0-9]{40}$/.test(mergeCommitSha) || !clean(mergeProof.merged_at)) {
-  throw new Error("ARC_PREVIEW_GATE_INVALID: merge proof completion fields");
-}
+const offerRaw=clean(inputData.checkout_offer_snapshot_private),offer=parseCanonical(offerRaw,"offer snapshot"),offerSha=await sha256(offerRaw),recipientRaw=clean(inputData.checkout_recipient_reservation_private),recipient=parseCanonical(recipientRaw,"recipient reservation"),recipientSha=await sha256(recipientRaw);
+if(offer.version!=="arc-checkout-offer-snapshot-v2"||offer.scope!=="immutable-approved-five-page-preview-private-checkout-offer"||offer.offer_contract_id!==bundle.offer_contract_id||offer.deliverable!==bundle.deliverable||offer.page_count!==5||offer.preview_folder!==previewFolder||canonicalJson(offer.preview_paths)!==canonicalJson(previewPaths)||offer.preview_source_repository!==`${owner}/${repository}`||offer.public_folder_prefix!==suffix||offer.approval_content_sha256!==bundle.approval_manifest_sha256||offer.published_preview_bundle_sha256!==bundle.published_preview_bundle_sha256||offer.production_content_sha256!==bundle.production_content_sha256||offer.render_bundle_sha256!==bundleSha||offer.lead_route_mode!==bundle.lead_route_mode||offer.lead_route_form_name!==bundle.lead_route_form_name||!hex64(offer.asset_publication_receipt_sha256)||clean(inputData.checkout_offer_snapshot_sha256).toLowerCase()!==offerSha||recipient.version!=="arc1-checkout-recipient-reservation-v2"||recipient.scope!=="private-recipients-for-approved-five-page-checkout"||recipient.offer_contract_id!==bundle.offer_contract_id||recipient.deliverable!==bundle.deliverable||recipient.page_count!==5||recipient.preview_folder!==previewFolder||canonicalJson(recipient.preview_paths)!==canonicalJson(previewPaths)||recipient.approval_content_sha256!==bundle.approval_manifest_sha256||recipient.published_preview_bundle_sha256!==bundle.published_preview_bundle_sha256||recipient.production_content_sha256!==bundle.production_content_sha256||recipient.checkout_offer_snapshot_sha256!==offerSha||recipient.lead_route_mode!==bundle.lead_route_mode||recipient.lead_route_form_name!==bundle.lead_route_form_name||recipient.lead_route_recipient_hmac_sha256!==offer.lead_route_recipient_hmac_sha256||clean(inputData.checkout_recipient_reservation_sha256).toLowerCase()!==recipientSha)throw new Error("ARC_PREVIEW_GATE_INVALID: v2 offer/reservation binding");
+if(bundle.lead_route_mode==="netlify_form"){if(!/^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(bundle.lead_route_form_name)||!hex64(offer.lead_route_recipient_hmac_sha256)||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient.lead_notification_email))throw new Error("ARC_PREVIEW_GATE_INVALID: netlify lead route");}else if(bundle.lead_route_mode!=="not_required"||bundle.lead_route_form_name!==""||offer.lead_route_recipient_hmac_sha256!==""||recipient.lead_notification_email!=="")throw new Error("ARC_PREVIEW_GATE_INVALID: no-form lead route");
+const customerEmail=clean(inputData.customer_email).toLowerCase(),emailStateToken=clean(inputData.email_state_token);if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)||!/^[A-Za-z0-9_-]{32,128}$/.test(emailStateToken)||clean(recipient.claim_recipient_email).toLowerCase()!==customerEmail||recipient.claim_recipient_email_sha256!==await sha256(customerEmail))throw new Error("ARC_PREVIEW_GATE_INVALID: private recipient/token binding");
+const currentKid=clean(inputData.checkout_binding_key_id).toLowerCase(),currentSecret=clean(inputData.checkout_binding_secret),retiredRaw=clean(inputData.retired_checkout_binding_keys_json),retired=parseCanonical(retiredRaw,"retired checkout key registry");if(!/^[a-f0-9]{2}$/.test(currentKid)||currentSecret.length<32||currentSecret.length>256||Object.entries(retired).some(([id,value])=>!/^[a-f0-9]{2}$/.test(id)||id===currentKid||typeof value!=="string"||value.length<32||value.length>256))throw new Error("ARC_PREVIEW_GATE_INVALID: checkout key registry");const selectedSecret=offer.checkout_binding_key_id===currentKid?currentSecret:retired[offer.checkout_binding_key_id];if(!selectedSecret)throw new Error("ARC_PREVIEW_GATE_INVALID: checkout key unavailable");const checkoutKey=await crypto.subtle.importKey("raw",encoder.encode(selectedSecret),{name:"HMAC",hash:"SHA-256"},false,["sign","verify"]),checkoutMode=offer.livemode?"live":"test";if(recipient.checkout_binding_key_id!==offer.checkout_binding_key_id||recipient.stripe_mode!==checkoutMode)throw new Error("ARC_PREVIEW_GATE_INVALID: checkout key/mode binding");await verifyHmac(checkoutKey,clean(inputData.checkout_offer_snapshot_hmac_sha256).toLowerCase(),`arc-checkout-offer-snapshot-signature-v2\n${checkoutMode}\n${offerRaw}`,"offer snapshot");await verifyHmac(checkoutKey,clean(inputData.checkout_recipient_reservation_hmac_sha256).toLowerCase(),`arc1-checkout-recipient-reservation-signature-v2\n${checkoutMode}\n${recipientRaw}`,"recipient reservation");
 
-const api = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}`;
-const githubHeaders = {
-  Accept: "application/vnd.github+json",
-  Authorization: `Bearer ${token}`,
-  "X-GitHub-Api-Version": "2022-11-28"
-};
-const requestedOperationTimeout = clean(inputData.provider_operation_timeout_ms);
-const operationTimeoutMs = requestedOperationTimeout ? Number(requestedOperationTimeout) : 25000;
-if (!Number.isSafeInteger(operationTimeoutMs) || operationTimeoutMs < 100 || operationTimeoutMs > 25000) {
-  throw new Error("ARC_PROVIDER_READ_FAILED: operation timeout is invalid");
-}
-const operationDeadline = Date.now() + operationTimeoutMs;
-const fetchBounded = async (url, options, maximumBytes, expectedOrigin, label) => {
-  const requestedUrl = new URL(url);
-  if (requestedUrl.origin !== expectedOrigin || requestedUrl.username || requestedUrl.password || requestedUrl.port) {
-    throw new Error(`${label}: invalid request origin`);
-  }
-  if (!Number.isSafeInteger(maximumBytes) || maximumBytes < 1 || maximumBytes > 4 * 1024 * 1024) {
-    throw new Error(`${label}: invalid response limit`);
-  }
-  const remaining = operationDeadline - Date.now();
-  if (remaining <= 0) throw new Error(`${label}: operation deadline exceeded`);
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), Math.max(1, Math.min(10000, remaining)));
-  let reader;
-  try {
-    const response = await fetch(requestedUrl.toString(), {
-      ...options,
-      redirect: "error",
-      signal: controller.signal
-    });
-    if (!response.url || response.url !== requestedUrl.toString()) {
-      throw new Error(`${label}: response URL changed`);
-    }
-    const declared = clean(response.headers?.get?.("content-length"));
-    if (declared && (!/^\d{1,10}$/.test(declared) || Number(declared) > maximumBytes)) {
-      throw new Error(`${label}: declared response exceeds limit`);
-    }
-    if (response.status === 204) return { response, bytes: Buffer.alloc(0) };
-    reader = response.body?.getReader?.();
-    if (!reader) throw new Error(`${label}: streaming response required`);
-    let total = 0;
-    const chunks = [];
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      total += value.byteLength;
-      if (total > maximumBytes) {
-        try { await reader.cancel(); } catch {}
-        throw new Error(`${label}: streamed response exceeds limit`);
-      }
-      chunks.push(Buffer.from(value));
-    }
-    return { response, bytes: Buffer.concat(chunks, total) };
-  } catch (error) {
-    if (error?.name === "AbortError") throw new Error(`${label}: request timeout`);
-    throw error;
-  } finally {
-    clearTimeout(timer);
-    try { reader?.releaseLock?.(); } catch {}
-  }
-};
-const request = async (url, options = {}, allowed = []) => {
-  const { response, bytes } = await fetchBounded(url, {
-    ...options,
-    headers: { ...githubHeaders, ...(options.headers || {}) }
-  }, 4 * 1024 * 1024, "https://api.github.com", "ARC_GITHUB_FAILED");
-  let body = {};
-  if (response.status !== 204) {
-    try { body = JSON.parse(bytes.toString("utf8")); }
-    catch { throw new Error("ARC_GITHUB_FAILED: malformed JSON response"); }
-  }
-  if (response.ok) return body;
-  if (allowed.includes(response.status)) return { _status: response.status, _body: body };
-  throw new Error(`ARC_GITHUB_FAILED: ${response.status} ${JSON.stringify(body).slice(0, 240)}`);
-};
-const wait = (status, proof) => ({
-  status,
-  send_preview_email: false,
-  preview_folder: previewFolder,
-  preview_branch: previewBranch,
-  head_sha: expectedHeadSha,
-  pr_number: prNumber,
-  required_check: requiredCheckName,
-  proof
-});
+const receiptRaw=clean(inputData.asset_publication_receipt_private),receipt=parseCanonical(receiptRaw,"asset publication receipt"),receiptSha=await sha256(receiptRaw);exactKeys(receipt,["asset_manifest_sha256","asset_permission","base_branch","bridge_contract_sha256","bridge_evidence_sha256","delivery_id","entries","intake_evidence_sha256","intake_state_digest_sha256","pages_base_url","preview_branch","preview_folder","private_asset_receipt_sha256","public_folder_prefix","repository","scope","status","version"],"asset publication receipt");if(receipt.version!=="arc1-public-asset-publication-receipt-v1"||receipt.scope!=="github-content-addressed-preview-assets"||receipt.repository!==`${owner}/${repository}`||receipt.base_branch!==baseBranch||receipt.preview_branch!==previewBranch||receipt.pages_base_url!==pagesRoot||receipt.preview_folder!==previewFolder||receipt.public_folder_prefix!==suffix||!Array.isArray(receipt.entries)||receipt.entries.length>3||receipt.status!==(receipt.entries.length?"VERIFIED_CONTENT_ADDRESSED":"NO_PUBLIC_UPLOADS")||receiptSha!==offer.asset_publication_receipt_sha256||clean(inputData.asset_publication_receipt_sha256).toLowerCase()!==receiptSha)throw new Error("ARC_PREVIEW_GATE_INVALID: asset receipt binding");const extensions={"image/png":"png","image/jpeg":"jpg","image/webp":"webp"},assetNames=new Set();for(const entry of receipt.entries){exactKeys(entry,["asset_id","content_type","git_blob_sha1","public_url","repository_path","role","sha256","size_bytes"],"asset entry");const name=`${entry.sha256}.${extensions[entry.content_type]}`;if(!extensions[entry.content_type]||assetNames.has(name)||!hex40(entry.git_blob_sha1)||!hex64(entry.sha256)||!Number.isSafeInteger(entry.size_bytes)||entry.size_bytes<1||entry.size_bytes>1250000||entry.repository_path!==`${previewFolder}/assets/${name}`||entry.public_url!==`${pagesRoot}/${entry.repository_path}`)throw new Error("ARC_PREVIEW_GATE_INVALID: asset entry");assetNames.add(name);}
 
-const checks = await request(
-  `${api}/commits/${expectedHeadSha}/check-runs?check_name=${encodeURIComponent(requiredCheckName)}&filter=latest&per_page=100`
-);
-const matchingChecks = (Array.isArray(checks.check_runs) ? checks.check_runs : [])
-  .filter(check =>
-    clean(check.name) === requiredCheckName &&
-    clean(check.head_sha).toLowerCase() === expectedHeadSha &&
-    clean(check.app?.slug) === requiredCheckAppSlug &&
-    Number(check.app?.id) === requiredCheckAppId &&
-    Number.isInteger(Number(check.id)) && Number(check.id) > 0
-  )
-  .sort((left, right) => Number(right.id || 0) - Number(left.id || 0));
-const latestCheck = matchingChecks[0];
-if (!latestCheck) return wait("WAITING_FOR_PREVIEW_QUALITY", { quality_check: "missing" });
-if (clean(latestCheck.status) !== "completed" || clean(latestCheck.conclusion) !== "success") {
-  const terminalFailure = clean(latestCheck.status) === "completed" &&
-    !["", "neutral", "skipped", "success"].includes(clean(latestCheck.conclusion));
-  return wait(terminalFailure ? "BLOCKED_BY_PREVIEW_QUALITY" : "WAITING_FOR_PREVIEW_QUALITY", {
-    quality_check: terminalFailure ? clean(latestCheck.conclusion) : "pending"
-  });
-}
+const mergeProofRaw=clean(inputData.merge_proof),mergeProof=parseCanonical(mergeProofRaw,"merge proof");exactKeys(mergeProof,["approval_content_sha256","asset_publication_receipt_sha256","check_app_id","check_app_slug","check_name","checkout_offer_snapshot_sha256","checkout_recipient_reservation_sha256","current_main_sha","current_main_tree_sha","deliverable","head_sha","head_tree_sha","merge_commit_sha","merged_at","offer_contract_id","page_count","pr_number","preview_branch","preview_folder","preview_paths","published_preview_bundle_sha256","published_site_sha256","render_bundle_sha256","repository","scope","script_manifest_sha256","source_tree_sha","version"],"merge proof");
+if(mergeProof.version!=="arc-preview-merge-proof-v2"||mergeProof.scope!=="exact-five-page-preview-pr-merge"||mergeProof.repository!==`${owner}/${repository}`||mergeProof.preview_folder!==previewFolder||canonicalJson(mergeProof.preview_paths)!==canonicalJson(previewPaths)||mergeProof.preview_branch!==previewBranch||mergeProof.offer_contract_id!==bundle.offer_contract_id||mergeProof.deliverable!==bundle.deliverable||mergeProof.page_count!==5||mergeProof.approval_content_sha256!==bundle.approval_manifest_sha256||mergeProof.published_preview_bundle_sha256!==bundle.published_preview_bundle_sha256||mergeProof.published_site_sha256!==bundle.production_content_sha256||mergeProof.render_bundle_sha256!==bundleSha||mergeProof.asset_publication_receipt_sha256!==receiptSha||mergeProof.checkout_offer_snapshot_sha256!==offerSha||mergeProof.checkout_recipient_reservation_sha256!==recipientSha||mergeProof.script_manifest_sha256!=="1ef7f0088cdcf042b1593fbc11d7ea2d3c47e9ff92c94caf2f578179e3993685"||mergeProof.head_sha!==expectedHeadSha||mergeProof.head_tree_sha!==expectedHeadTreeSha||!hex40(mergeProof.merge_commit_sha)||!hex40(mergeProof.source_tree_sha)||Number(mergeProof.pr_number)!==prNumber||mergeProof.check_name!==requiredCheckName||mergeProof.check_app_slug!==requiredCheckAppSlug||mergeProof.check_app_id!==requiredCheckAppId||!clean(mergeProof.merged_at))throw new Error("ARC_PREVIEW_GATE_INVALID: exact v2 merge proof binding");
 
-const pull = await request(`${api}/pulls/${prNumber}`);
-if (clean(pull.base?.ref) !== baseBranch || clean(pull.head?.ref) !== previewBranch) {
-  throw new Error("ARC_PREVIEW_GATE_MISMATCH: PR base or head changed");
-}
-if (clean(pull.head?.sha).toLowerCase() !== expectedHeadSha) {
-  throw new Error("ARC_PREVIEW_GATE_MISMATCH: PR head SHA changed after validation");
-}
-const pullFiles = await request(`${api}/pulls/${prNumber}/files?per_page=100`);
-const expectedFiles=new Set([filePath,...new Set(publicAssetEntries.map(entry=>entry.repository_path))]);
-if (!Array.isArray(pullFiles)||pullFiles.length!==expectedFiles.size||pullFiles.some(file=>!expectedFiles.has(clean(file.filename))||!new Set(["added","modified"]).has(clean(file.status))||file.previous_filename)) {
-  throw new Error("ARC_PREVIEW_GATE_MISMATCH: PR file scope changed");
-}
-if (!pull.merged_at || clean(pull.state) !== "closed") {
-  return wait("WAITING_FOR_PR_MERGE", { quality_check: "success", pr_merged: false });
-}
-if (clean(pull.merge_commit_sha).toLowerCase() !== mergeCommitSha || clean(pull.merged_at) !== clean(mergeProof.merged_at)) {
-  throw new Error("ARC_PREVIEW_GATE_MISMATCH: merge proof changed");
-}
+const api=`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}`,githubHeaders={Accept:"application/vnd.github+json",Authorization:`Bearer ${token}`,"X-GitHub-Api-Version":"2022-11-28"},timeoutRaw=clean(inputData.provider_operation_timeout_ms),timeoutMs=timeoutRaw?Number(timeoutRaw):25000;if(!Number.isSafeInteger(timeoutMs)||timeoutMs<100||timeoutMs>25000)throw new Error("ARC_PROVIDER_READ_FAILED: operation timeout");const deadline=Date.now()+timeoutMs;
+const fetchBounded=async(url,options,maximum,expectedOrigin,label)=>{const requested=new URL(url);if(requested.origin!==expectedOrigin||requested.username||requested.password||requested.port)throw new Error(`${label}: invalid origin`);const remaining=deadline-Date.now();if(remaining<=0)throw new Error(`${label}: deadline`);const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),Math.min(10000,remaining));let reader;try{const response=await fetch(requested.toString(),{...options,redirect:"error",signal:controller.signal});if(!response.url||response.url!==requested.toString())throw new Error(`${label}: response URL changed`);const declared=clean(response.headers?.get?.("content-length"));if(declared&&(!/^\d{1,10}$/.test(declared)||Number(declared)>maximum))throw new Error(`${label}: declared response exceeds limit`);if(response.status===204)return{response,bytes:Buffer.alloc(0)};reader=response.body?.getReader?.();if(!reader)throw new Error(`${label}: streaming response required`);let total=0;const chunks=[];while(true){const{done,value}=await reader.read();if(done)break;total+=value.byteLength;if(total>maximum){try{await reader.cancel();}catch{}throw new Error(`${label}: streamed response exceeds limit`);}chunks.push(Buffer.from(value));}return{response,bytes:Buffer.concat(chunks,total)};}catch(error){if(error?.name==="AbortError")throw new Error(`${label}: timeout`);throw error;}finally{clearTimeout(timer);try{reader?.releaseLock?.();}catch{}}};
+const request=async(url,allowed=[])=>{const{response,bytes}=await fetchBounded(url,{headers:githubHeaders},4*1024*1024,"https://api.github.com","ARC_GITHUB_FAILED");let body={};if(response.status!==204){try{body=JSON.parse(bytes.toString("utf8"));}catch{throw new Error("ARC_GITHUB_FAILED: malformed JSON");}}if(response.ok)return body;if(allowed.includes(response.status))return{_status:response.status,_body:body};throw new Error(`ARC_GITHUB_FAILED: ${response.status} ${JSON.stringify(body).slice(0,240)}`);};
+const contentUrl=(path,ref)=>`${api}/contents/${path.split("/").map(encodeURIComponent).join("/")}?ref=${encodeURIComponent(ref)}`,readPages=async ref=>{const pages=new Map();for(const path of artifactPaths){const result=await request(contentUrl(`${previewFolder}/${path}`,ref)),encoded=clean(result.content).replace(/\s/g,"");if(!encoded)throw new Error("ARC_PREVIEW_GATE_MISMATCH: empty raw page");const html=Buffer.from(encoded,"base64").toString("utf8");if(encoder.encode(html).length>150000)throw new Error("ARC_PREVIEW_GATE_MISMATCH: oversized raw page");pages.set(path,html);}return pages;},assertExactPages=(observed,label)=>{for(const path of artifactPaths)if(observed.get(path)!==pagesByPath.get(path).published_html)throw new Error(`ARC_PREVIEW_GATE_MISMATCH: ${label} ${path} bytes differ`);};
+const verifyPreviewTree=async commitSha=>{const commit=await request(`${api}/git/commits/${commitSha}`),treeSha=clean(commit.tree?.sha).toLowerCase();if(!hex40(treeSha))throw new Error("ARC_PREVIEW_GATE_MISMATCH: commit tree SHA");const root=await request(`${api}/git/trees/${treeSha}`),folders=(Array.isArray(root.tree)?root.tree:[]).filter(item=>item.path===previewFolder&&item.type==="tree"&&item.mode==="040000");if(folders.length!==1)throw new Error("ARC_PREVIEW_GATE_MISMATCH: preview folder tree");const folder=await request(`${api}/git/trees/${folders[0].sha}`),items=Array.isArray(folder.tree)?folder.tree:[],expected=new Set(["about","contact","process","services","index.html",...(receipt.entries.length?["assets"]:[])]);if(items.length!==expected.size||items.some(item=>!expected.has(item.path)))throw new Error("ARC_PREVIEW_GATE_MISMATCH: current preview folder has extra or missing entries");const home=items.filter(item=>item.path==="index.html"&&item.type==="blob"&&item.mode==="100644");if(home.length!==1)throw new Error("ARC_PREVIEW_GATE_MISMATCH: home tree entry");for(const name of ["about","contact","process","services"]){const directory=items.filter(item=>item.path===name&&item.type==="tree"&&item.mode==="040000");if(directory.length!==1)throw new Error("ARC_PREVIEW_GATE_MISMATCH: secondary page tree");const leaf=await request(`${api}/git/trees/${directory[0].sha}`),entries=Array.isArray(leaf.tree)?leaf.tree:[];if(entries.length!==1||entries[0].path!=="index.html"||entries[0].type!=="blob"||entries[0].mode!=="100644")throw new Error(`ARC_PREVIEW_GATE_MISMATCH: ${name} tree entry`);}if(receipt.entries.length){const directory=items.filter(item=>item.path==="assets"&&item.type==="tree"&&item.mode==="040000");if(directory.length!==1)throw new Error("ARC_PREVIEW_GATE_MISMATCH: asset tree");const leaf=await request(`${api}/git/trees/${directory[0].sha}`),entries=Array.isArray(leaf.tree)?leaf.tree:[];if(entries.length!==receipt.entries.length)throw new Error("ARC_PREVIEW_GATE_MISMATCH: asset tree count");for(const expectedAsset of receipt.entries){const name=expectedAsset.repository_path.split("/").at(-1),entry=entries.filter(item=>item.path===name&&item.type==="blob"&&item.mode==="100644");if(entry.length!==1||entry[0].sha!==expectedAsset.git_blob_sha1||entry[0].size!==expectedAsset.size_bytes)throw new Error("ARC_PREVIEW_GATE_MISMATCH: asset tree identity");}}return treeSha;};
+const wait=(status,proof)=>({status,send_preview_email:false,outbox_write_allowed:false,private_checkout_link_allowed:false,checkout_url_exposure_allowed:false,preview_folder:previewFolder,preview_paths:previewPaths,preview_branch:previewBranch,head_sha:expectedHeadSha,pr_number:prNumber,required_check:requiredCheckName,proof});
+const checks=await request(`${api}/commits/${expectedHeadSha}/check-runs?check_name=${encodeURIComponent(requiredCheckName)}&filter=latest&per_page=100`),matching=(Array.isArray(checks.check_runs)?checks.check_runs:[]).filter(check=>clean(check.name)===requiredCheckName&&clean(check.head_sha).toLowerCase()===expectedHeadSha&&clean(check.app?.slug)===requiredCheckAppSlug&&Number(check.app?.id)===requiredCheckAppId&&Number.isInteger(Number(check.id))&&Number(check.id)>0).sort((a,b)=>Number(b.id)-Number(a.id)),latest=matching[0];if(!latest)return wait("WAITING_FOR_PREVIEW_QUALITY",{quality_check:"missing"});if(clean(latest.status)!=="completed"||clean(latest.conclusion)!=="success")return wait("WAITING_FOR_PREVIEW_QUALITY",{quality_check:"pending"});
+const pull=await request(`${api}/pulls/${prNumber}`);if(clean(pull.base?.ref)!==baseBranch||clean(pull.head?.ref)!==previewBranch||clean(pull.head?.sha).toLowerCase()!==expectedHeadSha)throw new Error("ARC_PREVIEW_GATE_MISMATCH: PR base/head");const expectedFiles=new Set([...previewPaths,...receipt.entries.map(entry=>entry.repository_path)]),files=await request(`${api}/pulls/${prNumber}/files?per_page=100`);if(!Array.isArray(files)||files.length!==expectedFiles.size||new Set(files.map(file=>clean(file.filename))).size!==expectedFiles.size||files.some(file=>!expectedFiles.has(clean(file.filename))||!new Set(["added","modified"]).has(clean(file.status))||file.previous_filename))throw new Error("ARC_PREVIEW_GATE_MISMATCH: exact PR file vector");if(!pull.merged_at||clean(pull.state)!=="closed")return wait("WAITING_FOR_PR_MERGE",{quality_check:"success",pr_merged:false});if(clean(pull.merge_commit_sha).toLowerCase()!==mergeProof.merge_commit_sha||clean(pull.merged_at)!==mergeProof.merged_at)throw new Error("ARC_PREVIEW_GATE_MISMATCH: merge proof changed");
+const sourceTreeSha=await verifyPreviewTree(mergeProof.merge_commit_sha);if(sourceTreeSha!==mergeProof.source_tree_sha)throw new Error("ARC_PREVIEW_GATE_MISMATCH: source tree changed");const mergePages=await readPages(mergeProof.merge_commit_sha);assertExactPages(mergePages,"merged");const mergeManifest=await manifestFor(mergePages);if(mergeManifest.sha256!==bundle.published_preview_bundle_sha256)throw new Error("ARC_PREVIEW_GATE_MISMATCH: merged bundle digest");
+const mainRef=await request(`${api}/git/ref/${encodeURIComponent(`heads/${baseBranch}`)}`),currentMainSha=clean(mainRef.object?.sha).toLowerCase();if(!hex40(currentMainSha))throw new Error("ARC_PREVIEW_GATE_MISMATCH: current main SHA");const currentMainTreeSha=await verifyPreviewTree(currentMainSha);const mainPages=await readPages(currentMainSha);assertExactPages(mainPages,"current main");const mainManifest=await manifestFor(mainPages);if(mainManifest.sha256!==bundle.published_preview_bundle_sha256)throw new Error("ARC_PREVIEW_GATE_MISMATCH: current main bundle digest");
 
-const inspectPublishedHtml = async html => {
-  if (!/<meta\s+name=["']arc-template-version["'][^>]*content=["']10\.0["']/i.test(html)) {
-    return { ok: false, reason: "v10-marker" };
-  }
-  const robots = html.match(/<meta\s+name=["']robots["'][^>]*>/i)?.[0] || "";
-  if (!/content=["'][^"']*\bnoindex\b/i.test(robots)) return { ok: false, reason: "noindex" };
-  const folder = html.match(/<meta\s+name=["']arc-preview-folder["'][^>]*content=["']([^"']+)["'][^>]*>/i)?.[1] || "";
-  const hash = html.match(/<meta\s+name=["']arc-preview-source-sha256["'][^>]*content=["']([a-f0-9]{64})["'][^>]*>/i)?.[1] || "";
-  if (folder !== previewFolder || hash.toLowerCase() !== contentSha256) return { ok: false, reason: "folder-or-hash-marker" };
-  const proofMatches = html.match(/<!-- ARC_PREVIEW_PROOF_START -->[\s\S]*?<!-- ARC_PREVIEW_PROOF_END -->\r?\n?/gi) || [];
-  if (proofMatches.length !== 1) return { ok: false, reason: "proof-block-count" };
-  const source = html.replace(/<!-- ARC_PREVIEW_PROOF_START -->[\s\S]*?<!-- ARC_PREVIEW_PROOF_END -->\r?\n?/i, "");
-  if (await sha256Hex(source) !== contentSha256) return { ok: false, reason: "source-bytes" };
-  return { ok: true };
-};
+const decodePrivacy=value=>{let current=String(value??"");for(let pass=0;pass<5;pass+=1){let next=current.replace(/&#(\d+);?/g,(_,n)=>String.fromCodePoint(Number(n))).replace(/&#x([0-9a-f]+);?/gi,(_,n)=>String.fromCodePoint(Number.parseInt(n,16))).replace(/&(amp|quot|apos|lt|gt|colon|sol|period|commat|percnt|num);/gi,(_,n)=>({amp:"&",quot:'"',apos:"'",lt:"<",gt:">",colon:":",sol:"/",period:".",commat:"@",percnt:"%",num:"#"})[n.toLowerCase()]).replace(/\/\*[\s\S]*?\*\//g,"").replace(/\\x([0-9a-f]{2})/gi,(_,n)=>String.fromCodePoint(Number.parseInt(n,16))).replace(/\\u\{([0-9a-f]{1,6})\}/gi,(_,n)=>String.fromCodePoint(Number.parseInt(n,16))).replace(/\\u([0-9a-f]{4})/gi,(_,n)=>String.fromCodePoint(Number.parseInt(n,16))).replace(/[\u3002\uff0e\uff61]/g,".");next=next.replace(/(?:%[0-9a-f]{2})+/gi,part=>{try{return decodeURIComponent(part);}catch{return part;}});if(next===current)break;current=next;}return current.normalize("NFKC");};
+const privacyCanonical=value=>decodePrivacy(value).toLowerCase().replace(/[\u0000-\u001f\u007f]+/g," ").replace(/\s+/g," ").trim(),privacyCompact=value=>privacyCanonical(value).replace(/[^\p{L}\p{N}@]+/gu,"");const privateValues=[customerEmail,recipient.lead_notification_email,recipient.claim_recipient_email,inputData.private_contact_phone,inputData.private_contact_address,inputData.checkout_binding_secret,inputData.email_state_token].map(clean).filter(Boolean),forbiddenPublic=/buy\.stripe\.com|\bplink_[a-z0-9]+|client_reference_id|v[34]_[a-z0-9_-]{135}|arc-checkout-(?:offer-snapshot|config)|arc1-checkout-recipient-reservation|arc1-preview-readiness|arc-private-checkout|checkout_(?:binding|offer|recipient|readiness)|link_receipt_(?:private|hmac|sha256)/i;
+const expectedHrefs=path=>{if(path==="index.html")return["./","./services/","./about/","./process/","./contact/"];const name=path.split("/")[0];return["../",name==="services"?"./":"../services/",name==="about"?"./":"../about/",name==="process"?"./":"../process/",name==="contact"?"./":"../contact/"];};
+const inspectPage=(html,path)=>{const decoded=decodePrivacy(html),surfaces=[decoded,decoded.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi," ").replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi," ").replace(/<[^>]+>/g," "),...[...decoded.matchAll(/\b(?:href|src|srcset|action|content|style)\s*=\s*["']([^"']*)["']/gi)].map(match=>match[1])].map(value=>({canonical:privacyCanonical(value),compact:privacyCompact(value)}));for(const value of privateValues){const canonical=privacyCanonical(value),compact=privacyCompact(value);if(canonical&&surfaces.some(surface=>surface.canonical.includes(canonical)||(compact.length>=7&&surface.compact.includes(compact))))throw new Error(`ARC_PRIVACY_FAILED: ${path} contains private data`);}if(forbiddenPublic.test(decoded)||/<[A-Za-z][^>]*(?:\s|\/)on[a-z0-9_-]+\s*=/i.test(html)||/\p{Default_Ignorable_Code_Point}/u.test(decoded))throw new Error(`ARC_PREVIEW_GATE_MISMATCH: ${path} unsafe capability`);if(!/<meta\s+name="arc-template-version"\s+content="11\.0">/i.test(html)||!/<meta\s+name="robots"\s+content="[^"]*\bnoindex\b[^"]*">/i.test(html))throw new Error(`ARC_PREVIEW_GATE_MISMATCH: ${path} noindex/template`);const navs=html.match(/<nav\s+class="(?:nav-links|footer-links)"[^>]*>[\s\S]*?<\/nav>/gi)||[],expected=expectedHrefs(path);if(navs.length!==2)throw new Error(`ARC_PREVIEW_GATE_MISMATCH: ${path} navigation count`);for(const nav of navs){const hrefs=[...nav.matchAll(/<a\s+href="([^"]+)"/gi)].map(match=>match[1]);if(canonicalJson(hrefs)!==canonicalJson(expected))throw new Error(`ARC_PREVIEW_GATE_MISMATCH: ${path} navigation routes`);}};
+let liveFormCount=0;const livePages=new Map(),pagesOrigin=new URL(pagesRoot).origin;for(const path of artifactPaths){const page=pagesByPath.get(path),url=new URL(page.url);if(url.origin!==pagesOrigin||url.username||url.password||url.search||url.hash)throw new Error("ARC_PREVIEW_GATE_INVALID: Pages clean-route URL");const{response,bytes}=await fetchBounded(url.toString(),{method:"GET",headers:{Accept:"text/html"}},150000,url.origin,"ARC_PREVIEW_GATE_MISMATCH");if(response.status!==200)return wait("WAITING_FOR_PAGES",{quality_check:"success",pr_merged:true,live_path:path,live_status:response.status});let html;try{html=new TextDecoder("utf-8",{fatal:true}).decode(bytes);}catch{throw new Error(`ARC_PREVIEW_GATE_MISMATCH: ${path} Pages UTF-8`);}if(html!==page.published_html)return wait("WAITING_FOR_PAGES",{quality_check:"success",pr_merged:true,live_path:path,live_status:200,live_proof:"exact-main-bytes"});inspectPage(html,path);const forms=html.match(/<form\b/gi)||[];liveFormCount+=forms.length;if(forms.length&&path!=="contact/index.html")throw new Error("ARC_PREVIEW_GATE_MISMATCH: non-Contact form");livePages.set(path,html);}
+if(bundle.lead_route_mode==="netlify_form"?liveFormCount!==1:liveFormCount!==0)throw new Error("ARC_PREVIEW_GATE_MISMATCH: lead form count");const pagesManifest=await manifestFor(livePages);if(pagesManifest.sha256!==bundle.published_preview_bundle_sha256)return wait("WAITING_FOR_PAGES",{quality_check:"success",pr_merged:true,live_proof:"five-page-bundle-digest"});
+for(const entry of receipt.entries){const url=new URL(entry.public_url),{response,bytes}=await fetchBounded(url.toString(),{method:"GET",headers:{Accept:entry.content_type}},entry.size_bytes,url.origin,"ARC_PREVIEW_GATE_MISMATCH");if(response.status!==200||clean(response.headers?.get?.("content-type")).toLowerCase()!==entry.content_type||bytes.length!==entry.size_bytes||await sha256Bytes(bytes)!==entry.sha256)return wait("WAITING_FOR_PAGES",{quality_check:"success",pr_merged:true,live_asset:entry.repository_path});}
 
-const mergedContent = await request(
-  `${api}/contents/${filePath.split("/").map(encodeURIComponent).join("/")}?ref=${encodeURIComponent(mergeCommitSha)}`
-);
-const mergedHtml = Buffer.from(clean(mergedContent.content).replace(/\s/g, ""), "base64").toString("utf8");
-if (Buffer.byteLength(mergedHtml, "utf8") > 2097152) throw new Error("ARC_PREVIEW_GATE_MISMATCH: merged preview HTML exceeds limit");
-const mergedInspection = await inspectPublishedHtml(mergedHtml);
-if (!mergedInspection.ok) {
-  throw new Error(`ARC_PREVIEW_GATE_MISMATCH: merged preview content ${mergedInspection.reason}`);
-}
-const proofFreeMergedHtml=mergedHtml.replace(/<!-- ARC_PREVIEW_PROOF_START -->[\s\S]*?<!-- ARC_PREVIEW_PROOF_END -->\r?\n?/i,"");
-if (hasCheckoutCapability(proofFreeMergedHtml) || hasUnsafeBrowserMarkup(proofFreeMergedHtml)) {
-  throw new Error("ARC_PREVIEW_GATE_MISMATCH: public merged preview contains private checkout capability or evidence");
-}
-const trustedScriptHashes=["55335153318fa5a489d033599208d42c1c3c8b25f4a07f6e0a4f17fb5be60937","596ddd07b7b1525a0c2ec32411fa73e34121f8c320687a7249b9f793d8cf2870","98cbb58e3ec829ddaec61983333a8bb500b91558625a346350bfc8fe4842b860"].sort();
-const observedScriptHashes=[];for(const script of proofFreeMergedHtml.match(/<script\b[^>]*>[\s\S]*?<\/script>/gi)||[])observedScriptHashes.push(await sha256Hex(script));observedScriptHashes.sort();
-if(observedScriptHashes.length!==3||JSON.stringify(observedScriptHashes)!==JSON.stringify(trustedScriptHashes)||await sha256Hex(observedScriptHashes.join("\n"))!=="8ff6073533b7b631ab6657461d3631a2f00ca4a70ed0b79c2c016647948aae7b")throw new Error("ARC_PREVIEW_GATE_MISMATCH: reviewed script manifest changed");
-const terminalNotice=proofFreeMergedHtml.match(/<aside class="arc-preview-toolbar" aria-label="ARC preview purchase"><span><strong>ARC preview<\/strong>Built for this business\. Purchase only if approved\.<\/span><span data-arc-checkout-private>Checkout is available only through the private approval email\.<\/span><\/aside>\n<\/body>\n<\/html>$/)?.[0]||"";
-if(!terminalNotice)throw new Error("ARC_PREVIEW_GATE_MISMATCH: exact inert checkout notice missing");
-const approvalHtml=proofFreeMergedHtml.slice(0,-terminalNotice.length)+"</body>\n</html>";
-if(await sha256Hex(approvalHtml)!==approvalContentSha256){
-  throw new Error("ARC_PREVIEW_GATE_MISMATCH: approved preview bytes differ from private approval digest");
-}
-const currentMainRef = await request(`${api}/git/ref/${encodeURIComponent(`heads/${baseBranch}`)}`);
-const currentMainSha = clean(currentMainRef.object?.sha).toLowerCase();
-if (!/^[a-f0-9]{40}$/.test(currentMainSha)) throw new Error("ARC_PREVIEW_GATE_MISMATCH: current main SHA");
-const mainContent = await request(
-  `${api}/contents/${filePath.split("/").map(encodeURIComponent).join("/")}?ref=${encodeURIComponent(currentMainSha)}`
-);
-const mainHtml = Buffer.from(clean(mainContent.content).replace(/\s/g, ""), "base64").toString("utf8");
-if (Buffer.byteLength(mainHtml, "utf8") > 2097152 || mainHtml !== mergedHtml) {
-  throw new Error("ARC_PREVIEW_GATE_MISMATCH: current main preview bytes differ from approved merge");
-}
-const mainInspection = await inspectPublishedHtml(mainHtml);
-if (!mainInspection.ok) {
-  throw new Error(`ARC_PREVIEW_GATE_MISMATCH: current main preview content ${mainInspection.reason}`);
-}
-const verifyAssetTree=async commitSha=>{
-  if(!publicAssetEntries.length)return;
-  const commit=await request(`${api}/git/commits/${commitSha}`);let treeSha=clean(commit.tree?.sha);if(!/^[a-f0-9]{40}$/.test(treeSha))throw new Error("ARC_PREVIEW_GATE_MISMATCH: commit tree");
-  let tree=await request(`${api}/git/trees/${treeSha}`),matches=(Array.isArray(tree.tree)?tree.tree:[]).filter(item=>item.path===previewFolder&&item.type==="tree"&&item.mode==="040000");if(matches.length!==1)throw new Error("ARC_PREVIEW_GATE_MISMATCH: preview asset tree");
-  const folder=await request(`${api}/git/trees/${matches[0].sha}`),folderItems=Array.isArray(folder.tree)?folder.tree:[],assets=folderItems.filter(item=>item.path==="assets"&&item.type==="tree"&&item.mode==="040000"),index=folderItems.filter(item=>item.path==="index.html"&&item.type==="blob"&&item.mode==="100644");if(folderItems.length!==2||assets.length!==1||index.length!==1)throw new Error("ARC_PREVIEW_GATE_MISMATCH: exact preview root tree");
-  const leaf=await request(`${api}/git/trees/${assets[0].sha}`),items=Array.isArray(leaf.tree)?leaf.tree:[],unique=new Map(publicAssetEntries.map(entry=>[entry.repository_path.split("/").at(-1),entry]));if(items.length!==unique.size||items.some(item=>item.type!=="blob"||item.mode!=="100644"||!unique.has(item.path)))throw new Error("ARC_PREVIEW_GATE_MISMATCH: exact asset tree");for(const item of items){const entry=unique.get(item.path);if(item.sha!==entry.git_blob_sha1||item.size!==entry.size_bytes)throw new Error("ARC_PREVIEW_GATE_MISMATCH: asset blob identity");}
-};
-await verifyAssetTree(mergeCommitSha);
-await verifyAssetTree(currentMainSha);
-
-const previewUrl = new URL(clean(inputData.preview_url));
-if (previewUrl.protocol !== "https:") throw new Error("ARC_PREVIEW_GATE_INVALID: preview URL must use HTTPS");
-const pagesBaseUrl = new URL(clean(inputData.pages_base_url || `https://${owner}.github.io/${repository}`));
-if (
-  pagesBaseUrl.protocol !== "https:" ||
-  pagesBaseUrl.username ||
-  pagesBaseUrl.password ||
-  pagesBaseUrl.search ||
-  pagesBaseUrl.hash ||
-  pagesBaseUrl.origin.toLowerCase() !== `https://${owner.toLowerCase()}.github.io` ||
-  decodeURIComponent(pagesBaseUrl.pathname).replace(/\/+$/, "").toLowerCase() !== `/${repository.toLowerCase()}` ||
-  previewUrl.username ||
-  previewUrl.password ||
-  previewUrl.search ||
-  previewUrl.hash ||
-  previewUrl.origin !== pagesBaseUrl.origin
-) {
-  throw new Error("ARC_PREVIEW_GATE_INVALID: preview URL origin mismatch");
-}
-const expectedPath = `${decodeURIComponent(pagesBaseUrl.pathname).replace(/\/+$/, "")}/${previewFolder}/`;
-if (decodeURIComponent(previewUrl.pathname) !== expectedPath) {
-  throw new Error("ARC_PREVIEW_GATE_INVALID: live preview URL folder mismatch");
-}
-previewUrl.search = "";
-previewUrl.hash = "";
-const { response: liveResponse, bytes: liveBytes } = await fetchBounded(previewUrl.toString(), {
-  method: "GET",
-  headers: { Accept: "text/html" }
-}, 2097152, previewUrl.origin, "ARC_PREVIEW_GATE_MISMATCH");
-if (liveResponse.status !== 200) {
-  return wait("WAITING_FOR_PAGES", { quality_check: "success", pr_merged: true, live_status: liveResponse.status });
-}
-let liveHtml;
-try { liveHtml = new TextDecoder("utf-8", { fatal: true }).decode(liveBytes); }
-catch { throw new Error("ARC_PREVIEW_GATE_MISMATCH: live preview HTML is not valid UTF-8"); }
-if (liveHtml !== mergedHtml) {
-  return wait("WAITING_FOR_PAGES", { quality_check: "success", pr_merged: true, live_status: 200, live_proof: "exact-merged-bytes" });
-}
-const liveInspection = await inspectPublishedHtml(liveHtml);
-if (!liveInspection.ok) {
-  return wait("WAITING_FOR_PAGES", {
-    quality_check: "success",
-    pr_merged: true,
-    live_status: 200,
-    live_proof: liveInspection.reason
-  });
-}
-for(const entry of publicAssetEntries){
-  const assetUrl=new URL(entry.public_url);const {response,bytes}=await fetchBounded(assetUrl.toString(),{method:"GET",headers:{Accept:entry.content_type}},entry.size_bytes,assetUrl.origin,"ARC_PREVIEW_GATE_MISMATCH");
-  if(response.status!==200||clean(response.headers?.get?.("content-type")).toLowerCase()!==entry.content_type||bytes.length!==entry.size_bytes)return wait("WAITING_FOR_PAGES",{quality_check:"success",pr_merged:true,live_asset:entry.repository_path});
-  if(await sha256Bytes(bytes)!==entry.sha256)return wait("WAITING_FOR_PAGES",{quality_check:"success",pr_merged:true,live_asset:entry.repository_path});
-}
-
-const sourceCommit=await request(`${api}/git/commits/${mergeCommitSha}`);
-const sourceTreeSha=clean(sourceCommit.tree?.sha).toLowerCase();
-if(!/^[a-f0-9]{40}$/.test(sourceTreeSha))throw new Error("ARC_PREVIEW_GATE_MISMATCH: immutable source tree SHA");
-const issuedAt=new Date().toISOString();
-const expiresAt=new Date(Date.parse(issuedAt)+10*60*1000).toISOString();
-const readinessCore=canonicalJson({
-  version:"arc1-preview-readiness-core-v1",scope:"immutable-private-checkout-content-and-recipient-readiness",
-  repository:`${owner}/${repository}`,preview_folder:previewFolder,preview_path:filePath,preview_url:previewUrl.toString(),
-  approval_content_sha256:approvalContentSha256,content_sha256:contentSha256,published_html_sha256:await sha256Hex(mergedHtml),
-  script_manifest_sha256:"8ff6073533b7b631ab6657461d3631a2f00ca4a70ed0b79c2c016647948aae7b",
-  asset_publication_receipt_sha256:assetPublicationReceiptSha256,checkout_offer_snapshot_sha256:checkoutOfferSnapshotSha256,
-  checkout_recipient_reservation_sha256:await sha256Hex(checkoutRecipientReservationRaw),
-  customer_email_sha256:recipientSha256,email_state_token_sha256:tokenSha256,head_sha:expectedHeadSha,
-  merge_commit_sha:mergeCommitSha,source_tree_sha:sourceTreeSha,pr_number:prNumber,
-  check_name:requiredCheckName,check_app_slug:requiredCheckAppSlug,check_app_id:requiredCheckAppId,
-  merged_at:clean(pull.merged_at)
-});
-const readinessCoreSha256=await sha256Hex(readinessCore);
-const readinessCoreSignature=await globalThis.crypto.subtle.sign("HMAC",checkoutKey,new TextEncoder().encode(`arc1-preview-readiness-core-signature-v1\n${checkoutMode}\n${readinessCore}`));
-const readinessCoreHmacSha256=[...new Uint8Array(readinessCoreSignature)].map(byte=>byte.toString(16).padStart(2,"0")).join("");
-const readinessObservation=canonicalJson({version:"arc1-preview-readiness-observation-v1",scope:"renewable-private-checkout-readiness-observation",readiness_core_sha256:readinessCoreSha256,
-  current_main_sha:currentMainSha,current_main_html_sha256:await sha256Hex(mainHtml),pages_content_sha256:await sha256Hex(liveHtml),issued_at:issuedAt,expires_at:expiresAt});
-const readinessObservationSignature=await globalThis.crypto.subtle.sign("HMAC",checkoutKey,new TextEncoder().encode(`arc1-preview-readiness-observation-signature-v1\n${checkoutMode}\n${readinessObservation}`));
-const readinessObservationHmacSha256=[...new Uint8Array(readinessObservationSignature)].map(byte=>byte.toString(16).padStart(2,"0")).join("");
-return {
-  status:"PRIVATE_CHECKOUT_CONTENT_READY",send_preview_email:false,private_checkout_link_allowed:false,
-  recipient_ready_state_write_required:true,checkout_readiness_core_private:readinessCore,
-  checkout_readiness_core_sha256:readinessCoreSha256,checkout_readiness_core_hmac_sha256:readinessCoreHmacSha256,
-  checkout_readiness_observation_private:readinessObservation,checkout_readiness_observation_hmac_sha256:readinessObservationHmacSha256,
-  checkout_offer_snapshot_private:checkoutOfferSnapshotRaw,
-  checkout_offer_snapshot_hmac_sha256:checkoutOfferSnapshotHmacSha256,
-  checkout_recipient_reservation_private:checkoutRecipientReservationRaw,
-  checkout_recipient_reservation_hmac_sha256:checkoutRecipientReservationHmacSha256,
-  email_state:canonicalJson(emailState),email_state_token:emailStateToken,customer_email:customerEmail,
-  preview_folder:previewFolder,preview_url:previewUrl.toString(),preview_branch:previewBranch,
-  head_sha:expectedHeadSha,merge_commit_sha:mergeCommitSha,source_tree_sha:sourceTreeSha,content_sha256:contentSha256,
-  pr_number:prNumber,required_check:requiredCheckName
-};
+const customerEmailSha=await sha256(customerEmail),emailTokenSha=await sha256(emailStateToken),previewUrl=`${pagesRoot}/${previewFolder}/`;
+const readinessCore=canonicalJson({version:"arc1-preview-readiness-core-v2",scope:"immutable-five-page-private-checkout-content-and-recipient-readiness",repository:`${owner}/${repository}`,preview_folder:previewFolder,preview_paths:previewPaths,preview_url:previewUrl,offer_contract_id:bundle.offer_contract_id,deliverable:bundle.deliverable,page_count:5,approval_content_sha256:bundle.approval_manifest_sha256,content_sha256:bundle.published_preview_bundle_sha256,published_preview_bundle_sha256:bundle.published_preview_bundle_sha256,published_site_sha256:bundle.production_content_sha256,render_bundle_sha256:bundleSha,customer_email_sha256:customerEmailSha,email_state_token_sha256:emailTokenSha,checkout_offer_snapshot_sha256:offerSha,checkout_recipient_reservation_sha256:recipientSha,asset_publication_receipt_sha256:receiptSha,lead_route_mode:bundle.lead_route_mode,lead_route_form_name:bundle.lead_route_form_name,lead_route_recipient_hmac_sha256:offer.lead_route_recipient_hmac_sha256,script_manifest_sha256:"1ef7f0088cdcf042b1593fbc11d7ea2d3c47e9ff92c94caf2f578179e3993685",head_sha:expectedHeadSha,merge_commit_sha:mergeProof.merge_commit_sha,source_tree_sha:sourceTreeSha,pr_number:prNumber,check_name:requiredCheckName,check_app_slug:requiredCheckAppSlug,check_app_id:requiredCheckAppId,merged_at:clean(pull.merged_at)}),readinessCoreSha=await sha256(readinessCore),readinessCoreHmac=await crypto.subtle.sign("HMAC",checkoutKey,encoder.encode(`arc1-preview-readiness-core-signature-v2\n${checkoutMode}\n${readinessCore}`));
+const issuedAt=new Date().toISOString(),expiresAt=new Date(Date.parse(issuedAt)+10*60*1000).toISOString(),readinessObservation=canonicalJson({version:"arc1-preview-readiness-observation-v2",scope:"renewable-five-page-private-checkout-readiness-observation",repository:`${owner}/${repository}`,preview_folder:previewFolder,preview_paths:previewPaths,current_main_sha:currentMainSha,current_main_tree_sha:currentMainTreeSha,current_main_published_preview_bundle_sha256:mainManifest.sha256,pages_published_preview_bundle_sha256:pagesManifest.sha256,published_site_sha256:bundle.production_content_sha256,readiness_core_sha256:readinessCoreSha,issued_at:issuedAt,expires_at:expiresAt}),readinessObservationHmac=await crypto.subtle.sign("HMAC",checkoutKey,encoder.encode(`arc1-preview-readiness-observation-signature-v2\n${checkoutMode}\n${readinessObservation}`));
+const toHex=bytes=>[...new Uint8Array(bytes)].map(byte=>byte.toString(16).padStart(2,"0")).join("");
+return{status:"PRIVATE_CHECKOUT_CONTENT_READY",send_preview_email:false,outbox_write_allowed:false,email_authorization_allowed:false,private_checkout_link_allowed:false,checkout_url_exposure_allowed:false,recipient_ready_state_write_required:false,checkout_readiness_core_private:readinessCore,checkout_readiness_core_sha256:readinessCoreSha,checkout_readiness_core_hmac_sha256:toHex(readinessCoreHmac),checkout_readiness_observation_private:readinessObservation,checkout_readiness_observation_hmac_sha256:toHex(readinessObservationHmac),preview_folder:previewFolder,preview_paths:previewPaths,preview_branch:previewBranch,head_sha:expectedHeadSha,head_tree_sha:expectedHeadTreeSha,merge_commit_sha:mergeProof.merge_commit_sha,source_tree_sha:sourceTreeSha,current_main_sha:currentMainSha,current_main_tree_sha:currentMainTreeSha,content_sha256:bundle.published_preview_bundle_sha256,published_preview_bundle_sha256:bundle.published_preview_bundle_sha256,published_site_sha256:bundle.production_content_sha256,render_bundle_sha256:bundleSha,pr_number:prNumber,required_check:requiredCheckName};

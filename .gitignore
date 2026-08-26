@@ -1,3 +1,5 @@
 node_modules/
 test-results/
 .pages-dist/
+# Deterministic browser fixtures are rebuilt from the V11 template and fixture sources.
+qa-v11/

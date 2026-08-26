@@ -41,13 +41,14 @@ const verifyHmac = async (key, signature, value) => {
 };
 const sha = value => /^[a-f0-9]{64}$/.test(clean(value));
 const gitSha = value => /^[a-f0-9]{40}$/.test(clean(value));
-const BRIDGE_CONTRACT_SHA256 = "e9bd5a3be21e0192acdc8b81692dab7bf5b1d0a132325a73011aa03e43674841";
+const BRIDGE_CONTRACT_SHA256 = "c4ab396bf04464629624dd19a37602755c8d429db0bf729b49bbfdfdba3ae20c";
 const OWNER = "arcwebhq-cpu";
 const REPOSITORY = "arc-previews";
 const BASE_BRANCH = "main";
 const PAGES_BASE = `https://${OWNER}.github.io/${REPOSITORY}`;
-const CURRENT_BUDGET = "Yes, understands the finished ARC website subtotal is $5,000 plus applicable sales tax only after preview approval";
-const CURRENT_TERMS = "Accepted ARC preview terms, privacy policy, refund policy, and service scope dated 2026-08-12; separate adult checkout acceptance required";
+const CURRENT_OFFER_CONTRACT_ID = "arc-fixed-five-page-offer-v1";
+const CURRENT_BUDGET = "Yes, understands the finished ARC website is a fixed five-page website with a $5,000 subtotal plus applicable sales tax only after preview approval";
+const CURRENT_TERMS = "Accepted ARC preview terms, privacy policy, refund policy, and fixed five-page service scope dated 2026-08-25; separate adult checkout acceptance required";
 const EXTENSION = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" };
 const roleOrder = ["hero_image_file", "logo_file", "supporting_image_file"];
 const slugify = value => clean(value).toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
@@ -70,7 +71,7 @@ let evidence;
 try { evidence = JSON.parse(evidenceRaw); } catch { throw new Error("ARC1_ASSET_PUBLICATION_INVALID: intake evidence JSON"); }
 const evidenceFields = [
   "version", "scope", "bridge_contract_sha256", "site_id_sha256", "source_schema", "source_form_name", "source_key_hmac_sha256",
-  "delivery_id", "submission_id", "received_at", "intake_version", "budget_confirmed", "terms_accepted", "asset_permission",
+  "delivery_id", "submission_id", "received_at", "intake_version", "offer_contract_id", "budget_confirmed", "terms_accepted", "asset_permission",
   "public_folder_prefix", "submission_data_sha256", "asset_manifest", "asset_manifest_sha256", "total_asset_bytes", "state_key",
   "state_digest_sha256", "claim_required_before_build", "issued_at"
 ];
@@ -80,7 +81,8 @@ if (!exactKeys(evidence, evidenceFields) || canonicalJson(evidence) !== evidence
     !sha(evidence.site_id_sha256) || !sha(evidence.source_key_hmac_sha256) || !sha(evidence.delivery_id) || !sha(evidence.submission_data_sha256) ||
     !sha(evidence.asset_manifest_sha256) || !sha(evidence.state_digest_sha256) || evidence.state_key !== `arc1-intake-claim-v2:${evidence.state_digest_sha256}` ||
     evidence.claim_required_before_build !== true || !/^[a-f0-9]{8}$/.test(evidence.public_folder_prefix) ||
-    evidence.intake_version !== "arc-intake-v7" || evidence.budget_confirmed !== CURRENT_BUDGET || evidence.terms_accepted !== CURRENT_TERMS) {
+    evidence.intake_version !== "arc-intake-v8" || evidence.offer_contract_id !== CURRENT_OFFER_CONTRACT_ID ||
+    evidence.budget_confirmed !== CURRENT_BUDGET || evidence.terms_accepted !== CURRENT_TERMS) {
   throw new Error("ARC1_ASSET_PUBLICATION_INVALID: canonical Function intake evidence");
 }
 const receivedMs = Date.parse(evidence.received_at), issuedMs = Date.parse(evidence.issued_at), nowMs = Date.now();
@@ -580,9 +582,28 @@ if (entries.length) {
     const folderItems = Array.isArray(folder.tree) ? folder.tree : [];
     const assetTrees = folderItems.filter(item => item.path === "assets" && item.type === "tree" && item.mode === "040000" && gitSha(item.sha));
     const indexItems = folderItems.filter(item => item.path === "index.html" && item.type === "blob" && item.mode === "100644" && gitSha(item.sha));
-    if (assetTrees.length !== 1 || indexItems.length > 1 || folderItems.length !== 1 + indexItems.length ||
-        folderItems.some(item => item.path !== "assets" && item.path !== "index.html")) {
+    const routeNames = ["about", "contact", "process", "services"];
+    const assetStagePaths = new Set(["assets"]);
+    const completedPaths = new Set(["assets", "about", "contact", "process", "services", "index.html"]);
+    const isExactPathSet = expected => folderItems.length === expected.size &&
+      new Set(folderItems.map(item => item.path)).size === expected.size && folderItems.every(item => expected.has(item.path));
+    const assetStage = isExactPathSet(assetStagePaths);
+    const completedSite = isExactPathSet(completedPaths);
+    if (assetTrees.length !== 1 || (!assetStage && !completedSite) ||
+        (completedSite && indexItems.length !== 1)) {
       throw new Error("ARC1_ASSET_PUBLICATION_CONFLICT: asset-stage preview folder has extra or missing entries");
+    }
+    if (completedSite) {
+      for (const route of routeNames) {
+        const routeTrees = folderItems.filter(item => item.path === route && item.type === "tree" && item.mode === "040000" && gitSha(item.sha));
+        if (routeTrees.length !== 1) throw new Error("ARC1_ASSET_PUBLICATION_CONFLICT: completed five-page route missing or ambiguous");
+        const routeTree = await request(`${api}/git/trees/${routeTrees[0].sha}`);
+        const routeItems = Array.isArray(routeTree.tree) ? routeTree.tree : [];
+        if (routeItems.length !== 1 || routeItems[0].path !== "index.html" || routeItems[0].type !== "blob" ||
+            routeItems[0].mode !== "100644" || !gitSha(routeItems[0].sha)) {
+          throw new Error("ARC1_ASSET_PUBLICATION_CONFLICT: completed five-page route has extra or missing entries");
+        }
+      }
     }
     treeSha = assetTrees[0].sha;
     const leaf = await request(`${api}/git/trees/${treeSha}`);
@@ -598,7 +619,7 @@ if (entries.length) {
         throw new Error("ARC1_ASSET_PUBLICATION_CONFLICT: deterministic asset differs");
       }
     }
-    return { found: true, hasIndex: indexItems.length === 1 };
+    return { found: true, hasIndex: completedSite };
   };
   let ref = await getRef(branch, [404]);
   if (!ref._status) {

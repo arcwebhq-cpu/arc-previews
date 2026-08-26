@@ -34,8 +34,9 @@ const clientSpoofId = otherSubmissionId;
 const clientSpoofReceivedAt = "2099-01-01T00:00:00.000Z";
 const clientSpoofStartedAt = "1999-01-01T00:00:00.000Z";
 const privateEmail = "private-owner@example.test";
-const requiredBudgetConfirmation = "Yes, understands the finished ARC website subtotal is $5,000 plus applicable sales tax only after preview approval";
-const requiredTermsAcceptance = "Accepted ARC preview terms, privacy policy, refund policy, and service scope dated 2026-08-12; separate adult checkout acceptance required";
+const requiredOfferContractId = "arc-fixed-five-page-offer-v1";
+const requiredBudgetConfirmation = "Yes, understands the finished ARC website is a fixed five-page website with a $5,000 subtotal plus applicable sales tax only after preview approval";
+const requiredTermsAcceptance = "Accepted ARC preview terms, privacy policy, refund policy, and fixed five-page service scope dated 2026-08-25; separate adult checkout acceptance required";
 const typeByRole = {
   logo_file: "image/png",
   hero_image_file: "image/jpeg",
@@ -85,7 +86,8 @@ class MockNetlify {
       created_at: serverCreatedAt,
       data: {
         "form-name": formName,
-        intake_version: "arc-intake-v7",
+        intake_version: "arc-intake-v8",
+        offer_contract_id: requiredOfferContractId,
         budget_confirmed: requiredBudgetConfirmation,
         terms_accepted: requiredTermsAcceptance,
         business_name: "Private Test Business",
@@ -169,7 +171,7 @@ for (const item of issued.asset_manifest) {
 const evidence = JSON.parse(issued.intake_evidence_private);
 assert.deepEqual(Object.keys(evidence).sort(), [
   "version", "scope", "site_id", "site_url", "form_id", "form_name", "submission_id", "received_at",
-  "intake_version", "budget_confirmed", "terms_accepted", "public_folder_prefix", "submission_data_sha256",
+  "intake_version", "offer_contract_id", "budget_confirmed", "terms_accepted", "public_folder_prefix", "submission_data_sha256",
   "asset_manifest", "asset_manifest_sha256", "total_asset_bytes", "state_key", "state_digest_sha256",
   "claim_required_before_build", "issued_at"
 ].sort());
@@ -178,7 +180,8 @@ assert.equal(evidence.form_id, formId);
 assert.equal(evidence.form_name, formName);
 assert.equal(evidence.submission_id, submissionId);
 assert.equal(evidence.received_at, serverCreatedAt);
-assert.equal(evidence.intake_version, "arc-intake-v7");
+assert.equal(evidence.intake_version, "arc-intake-v8");
+assert.equal(evidence.offer_contract_id, requiredOfferContractId);
 assert.equal(evidence.budget_confirmed, requiredBudgetConfirmation);
 assert.equal(evidence.terms_accepted, requiredTermsAcceptance);
 assert.equal(evidence.claim_required_before_build, true);
@@ -235,6 +238,7 @@ await expectReject(mock => { mock.submissions[0].created_at = new Date(Date.now(
 await expectReject(mock => { mock.submissions[0].created_at = new Date(Date.now() + 5 * 60 * 1000 + 60_000).toISOString(); }, /future/);
 for (const [field, badValue] of [
   ["intake_version", "arc-intake-v6"],
+  ["offer_contract_id", "arc-fixed-five-page-offer-v0"],
   ["budget_confirmed", "$5000"],
   ["terms_accepted", "2026-08-10"]
 ]) {

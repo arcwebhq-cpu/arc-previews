@@ -6,6 +6,12 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { chromium } from "playwright";
 
+import {
+  V11_PAGES,
+  V11_SITE_CONTRACT_VERSION,
+  V11_TEMPLATE_VERSION
+} from "../scripts/v11_site_contract.mjs";
+
 // tar-fs attempts chown when tests run as root, which some CI/container filesystems reject.
 if (process.getuid?.() === 0) process.getuid = () => 1000;
 const { default: serverlessChromium } = await import("@sparticuz/chromium");
@@ -25,11 +31,30 @@ const legacyQaFiles = [
   "prism-auto-detail-qa-6a77713f/index.html"
 ];
 const v10Manifest = JSON.parse(await readFile(path.join(root, "qa-v10/manifest.json"), "utf8"));
+const v11Manifest = JSON.parse(await readFile(path.join(root, "qa-v11/manifest.json"), "utf8"));
 const showcaseManifest = JSON.parse(await readFile(path.join(root, "showcases/manifest.json"), "utf8"));
 const mediaManifest = JSON.parse(await readFile(path.join(root, "config/media-manifest.json"), "utf8"));
 const v10ByFile = new Map(v10Manifest.map(item => [item.file, item]));
-const showcaseByFile = new Map(showcaseManifest.map(item => [item.file, item]));
+const v11Pages = v11Manifest.flatMap(site => {
+  const pages = site.pages.map(page => ({ ...page, file: `qa-v11/${page.file}` }));
+  return pages.map(page => ({ ...site, pages, page, file: page.file }));
+});
+const v11ByFile = new Map(v11Pages.map(item => [item.file, item]));
+const showcasePages = showcaseManifest.flatMap(showcase => showcase.pages.map(page => ({ ...showcase, page })));
+const showcaseByFile = new Map(showcasePages.map(item => [item.page.file, item]));
 const launchV10Manifest = v10Manifest.filter(item => item.isLaunch);
+
+assert.equal(v11Manifest.length, 19, "active V11 browser matrix must contain exactly 19 niche sites");
+assert.equal(v11Pages.length, 95, "active V11 browser matrix must contain exactly 95 HTML documents");
+assert.equal(new Set(v11Manifest.map(site => site.expectedProfile)).size, 19, "active V11 browser matrix must cover 19 distinct profiles");
+for (const site of v11Manifest) {
+  assert.equal(site.pageCount, V11_PAGES.length, `${site.folder}: V11 manifest page count mismatch`);
+  assert.deepEqual(
+    site.pages.map(page => ({ key: page.key, path: page.path })),
+    V11_PAGES.map(page => ({ key: page.key, path: page.path })),
+    `${site.folder}: V11 manifest route vector mismatch`
+  );
+}
 
 async function discoverV10Files(directory, ignoredDirectories = []) {
   let entries;
@@ -57,15 +82,18 @@ async function discoverV10Files(directory, ignoredDirectories = []) {
 
 const discoveredV10Files = (await discoverV10Files(root, ["deliveries", "showcases"])).sort();
 const discoveredV10DeliveryFiles = (await discoverV10Files(path.join(root, "deliveries"))).sort();
-const showcaseFiles = showcaseManifest.map(item => item.file);
+const showcaseFiles = showcasePages.map(item => item.page.file);
+const v11Files = v11Pages.map(item => item.file);
 for (const fixture of v10Manifest) {
   assert.ok(discoveredV10Files.includes(fixture.file), `v10 fixture is missing from browser discovery: ${fixture.file}`);
 }
-const currentReleaseFiles = [...discoveredV10Files, ...showcaseFiles, ...discoveredV10DeliveryFiles];
-const qaFiles = process.env.ARC_QA_V10_ONLY === "1"
+const currentReleaseFiles = [...v11Files, ...showcaseFiles];
+const qaFiles = process.env.ARC_QA_SHOWCASES_ONLY === "1"
+  ? showcaseFiles
+  : process.env.ARC_QA_V10_ONLY === "1"
   ? [...discoveredV10Files, ...discoveredV10DeliveryFiles]
   : process.env.ARC_QA_INCLUDE_LEGACY === "1"
-    ? [...legacyQaFiles, ...currentReleaseFiles]
+    ? [...currentReleaseFiles, ...discoveredV10Files, ...discoveredV10DeliveryFiles, ...legacyQaFiles]
     : currentReleaseFiles;
 const qaLimit = Math.max(1, Math.min(qaFiles.length, Number(process.env.ARC_QA_LIMIT || qaFiles.length)));
 const filesToTest = qaFiles.slice(0, qaLimit);
@@ -74,7 +102,10 @@ const viewports = [
   { name: "tablet", width: 768, height: 1024, isMobile: true, isPhone: false },
   { name: "small-phone", width: 320, height: 740, isMobile: true, isPhone: true },
   { name: "iphone", width: 390, height: 844, isMobile: true, isPhone: true }
-].filter(item => process.env.ARC_QA_DESKTOP_ONLY !== "1" || !item.isMobile);
+].filter(item =>
+  (process.env.ARC_QA_DESKTOP_ONLY !== "1" || !item.isMobile) &&
+  (process.env.ARC_QA_DESKTOP_MOBILE_ONLY !== "1" || item.name === "desktop" || item.name === "iphone")
+);
 const useRealImages = process.env.ARC_QA_REAL_IMAGES === "1";
 const saveScreenshots = process.env.ARC_QA_SAVE_SCREENSHOTS === "1";
 const compositionOrders = {
@@ -98,7 +129,8 @@ function safeFilePath(urlPath) {
 
 const server = http.createServer(async (request, response) => {
   try {
-    const file = safeFilePath(request.url || "/");
+    let file = safeFilePath(request.url || "/");
+    if (file && (await stat(file)).isDirectory()) file = path.join(file, "index.html");
     if (!file || !(await stat(file)).isFile()) {
       response.writeHead(404).end("Not found");
       return;
@@ -155,7 +187,12 @@ try {
       try {
         await page.goto(`${baseUrl}/${file}`, { waitUntil: "domcontentloaded", timeout: 30_000 });
         await page.addStyleTag({ content: "html{scroll-behavior:auto!important}*,*:before,*:after{animation:none!important;transition:none!important}" });
-        await page.waitForFunction(() => document.querySelectorAll(".hero-fallback,.about-media.arc-local-visual,.gallery-grid>.arc-local-visual").length >= 5, null, { timeout: 5_000 });
+        await page.waitForFunction(() =>
+          document.querySelector('meta[name="arc-template-version"]')?.content === "11.0" ||
+          document.querySelectorAll(".hero-fallback,.about-media.arc-local-visual,.gallery-grid>.arc-local-visual").length >= 5,
+          null,
+          { timeout: 5_000 }
+        );
         await page.evaluate(() => {
           for (const image of document.images) image.loading = "eager";
         });
@@ -242,10 +279,10 @@ try {
           const controls = [...document.querySelectorAll(".btn,button,input,textarea,select")]
             .filter(visible)
             .map(element => ({ label: element.textContent.trim() || element.getAttribute("aria-label") || element.tagName, height: element.getBoundingClientRect().height }));
-          const mobileGridItems = [...document.querySelectorAll(".service-grid>*,.why-grid>*,.process-list>*,.proof-grid>*,.about-grid>*")]
+          const mobileGridItems = [...document.querySelectorAll(".service-grid>*,.why-grid>*,.process-list>*,.proof-grid>*,.about-grid>*,.card-grid>*,.process-grid>*")]
             .filter(visible)
             .map(element => ({ className: element.className, width: element.getBoundingClientRect().width }));
-          const darkSections = [...document.querySelectorAll(".why,.gallery,.contact-card")]
+          const darkSections = [...document.querySelectorAll(".why,.gallery,.contact-card,.section-dark")]
             .filter(visible)
             .map(element => {
               const style = getComputedStyle(element);
@@ -261,6 +298,10 @@ try {
           return {
             robots: document.querySelector('meta[name="robots"]')?.content || "",
             arcTemplateVersion: document.querySelector('meta[name="arc-template-version"]')?.content || "",
+            arcSiteContract: document.querySelector('meta[name="arc-site-contract"]')?.content || "",
+            arcPageKey: document.querySelector('meta[name="arc-page-key"]')?.content || "",
+            arcPagePath: document.querySelector('meta[name="arc-page-path"]')?.content || "",
+            arcShowcasePageCount: document.querySelector('meta[name="arc-showcase-page-count"]')?.content || "",
             arcShowcaseProfile: document.querySelector('meta[name="arc-showcase-profile"]')?.content || "",
             arcSiteMode: document.body.dataset.arcSiteMode || "",
             arcMediaProfile: document.body.dataset.arcMediaProfile || "",
@@ -285,7 +326,18 @@ try {
             darkSections,
             images,
             links,
+            navigation: [...document.querySelectorAll("nav.nav-links,nav.footer-links")].map(nav => ({
+              className: nav.className,
+              links: [...nav.querySelectorAll("a[href]")].map(link => ({
+                href: link.getAttribute("href"),
+                label: link.textContent.trim(),
+                current: link.getAttribute("aria-current") === "page",
+                resolvedPath: new URL(link.href).pathname
+              }))
+            })),
             formCount: document.querySelectorAll("form").length,
+            previewFormNote: Boolean(document.querySelector(".arc-preview-form-note")),
+            previewToolbar: Boolean(document.querySelector(".arc-preview-toolbar")),
             showcaseDisclosure: document.body.innerText.includes("Fictional ARC design concept — not a real business. Checkout and lead collection are disabled."),
             showcaseChrome: document.body.dataset.arcSiteMode === "showcase" ? (() => {
               const notice = document.querySelector(".arc-showcase-notice")?.getBoundingClientRect();
@@ -301,11 +353,14 @@ try {
             })),
             localShells: [...document.querySelectorAll('.hero-fallback[data-arc-media-provider="local-css"],.about-media.arc-local-visual[data-arc-media-provider="local-css"],.gallery-grid>.arc-local-visual[data-arc-media-provider="local-css"]')]
               .filter(visible).map(element => element.className),
+            showcaseVisuals: [...document.querySelectorAll(".visual-stage,.about-visual,.gallery-grid>*")]
+              .filter(visible).map(element => element.className),
             privateEmail: /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(document.documentElement.innerHTML)
           };
         });
 
         const isDelivery = file.startsWith("deliveries/");
+        const v11Fixture = v11ByFile.get(file);
         const showcase = showcaseByFile.get(file);
         if (isDelivery) {
           assert.match(report.robots, /(?:^|,)\s*index\s*,\s*follow(?:,|$)/i, "production index/follow metadata missing");
@@ -319,7 +374,7 @@ try {
         assert.equal(report.privateEmail, false, "private requester email is visible");
         const documentUrl = new URL(`${baseUrl}/${file}`).toString();
         const expectedProbeUrl = `${baseUrl}/__arc_missing_customer_upload__.png`;
-        const expectedShowcaseHeroUrl = showcase ? `${baseUrl}/${showcase.heroAsset.file}` : "";
+        const expectedShowcaseHeroUrl = showcase?.page.key === "home" ? `${baseUrl}/${showcase.heroAsset.file}` : "";
         const unexpectedRequests = runtimeRequests.filter(request => request.url !== documentUrl && request.url !== "about:blank" && request.url !== expectedProbeUrl && request.url !== expectedShowcaseHeroUrl);
         assert.deepEqual(unexpectedRequests, [], `zero-egress page made subresource/network requests: ${JSON.stringify(unexpectedRequests)}`);
         assert.equal(report.hiddenReveals.length, 0, `scroll-reveal content remained hidden: ${JSON.stringify(report.hiddenReveals)}`);
@@ -332,8 +387,11 @@ try {
         assert.ok(report.images.every(item => item.naturalWidth > 0 && item.naturalHeight > 0), "a rendered image is broken");
         assert.ok(report.images.every(item => item.alt.length > 0 && item.alt.length <= 160), "image alt text is empty or too long");
         assert.equal(new Set(report.images.map(item => item.source)).size, report.images.length, "an image is duplicated");
-        assert.ok(report.images.length || report.localShells.length >= 5, "neither customer uploads nor the complete local visual shell set rendered");
+        if (!showcase && !v11Fixture) {
+          assert.ok(report.images.length || report.localShells.length >= 5, "neither customer uploads nor the complete local visual shell set rendered");
+        }
         assert.ok(report.links.every(href => !/^https?:\/\/(?:www\.)?example\.(?:com|org|net)/i.test(href)), "dummy external CTA remains");
+        assert.equal(report.links.some(href => href?.includes("buy.stripe.com")), false, "a browser-tested page exposed a private Stripe checkout capability");
         if (viewport.isPhone) {
           assert.ok(report.media.every(item => item.height <= 320), "a phone media block is taller than 320px");
         }
@@ -342,10 +400,10 @@ try {
         }
         const v10Fixture = v10ByFile.get(file);
         if (report.arcTemplateVersion === "10.0") {
-          const expectedProfile = v10Fixture?.expectedProfile || showcase?.profile || report.arcExpectedMediaProfile;
+          const expectedProfile = v10Fixture?.expectedProfile || report.arcExpectedMediaProfile;
           const profile = mediaManifest.profiles.find(item => item.key === expectedProfile);
           assert.ok(profile, `media manifest profile ${expectedProfile} is missing`);
-          assert.equal(report.arcSiteMode, isDelivery ? "production" : showcase ? "showcase" : "preview", "v10 site mode does not match its audit class");
+          assert.equal(report.arcSiteMode, isDelivery ? "production" : "preview", "v10 site mode does not match its audit class");
           assert.equal(report.arcMediaProfile, expectedProfile, "semantic media profile mismatch");
           assert.equal(report.arcExpectedMediaProfile, expectedProfile, "server-selected media profile mismatch");
           assert.ok(new Set(["local-css", "customer-upload", "arc-generated"]).has(report.arcMediaProvider), "media provider is not a reviewed local, upload, or ARC-generated class");
@@ -360,24 +418,92 @@ try {
           assert.deepEqual(report.mainOrder, compositionOrders[profile.layout], "industry section order mismatch");
           if (v10Fixture?.isLaunch) seenV10Compositions.add(`${report.arcLayout}:${report.arcVariant}`);
           assert.ok(report.curatedImages.every(item => item.profile === expectedProfile), "an image escaped the selected media profile");
-          assert.ok(report.curatedImages.every(item => item.provider === (showcase ? "arc-generated" : "customer-upload")), "an image has an inaccurate media-provider classification");
+          assert.ok(report.curatedImages.every(item => item.provider === "customer-upload"), "an image has an inaccurate media-provider classification");
           assert.ok(report.curatedImages.every(item => item.version === mediaManifest.version), "an image has a stale manifest tag");
           assert.ok(report.curatedImages.every(item => new URL(item.source).origin === baseUrl), "a rendered customer upload escaped the served preview origin");
           if (!report.curatedImages.length) assert.ok(report.localShells.length >= 5, "no-upload preview lost its CSS visual system");
           const checkout = report.links.find(href => href?.includes("buy.stripe.com"));
           assert.equal(checkout, undefined, "a public page exposed a private Stripe checkout capability");
-          if (showcase) {
-            assert.equal(report.arcMediaProvider, "arc-generated", "showcase document is not classified as ARC-generated imagery");
-            assert.equal(report.arcShowcaseProfile, showcase.profile, "showcase profile metadata mismatch");
-            assert.equal(report.images.length, 1, "showcase must render exactly one ARC-owned hero photo");
+        }
+        if (v11Fixture) {
+          assert.equal(report.arcTemplateVersion, V11_TEMPLATE_VERSION, "active fixture is not rendered from ARC V11");
+          assert.equal(report.arcSiteContract, V11_SITE_CONTRACT_VERSION, "active fixture five-page contract metadata mismatch");
+          assert.equal(report.arcPageKey, v11Fixture.page.key, "active fixture page-key metadata mismatch");
+          assert.equal(report.arcPagePath, v11Fixture.page.path, "active fixture page-path metadata mismatch");
+          assert.equal(report.arcSiteMode, "preview", "active fixture escaped inert preview mode");
+          assert.equal(report.arcExpectedMediaProfile, v11Fixture.expectedProfile, "active fixture semantic media profile mismatch");
+          assert.equal(report.previewToolbar, true, "active fixture lost the private-checkout preview notice");
+          assert.equal(report.formCount, v11Fixture.page.key === "contact" ? 1 : 0, "active fixture form is not confined to Contact");
+          assert.equal(report.previewFormNote, v11Fixture.page.key === "contact", "active fixture preview form guard mismatch");
+          assert.equal(report.navigation.length, 2, "active fixture header/footer navigation is incomplete");
+          const expectedNavigation = v11Fixture.pages.map((page, index) => ({
+            label: V11_PAGES[index].label,
+            current: page.key === v11Fixture.page.key,
+            resolvedPath: `/${page.file.replace(/index\.html$/, "")}`
+          }));
+          for (const navigation of report.navigation) {
+            assert.deepEqual(
+              navigation.links.map(({ label, current, resolvedPath }) => ({ label, current, resolvedPath })),
+              expectedNavigation,
+              `${navigation.className} does not resolve to the active fixture's exact five-page route set`
+            );
+          }
+          if (["home", "about", "process"].includes(v11Fixture.page.key)) {
+            assert.ok(report.showcaseVisuals.length >= 1, "active fixture lost its page-specific visual composition");
+          }
+          if (viewport.name === "desktop") {
+            const [navigationResponse] = await Promise.all([
+              page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 10_000 }),
+              page.locator("nav.nav-links a[aria-current=\"page\"]").click()
+            ]);
+            assert.equal(navigationResponse?.status(), 200, "active fixture directory navigation did not resolve to an HTML page");
+            assert.equal(new URL(page.url()).pathname, `/${v11Fixture.file.replace(/index\.html$/, "")}`, "active fixture current-page route resolved incorrectly");
+          }
+        }
+        if (showcase) {
+          assert.equal(report.arcTemplateVersion, V11_TEMPLATE_VERSION, "showcase is not rendered from ARC v11");
+          assert.equal(report.arcSiteContract, V11_SITE_CONTRACT_VERSION, "showcase five-page contract metadata mismatch");
+          assert.equal(report.arcPageKey, showcase.page.key, "showcase page-key metadata mismatch");
+          assert.equal(report.arcPagePath, showcase.page.path, "showcase page-path metadata mismatch");
+          assert.equal(report.arcShowcasePageCount, "5", "showcase page-count metadata mismatch");
+          assert.equal(report.arcSiteMode, "showcase", "showcase body is not inert");
+          assert.equal(report.arcShowcaseProfile, showcase.profile, "showcase profile metadata mismatch");
+          assert.equal(report.arcExpectedMediaProfile, showcase.profile, "showcase semantic media profile mismatch");
+          assert.equal(report.formCount, 0, "showcase retained a customer lead submission form");
+          assert.equal(report.showcaseDisclosure, true, "visible fictional-concept disclosure missing");
+          assert.ok(report.showcaseChrome, "showcase notice or site header is missing");
+          assert.ok(report.showcaseChrome.headerTop >= report.showcaseChrome.noticeBottom - 1, `showcase notice overlaps the site header: ${JSON.stringify(report.showcaseChrome)}`);
+          const expectedRoutePaths = showcase.pages.map(page => `/${page.file.replace(/index\.html$/, "")}`);
+          const expectedNavigation = showcase.pages.map((page, index) => ({
+            label: page.label,
+            current: page.key === showcase.page.key,
+            resolvedPath: expectedRoutePaths[index]
+          }));
+          assert.equal(report.navigation.length, 2, "showcase header/footer navigation is incomplete");
+          for (const navigation of report.navigation) {
+            assert.deepEqual(
+              navigation.links.map(({ label, current, resolvedPath }) => ({ label, current, resolvedPath })),
+              expectedNavigation,
+              `${navigation.className} does not resolve to the exact five-page route set`
+            );
+          }
+          if (showcase.page.key === "home") {
+            assert.equal(report.images.length, 1, "showcase home must render exactly one ARC-owned hero photo");
             assert.equal(report.images[0].source, expectedShowcaseHeroUrl, "showcase rendered an unexpected hero asset");
             assert.equal(report.images[0].naturalWidth, showcase.heroAsset.width, "showcase hero width changed");
             assert.equal(report.images[0].naturalHeight, showcase.heroAsset.height, "showcase hero height changed");
             assert.equal(report.curatedImages[0]?.owned, "true", "showcase hero lacks ARC ownership classification");
-            assert.equal(report.formCount, 0, "showcase retained a customer lead submission form");
-            assert.equal(report.showcaseDisclosure, true, "visible fictional-concept disclosure missing");
-            assert.ok(report.showcaseChrome, "showcase notice or site header is missing");
-            assert.ok(report.showcaseChrome.headerTop >= report.showcaseChrome.noticeBottom - 1, `showcase notice overlaps the site header: ${JSON.stringify(report.showcaseChrome)}`);
+            assert.ok(report.showcaseVisuals.length >= 1, "showcase home visual stage did not render");
+          } else {
+            assert.equal(report.images.length, 0, "secondary showcase page rendered an unallowlisted image");
+          }
+          if (viewport.name === "desktop") {
+            const [navigationResponse] = await Promise.all([
+              page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 10_000 }),
+              page.locator("nav.nav-links a[aria-current=\"page\"]").click()
+            ]);
+            assert.equal(navigationResponse?.status(), 200, "showcase directory navigation did not resolve to an HTML page");
+            assert.equal(new URL(page.url()).pathname, `/${showcase.page.file.replace(/index\.html$/, "")}`, "showcase current-page route resolved incorrectly");
           }
         }
         if (saveScreenshots) {
@@ -409,15 +535,26 @@ try {
     try {
       await context.setOffline(true);
       await page.goto(pathToFileURL(path.join(root, filesToTest[0])).href, { waitUntil: "domcontentloaded", timeout: 30_000 });
-      await page.waitForFunction(() => document.querySelectorAll(".hero-fallback,.about-media.arc-local-visual,.gallery-grid>.arc-local-visual").length >= 5);
+      await page.waitForFunction(() =>
+        document.querySelector('meta[name="arc-template-version"]')?.content === "11.0" ||
+        document.querySelectorAll(".hero-fallback,.about-media.arc-local-visual,.gallery-grid>.arc-local-visual").length >= 5
+      );
       const offlineReport = await page.evaluate(() => ({
+        templateVersion: document.querySelector('meta[name="arc-template-version"]')?.content || "",
+        siteMode: document.body.dataset.arcSiteMode || "",
         unresolved: document.documentElement.innerHTML.match(/\[\[[A-Z0-9_]+\]\]/g) || [],
         shells: document.querySelectorAll('[data-arc-media-provider="local-css"]').length,
         broken: [...document.images].filter(image => image.complete && image.naturalWidth === 0).length
       }));
       assert.equal(pageErrors.length, 0, `offline local artifact raised page errors: ${pageErrors.join(" | ")}`);
       assert.equal(offlineReport.unresolved.length, 0, "offline local artifact has unresolved placeholders");
-      assert.ok(offlineReport.shells >= 5, "offline local artifact lost its CSS visual shells");
+      if (offlineReport.templateVersion === "11.0") {
+        const expectedMode = showcaseByFile.has(filesToTest[0]) ? "showcase" : v11ByFile.has(filesToTest[0]) ? "preview" : "";
+        assert.ok(expectedMode, "offline V11 artifact is not part of an approved browser matrix");
+        assert.equal(offlineReport.siteMode, expectedMode, "offline V11 artifact escaped its inert mode");
+      } else {
+        assert.ok(offlineReport.shells >= 5, "offline local artifact lost its CSS visual shells");
+      }
       assert.equal(offlineReport.broken, 0, "offline local artifact contains a broken image");
       console.log(`PASS ${filesToTest[0]} [offline-local]`);
     } finally {

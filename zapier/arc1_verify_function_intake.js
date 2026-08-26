@@ -41,12 +41,13 @@ const iso = value => {
   return { text, ms };
 };
 
-const BRIDGE_CONTRACT_SHA256 = "e9bd5a3be21e0192acdc8b81692dab7bf5b1d0a132325a73011aa03e43674841";
+const BRIDGE_CONTRACT_SHA256 = "c4ab396bf04464629624dd19a37602755c8d429db0bf729b49bbfdfdba3ae20c";
 const BRIDGE_SCHEMA = "arc-intake-arc1-bridge-envelope-v1";
 const SOURCE_SCHEMA = "arc-intake-function-submission-v1";
 const CONSUMER_SCHEMA = "arc1-function-intake-adapter-v1";
-const CURRENT_BUDGET = "Yes, understands the finished ARC website subtotal is $5,000 plus applicable sales tax only after preview approval";
-const CURRENT_TERMS = "Accepted ARC preview terms, privacy policy, refund policy, and service scope dated 2026-08-12; separate adult checkout acceptance required";
+const CURRENT_OFFER_CONTRACT_ID = "arc-fixed-five-page-offer-v1";
+const CURRENT_BUDGET = "Yes, understands the finished ARC website is a fixed five-page website with a $5,000 subtotal plus applicable sales tax only after preview approval";
+const CURRENT_TERMS = "Accepted ARC preview terms, privacy policy, refund policy, and fixed five-page service scope dated 2026-08-25; separate adult checkout acceptance required";
 const EVIDENCE_FIELDS = [
   "asset_manifest", "asset_retrieval_endpoint", "bridge_contract_sha256", "data", "delivery_id", "evidence_expires_at",
   "evidence_issued_at", "received_at", "scope", "site_id_sha256", "source_form_name", "source_key_hmac_sha256",
@@ -56,7 +57,7 @@ const DATA_FIELDS = new Set([
   "asset_folder_link", "asset_permission", "assets", "brand_tone", "budget_confirmed", "business", "business_hours",
   "business_story", "city", "colors", "competitor_sites", "cta_destination", "design_dislikes", "domain_status", "email",
   "faqs_and_objections", "features", "final_notes", "first_cta", "form_started_at", "goals", "highest_profit_service",
-  "industry", "intake_version", "landing_path", "last_step_reached", "lead_form_fields", "lead_form_needed",
+  "industry", "intake_version", "offer_contract_id", "landing_path", "last_step_reached", "lead_form_fields", "lead_form_needed",
   "lead_notification_email", "main_call_to_action", "main_offer", "main_services", "name", "primary_style", "proof",
   "proof_details", "public_address", "public_email", "public_phone", "reference_site_likes", "referrer_host", "sections",
   "social_links", "target_customer", "terms_accepted", "utm_campaign", "utm_content", "utm_medium", "utm_source",
@@ -123,7 +124,8 @@ for (const [field, value] of Object.entries(evidence.data)) {
     if (!Array.isArray(value) || value.length > 16 || value.some(item => typeof item !== "string")) throw new Error("ARC1_BRIDGE_INVALID: multi-value data");
   } else if (typeof value !== "string") throw new Error("ARC1_BRIDGE_INVALID: scalar data");
 }
-if (evidence.data.intake_version !== "arc-intake-v7" || evidence.data.budget_confirmed !== CURRENT_BUDGET ||
+if (evidence.data.intake_version !== "arc-intake-v8" || evidence.data.offer_contract_id !== CURRENT_OFFER_CONTRACT_ID ||
+    evidence.data.budget_confirmed !== CURRENT_BUDGET ||
     evidence.data.terms_accepted !== CURRENT_TERMS) throw new Error("ARC1_BRIDGE_INVALID: immutable consent mismatch");
 
 let retrievalEndpoint;
@@ -202,6 +204,7 @@ const arc1Evidence = {
   submission_id: evidence.submission_id,
   received_at: evidence.received_at,
   intake_version: evidence.data.intake_version,
+  offer_contract_id: evidence.data.offer_contract_id,
   budget_confirmed: evidence.data.budget_confirmed,
   terms_accepted: evidence.data.terms_accepted,
   asset_permission: evidence.asset_manifest.length > 0 ? evidence.data.asset_permission : "",

@@ -1,7 +1,14 @@
 import { createHash } from "node:crypto";
 
-export const SYNTHETIC_STRIPE_API_VERSION = "2026-06-24.dahlia";
+export const SYNTHETIC_STRIPE_API_VERSION = "2026-07-29.dahlia";
 export const SYNTHETIC_SUBTOTAL_MINOR_UNITS = 500000;
+export const SYNTHETIC_HTML_PATHS = Object.freeze([
+  "about/index.html",
+  "contact/index.html",
+  "process/index.html",
+  "services/index.html",
+  "index.html"
+]);
 
 const SUPPORTED_NICHES = new Set(["roofing", "hvac", "remodeling", "landscaping", "auto_detailing"]);
 const REVERSAL_EVENTS = new Set([
@@ -41,20 +48,24 @@ const assertTestIdentifier = (value, pattern, label) => {
 export function createSyntheticStripeTestHandoffSimulator({
   niche,
   previewFolder,
-  previewHtml,
+  previewPages,
   clock = () => new Date()
 }) {
   if (!SUPPORTED_NICHES.has(niche)) throw new TypeError("ARC_SYNTHETIC_E2E_INVALID: unsupported launch niche");
   if (!/^[a-z0-9][a-z0-9-]*-[a-f0-9]{8}$/.test(previewFolder)) {
     throw new TypeError("ARC_SYNTHETIC_E2E_INVALID: preview folder");
   }
-  if (typeof previewHtml !== "string" || !previewHtml.includes("ARC Client Master Template v10.0") ||
-      !previewHtml.includes("Checkout is available only through the private approval email.") ||
-      /buy\.stripe\.com|\bplink_[A-Za-z0-9]+|client_reference_id|v3_[A-Za-z0-9_-]{135}/i.test(previewHtml)) {
-    throw new TypeError("ARC_SYNTHETIC_E2E_INVALID: preview must be an inert ARC v10 artifact");
+  if (!Array.isArray(previewPages) || previewPages.length !== 5 ||
+      JSON.stringify(previewPages.map(page => page?.path)) !== JSON.stringify(SYNTHETIC_HTML_PATHS) ||
+      previewPages.some(page => !page || typeof page !== "object" || Array.isArray(page) || typeof page.html !== "string" ||
+        !page.html.includes("ARC Client Master Template v11.0") ||
+        !page.html.includes("Checkout is available only through the private approval email.") ||
+        /buy\.stripe\.com|\bplink_[A-Za-z0-9]+|client_reference_id|v[34]_[A-Za-z0-9_-]{135}/i.test(page.html))) {
+    throw new TypeError("ARC_SYNTHETIC_E2E_INVALID: exact ordered inert ARC five-page v11 bundle required");
   }
-
-  const previewSha256 = sha256(previewHtml);
+  const productionHasher = createHash("sha256");
+  for (const page of previewPages) productionHasher.update(page.path).update("\0").update(page.html).update("\0");
+  const productionContentSha256 = productionHasher.digest("hex");
   const processedEvents = new Map();
   const paidSessions = new Map();
   let state = "PREVIEW_READY";
@@ -82,7 +93,10 @@ export function createSyntheticStripeTestHandoffSimulator({
     if (configuration?.payment_method_types !== undefined || configuration?.payment_method_selection !== "dynamic") {
       throw new Error("ARC_SYNTHETIC_E2E_BLOCKED: Stripe dynamic payment methods are required");
     }
-    if (configuration.automatic_tax_enabled !== true || configuration.tax_settings_status !== "active" ||
+    if (configuration.checkout_policy_version !== "arc-private-checkout-policy-v2" ||
+        configuration.offer_contract_id !== "arc-fixed-five-page-offer-v1" ||
+        configuration.deliverable !== "fixed-five-page-marketing-website-v1" || configuration.page_count !== 5 ||
+        configuration.automatic_tax_enabled !== true || configuration.tax_settings_status !== "active" ||
         !Array.isArray(configuration.active_tax_registration_states) || !configuration.active_tax_registration_states.includes("WA") ||
         configuration.billing_address_collection !== "required" || configuration.destination_address_required !== true) {
       throw new Error("ARC_SYNTHETIC_E2E_BLOCKED: active tax registration and destination-address collection are required");
@@ -182,15 +196,19 @@ export function createSyntheticStripeTestHandoffSimulator({
     if (!handoff) {
       handoffCount += 1;
       handoff = {
-        version: "arc-synthetic-test-handoff-v1",
+        version: "arc-synthetic-five-page-test-handoff-v2",
         synthetic: true,
         external_provider_proof: false,
         niche,
         preview_folder: previewFolder,
-        preview_sha256: previewSha256,
+        offer_contract_id: "arc-fixed-five-page-offer-v1",
+        deliverable: "fixed-five-page-marketing-website-v1",
+        page_count: 5,
+        preview_paths: SYNTHETIC_HTML_PATHS.map(path => `${previewFolder}/${path}`),
+        production_content_sha256: productionContentSha256,
         checkout_session_id_sha256: sha256(lastPayment.checkoutSessionId),
         payment_evidence_sha256: lastPayment.digest,
-        artifact_binding_sha256: sha256(`${previewFolder}\n${previewSha256}\n${lastPayment.digest}`)
+        artifact_binding_sha256: sha256(`${previewFolder}\n${productionContentSha256}\n${lastPayment.digest}`)
       };
     }
     state = "HANDOFF_READY";
@@ -254,7 +272,7 @@ export function createSyntheticStripeTestHandoffSimulator({
       externalProviderProof: false,
       niche,
       state,
-      previewSha256,
+      productionContentSha256,
       paymentLinkId: activeLink?.paymentLinkId ?? null,
       linkGeneration: activeLink?.generation ?? null,
       handoffCount

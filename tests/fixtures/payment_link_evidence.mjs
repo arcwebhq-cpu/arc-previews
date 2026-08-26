@@ -14,8 +14,8 @@ export const testPaymentLinkId = "plink_1ArcV10LegacyDisabled";
 export const testPaymentLinkUrl = "https://buy.stripe.com/test_LegacyDisabled";
 export const testPriceId = "price_1ArcV10Test5000";
 export const testProductId = "prod_ArcWebsiteService";
-export const testTermsVersion = "2026-08-12";
-export const testTermsDocumentSha256 = sha256("ARC terms 2026-08-12 immutable test document");
+export const testTermsVersion = "2026-08-25";
+export const testTermsDocumentSha256 = sha256("ARC terms 2026-08-25 immutable test document");
 export const testProductTaxCode = "txcd_12345678";
 export const testTaxRegistrations = Object.freeze([
   Object.freeze({ country: "US", id: "taxreg_ArcWashingtonTest", state: "WA", type: "state_sales_tax" })
@@ -57,7 +57,7 @@ export function createTestPaymentLinkEvidence({
     name_collection_required: true,
     submit_type: "auto",
     checkout_redirect_url: "https://arcweb.onl/payment-success/?session_id={CHECKOUT_SESSION_ID}",
-    stripe_api_version: "2026-06-24.dahlia"
+    stripe_api_version: "2026-07-29.dahlia"
   });
   const evidencePrivate = canonicalJson({
     version: "arc1-checkout-offer-template-evidence-v1",
@@ -83,7 +83,7 @@ export function createTestPaymentLinkEvidence({
     name_collection_required: true,
     submit_type: "auto",
     checkout_redirect_url: "https://arcweb.onl/payment-success/?session_id={CHECKOUT_SESSION_ID}",
-    stripe_api_version: "2026-06-24.dahlia",
+    stripe_api_version: "2026-07-29.dahlia",
     configuration_sha256: sha256(configuration),
     issued_at: issuedAt
   });

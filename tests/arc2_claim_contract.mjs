@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { createHash, createHmac } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { fixtures } from "../fixtures/v11_industries.mjs";
 import {
@@ -9,8 +11,9 @@ import {
   finalizeV11ProductionSite
 } from "../scripts/v11_production_finalizer.mjs";
 import { canonicalJson, renderV11Site, sha256 } from "../scripts/v11_site_contract.mjs";
-import { normalizeStartPayload } from "../../arc-site/netlify/lib/arc2-handoff-core.mjs";
-import { startHandoff } from "../../arc-site/netlify/lib/arc2-handoff-service.mjs";
+const siteRoot = path.resolve(process.env.ARC_SITE_DIR || "../arc-site");
+const { normalizeStartPayload } = await import(pathToFileURL(path.join(siteRoot, "netlify/lib/arc2-handoff-core.mjs")).href);
+const { startHandoff } = await import(pathToFileURL(path.join(siteRoot, "netlify/lib/arc2-handoff-service.mjs")).href);
 
 const resolverSource = await readFile(new URL("../zapier/arc2_resolve_and_finalize.js", import.meta.url), "utf8");
 const template = await readFile(new URL("../ARC_MASTER_TEMPLATE_V11.html", import.meta.url), "utf8");

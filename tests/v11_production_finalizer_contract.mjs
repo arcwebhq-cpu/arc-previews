@@ -337,7 +337,7 @@ assert.throws(() => finalizeV11ProductionSite(oversizedPage), /services\/index\.
 const aggregateHtml = withApprovalMutation(render(), html => padHtml(html, 105_000));
 assert.throws(() => finalizeV11ProductionSite(aggregateHtml), /aggregate HTML exceeds 500000 bytes/i);
 
-const siblingCorePath = path.resolve(root, "../arc-site/netlify/lib/arc2-handoff-core.mjs");
+const siblingCorePath = path.resolve(process.env.ARC_SITE_DIR || path.join(root, "../arc-site"), "netlify/lib/arc2-handoff-core.mjs");
 let siblingCrossCheck = "skipped (arc-site sibling is not present)";
 try {
   await access(siblingCorePath);

@@ -8,8 +8,14 @@ const workflow = await readFile(path.join(projectRoot, ".github/workflows/previe
 const dependabot = await readFile(path.join(projectRoot, ".github/dependabot.yml"), "utf8");
 const packageJson = JSON.parse(await readFile(path.join(projectRoot, "package.json"), "utf8"));
 
-assert.match(workflow, /repository:\s*arcwebhq-cpu\/arc-site\s*\n\s*ref:\s*f7ee8e69962bba3010bb2c32c4bff4d22c1fb8cc\s*\n\s*path:\s*\.arc-site-contract/,
+assert.match(workflow, /repository:\s*arcwebhq-cpu\/arc-site\s*\n\s*ref:\s*f84c303e0d34045a3929383e538e209790763f5e\s*\n\s*path:\s*\.arc-site-contract/,
   "CI must execute against the reviewed ARC1 v2 site producer authority.");
+assert.match(workflow, /preview-quality:[\s\S]*permissions:\s*\n\s*contents:\s*read\s*\n\s*pages:\s*read/,
+  "The quality job must retain least-privilege Pages settings readback access.");
+assert.equal((workflow.match(/run:\s*node scripts\/verify_pages_source\.mjs/g) || []).length, 2,
+  "Both the quality and deploy jobs must fail closed unless Pages remains Actions-only.");
+assert.equal((workflow.match(/GITHUB_TOKEN:\s*\$\{\{ secrets\.GITHUB_TOKEN \}\}/g) || []).length, 2,
+  "Both Pages source readbacks must use the scoped workflow token.");
 assert.match(workflow, /run:\s*npm ci --prefix \.arc-site-contract\s*$/m,
   "CI must install the pinned ARC site contract's exact dependencies before importing its runtime modules.");
 assert.match(packageJson.scripts["test:arc1-consumer"], /tests\/arc1_site_packet_runtime_contract\.mjs/,

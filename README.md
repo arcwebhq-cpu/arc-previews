@@ -96,9 +96,10 @@ stale-claim alerts, and provider-specific disabled-sandbox evidence.
 
 ## GitHub Pages
 
-GitHub Pages must use **GitHub Actions** as its build source. On a push to `main`, deployment waits
-for the full quality gate and publishes only the allowlisted `.pages-dist` artifact. Do not switch
-Pages to branch/root publishing.
+GitHub Pages must use **GitHub Actions** as its build source. On a push to `main` or the dedicated
+`automation/generated-previews` publishing branch, deployment waits for the full quality gate and
+publishes only the allowlisted `.pages-dist` artifact. `main` remains protected; ARC's generator
+writes only to the publishing branch. Do not switch Pages to branch/root publishing.
 
 The public showcase set is exactly three fictional V11 sites—roofing, dental, and finance—with five
 pages each (15 showcase documents total). Each page visibly says that it is a fictional ARC design

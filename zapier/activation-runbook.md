@@ -1,8 +1,53 @@
 # ARC Zapier activation runbook
 
-Status: **blocked and OFF**. This is a configuration order, not evidence that
-ARC1 or ARC2 is ready. Do not enable a Zap, public intake, email, checkout,
-Netlify claims, or Apollo while any item below is unresolved.
+Status: **blocked and OFF**. Every ordered ARC stage defaults to OFF. External
+provider controls are separate, and none is authorized by this runbook. The
+committed adapter/runtime code is present in the current deployed ARC bundle,
+but code presence is not provider wiring, activation, runtime attestation, or
+end-to-end evidence. Do not enable a Zap, public intake, email, checkout,
+Netlify claim, or Apollo while any item below is unresolved.
+
+## Ordered activation and cumulative evidence
+
+The only valid stage order is:
+
+`OFF -> EMAIL_SANDBOX -> CLAIM_SANDBOX -> LIVE_CHECKOUT -> PUBLIC_INTAKE -> PILOT -> OUTREACH`
+
+Each transition appends its new evidence after every earlier receipt. The
+complete receipt order is exact and cumulative:
+
+1. `email_sandbox_e2e`
+2. `claim_sandbox_e2e`
+3. `adult_legal_tax_approval`
+4. `checkout_test_e2e`
+5. `live_checkout_readback`
+6. `public_intake_privacy_retention_review`
+7. `public_intake_provider_e2e`
+8. `pilot_acceptance`
+9. `outreach_approval`
+
+The receipts are reviewed, access-controlled external evidence; only their
+pseudonymous references and digests belong in a short-lived activation
+manifest. Repository tests, synthetic fixtures, a successful Zap task, a local
+HMAC, or an inventory readback cannot substitute for a provider receipt. A
+higher stage may not skip, reorder, or replace any earlier receipt, and a signed
+manifest never turns on an external provider dashboard by itself.
+
+### Bootstrap remains blocked
+
+The current contract has no approved self-bootstrap path. Sandbox ARC2
+preflight requires `CLAIM_SANDBOX`, while a `CLAIM_SANDBOX` manifest already
+requires `claim_sandbox_e2e` (and the earlier email receipt). Public-intake
+execution similarly requires `PUBLIC_INTAKE`, while that manifest already
+requires `public_intake_provider_e2e`. No deployment-bound private bootstrap
+harness or separately reviewed bootstrap procedure has been provider-proven.
+
+Do not solve this circularity by temporarily weakening a runtime minimum,
+fabricating a receipt, treating a local fixture as external evidence, or
+enabling the target stage to prove itself. Before either stage can advance, an
+independently reviewed private bootstrap procedure must be implemented and
+provider-tested, or the stage contract must be explicitly revised and tested.
+This runbook records the blocker; it does not authorize a bypass.
 
 ## Hard blockers before opening the Zap editor
 
@@ -12,12 +57,14 @@ Netlify claims, or Apollo while any item below is unresolved.
    and a durable create-only ingress claim. Pointing
    `ARC_INTAKE_ARC1_ENDPOINT` directly at a Zapier hook therefore fails the
    acknowledgement contract.
-2. **The first-party adapter is code-complete only.** `arc-site-launch` now has
-   a default-OFF Netlify Blob adapter that validates the signed envelope,
-   authoritative content-addressed asset indexes and bytes, atomically claims
-   ingress, returns the exact signed ACK, and queues a bounded downstream hook
-   dispatch. It is not deployed, runtime-attested, or provider-tested. All of
-   its activation flags remain OFF and ARC public readiness remains false.
+2. **The first-party adapter code is deployed but not activated.** The current
+   ARC Netlify bundle contains the committed default-OFF Blob adapter that
+   validates the signed envelope, authoritative content-addressed asset indexes
+   and bytes, atomically claims ingress, returns the exact signed ACK, and
+   queues a bounded downstream hook dispatch. That deployed code has not been
+   enabled, runtime-attested, wired to the required private providers, or
+   provider-tested. All activation flags remain OFF and ARC public readiness
+   remains false.
 3. **The downstream runtime is executable but provider-unverified.** The adapter now
    signs one canonical v2 packet, exposes default-OFF atomic claim and signed
    completion endpoints, and retains recovery state after Hook HTTP 200 until
@@ -41,6 +88,12 @@ Netlify claims, or Apollo while any item below is unresolved.
 6. **Email receipt adapters are missing.** A provider must authenticate its
    native delivered webhook before signing ARC's receipt. Accepted, queued, or
    sent is not delivered.
+7. **GitHub Pages must use GitHub Actions as its only publication source.** A
+   branch/root Pages build can publish repository internals before the strict
+   allowlisted Actions artifact replaces it. Verify the Pages settings
+   readback is Actions-only and the live artifact contains only the committed
+   public allowlist before any preview-repository push. A passing Actions run
+   does not neutralize a concurrently configured branch/root publisher.
 
 Official Zapier capability references reviewed on 2026-08-24:
 
@@ -157,16 +210,24 @@ Build with the Zap unpublished and every provider action in test/sandbox mode.
    registration, exact one-time Price, destination address, terms snapshot, and
    redirect URL.
 13. Enforce approved rolling/day limits from the durable work record.
-14. Publish content-addressed assets, inject the preview, run the validator,
+14. Before any preview-repository push, verify GitHub Pages is configured with
+   GitHub Actions as its only publication source. A branch/root publisher must
+   be disabled; do not rely on the strict artifact racing it afterward.
+15. Publish content-addressed assets, inject the preview, run the validator,
    publish a PR, wait for the exact required check, and squash merge only that
    immutable head.
-15. Re-read GitHub Pages bytes. Reserve the preview outbox before any email.
-16. Run the private checkout PREPARE/AUTHORIZE/CREATE/PERSIST/ACTIVATE/FINALIZE
-    phases with compare-and-set transitions. Keep the Link private and bounded
-    to one completed session.
-17. Send the preview email through the branded transactional provider using the
-    durable outbox key as idempotency. Persist provider receipt evidence; do not
-    treat a Zap step success as delivery.
+16. Re-read the live GitHub Pages file allowlist and exact bytes. Run
+   `arc1_preview_review_outbox.js#PREPARE`, atomically claim the durable outbox,
+   issue one private ARC review invite, bind it with `BIND_INVITE`, and
+   authoritatively read back the exact `INVITE_BOUND` bytes.
+17. Run `AUTHORIZE_SEND` immediately before the branded transactional provider
+   call. Send only the private review link using the returned durable
+   idempotency key. Never include a checkout link or require an email reply.
+18. Accept only the provider's authenticated `DELIVERED` webhook evidence in
+   `ACK_DELIVERY`; queued, accepted, or a successful Zap task is not delivery.
+   The review service may create checkout only after a signed
+   `APPROVE_AND_PAY` decision. `REQUEST_CHANGES` must produce a new immutable
+   preview and invite before another email.
 
 ## ARC2 disabled build order
 
@@ -215,6 +276,21 @@ Build with the Zap unpublished and every provider action in test/sandbox mode.
 - Exhaustion, conflict, invalid signature, stale proof, reversal, bounce,
   complaint, or missing receipt must create a durable alert and stop delivery.
 
+## Balanced five-niche pilot
+
+The pilot is one balanced cohort of exactly five independently approved
+workflows: one roofing, one HVAC, one remodeling, one landscaping, and one auto
+detailing. The provider-neutral synthetic suite must cover all five, and then
+one real sandbox provider workflow for each niche must pass the same receipts,
+readbacks, retry, reversal, delivery, and alert gates. Synthetic success is not
+external provider proof, and success in one niche cannot stand in for another.
+
+`pilot_acceptance` may be reviewed only after the cumulative evidence through
+`PUBLIC_INTAKE` is valid and the five-niche sandbox cohort is complete. Pilot
+contacts must be individually reviewed against suppression, sender-domain, and
+outreach-compliance controls. Keep Apollo OFF during the pilot; no sequence may
+start until the later `OUTREACH` stage also has `outreach_approval`.
+
 ## Smallest safe login sequence
 
 1. Sign into Zapier and inspect ARC1/ARC2/ARC3 without publishing them.
@@ -224,12 +300,16 @@ Build with the Zap unpublished and every provider action in test/sandbox mode.
 4. Select the private state, secret, email, inbox-receipt, and alert adapters.
 5. Build ARC1 behind the acknowledgement adapter and run one zero-egress fixture.
 6. Build ARC2 in Stripe test mode and run the five committed synthetic niches,
-   then five real sandbox provider workflows.
+   then one real sandbox provider workflow for each of roofing, HVAC,
+   remodeling, landscaping, and auto detailing.
 7. Test duplicate, timeout, lost response, async payment, expired Link, refund,
    dispute, bounce, complaint, stuck outbox, and alert acknowledgement.
 8. Export/redact the exact step map and evidence for adult review.
 9. Keep every Zap OFF until the repository and provider evidence both pass.
 
-Activation order remains: transactional email test, disposable Netlify claim
-test, public intake, live Stripe last. Apollo stays OFF until its separate
-branded-domain and outreach-compliance gate passes.
+Activation order remains exactly `OFF -> EMAIL_SANDBOX -> CLAIM_SANDBOX ->
+LIVE_CHECKOUT -> PUBLIC_INTAKE -> PILOT -> OUTREACH`, with cumulative evidence
+in the order documented above. GitHub Pages Actions-only publication is a
+precondition to any preview push, not a substitute stage. Apollo stays OFF
+through the balanced five-niche pilot and until the separate branded-domain,
+suppression, outreach-compliance, and `outreach_approval` gates all pass.

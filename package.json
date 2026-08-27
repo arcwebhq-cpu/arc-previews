@@ -26,6 +26,7 @@
     "test:receipt-v1-cutover": "node tests/receipt_v1_clean_cutover_contract.mjs",
     "test:pipeline": "node tests/pipeline_contract.mjs",
     "test:arc1-pr-gate": "node tests/arc1_pr_gate_contract.mjs",
+    "test:arc1-review-email": "node tests/arc1_preview_review_outbox_contract.mjs",
     "test:arc1-network-response": "node tests/arc1_network_response_contract.mjs",
     "test:arc2-claim": "node tests/arc2_claim_contract.mjs",
     "test:arc2-delivery": "node tests/arc2_delivery_email_gate_contract.mjs",
@@ -42,7 +43,7 @@
     "test:browser:all-viewports": "npm run build:v11-fixtures && node tests/preview_quality.mjs",
     "test:browser:legacy": "npm run build:v11-fixtures && npm run build:fixtures && ARC_QA_V10_ONLY=1 ARC_QA_DESKTOP_MOBILE_ONLY=1 node tests/preview_quality.mjs",
     "test:images": "npm run build:v11-fixtures && ARC_QA_REAL_IMAGES=1 ARC_QA_SAVE_SCREENSHOTS=1 ARC_QA_DESKTOP_MOBILE_ONLY=1 node tests/preview_quality.mjs",
-    "test": "npm run build && npm run audit && npm run test:v11-suite && npm run test:arc1-generation && npm run test:arc1-consumer && npm run test:sanitizer && npm run test:premium && npm run test:no-egress && npm run test:arc1-intake-assets && npm run test:arc1-payment-link && npm run test:receipt-v1-cutover && npm run test:pipeline && npm run test:arc1-pr-gate && npm run test:arc1-network-response && npm run test:arc2-claim && npm run test:arc2-delivery && npm run test:arc2-legacy && npm run test:arc2-lead-route && npm run test:synthetic-e2e && npm run test:wiring && npm run test:pages && npm run test:pages-source && npm run test:repository-privacy && npm run test:workflow-supply-chain && npm run test:customer-upload-browser && npm run test:browser"
+    "test": "npm run build && npm run audit && npm run test:v11-suite && npm run test:arc1-generation && npm run test:arc1-consumer && npm run test:sanitizer && npm run test:premium && npm run test:no-egress && npm run test:arc1-intake-assets && npm run test:arc1-payment-link && npm run test:receipt-v1-cutover && npm run test:pipeline && npm run test:arc1-pr-gate && npm run test:arc1-review-email && npm run test:arc1-network-response && npm run test:arc2-claim && npm run test:arc2-delivery && npm run test:arc2-legacy && npm run test:arc2-lead-route && npm run test:synthetic-e2e && npm run test:wiring && npm run test:pages && npm run test:pages-source && npm run test:repository-privacy && npm run test:workflow-supply-chain && npm run test:customer-upload-browser && npm run test:browser"
   },
   "devDependencies": {
     "@sparticuz/chromium": "149.0.0",

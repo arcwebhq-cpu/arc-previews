@@ -113,8 +113,16 @@ and every private checkout capability or evidence value.
 
 ## Private checkout and Stripe
 
-Checkout is private and becomes eligible only after the immutable five-page preview is approved,
-merged, and read back from Pages. The current contracts are:
+The automated preview email contains one private ARC review-portal link—never a checkout link and
+never a request to reply manually. Before that email is authorized, the exact five-page Pages bytes
+must pass the readiness gate, a durable outbox must move through `PENDING -> CLAIMED ->
+INVITE_BOUND`, and the bound state must be authoritatively read back. `SENT` requires an
+authenticated provider `DELIVERED` receipt; queued or accepted is not delivery.
+
+Checkout becomes eligible only after the customer selects `APPROVE_AND_PAY` in that private portal.
+`REQUEST_CHANGES` creates a new immutable five-page preview and a new invite, for at most two
+revision rounds. The older pre-review Payment Link state machine remains default-off for frozen
+legacy replay and is no longer part of ARC1's ordered flow. The retained checkout contracts are:
 
 - Offer snapshot and recipient reservation: V2
 - Readiness core and observation: V2

@@ -534,7 +534,7 @@ const arc1V11TemplateKeys = Object.freeze([
   "PRIMARY_COLOR", "PRIMARY_CTA_LABEL", "STYLE_MODE", "SURFACE_COLOR", "TEXT_COLOR"
 ]);
 
-const arc1V11PreviewToolbar = '<aside class="arc-preview-toolbar" aria-label="ARC preview status"><span><strong>ARC preview</strong>Five-page website concept for this business.</span><span data-arc-checkout-private>Checkout is available only through the private approval email.</span></aside>';
+const arc1V11PreviewToolbar = '<aside class="arc-preview-toolbar" aria-label="ARC preview status"><span><strong>ARC preview</strong>Five-page website concept for this business.</span><span data-arc-checkout-private>Review and payment are available through your private review link.</span></aside>';
 const arc1V11PageByKey = new Map(ARC1_V11_PAGES.map(page => [page.key, page]));
 
 const arc1V11Clean = value => String(value == null ? "" : value).trim();

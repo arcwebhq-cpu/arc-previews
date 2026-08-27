@@ -28,7 +28,7 @@ function customerPreview(folder, { proofFolder = folder, injectedCheckout = "", 
 <meta name="robots" content="noindex,nofollow,noarchive">
 <meta name="arc-template-version" content="10.0">
 </head><body data-arc-site-mode="preview">${trustedScripts}${assetUrl ? `<img src="${assetUrl}" alt="Customer asset">` : ""}${injectedCheckout}
-<aside class="arc-preview-toolbar" aria-label="ARC preview purchase"><span><strong>ARC preview</strong>Built for this business. Purchase only if approved.</span><span data-arc-checkout-private>Checkout is available only through the private approval email.</span></aside>
+<aside class="arc-preview-toolbar" aria-label="ARC preview purchase"><span><strong>ARC preview</strong>Built for this business. Purchase only if approved.</span><span data-arc-checkout-private>Review and payment are available through your private review link.</span></aside>
 </body></html>`;
   const proof = `<!-- ARC_PREVIEW_PROOF_START -->\n<meta name="arc-preview-folder" content="${proofFolder}">\n<meta name="arc-preview-source-sha256" content="${sha256(unsigned)}">\n<!-- ARC_PREVIEW_PROOF_END -->\n`;
   return unsigned.replace("</head>", `${proof}</head>`);

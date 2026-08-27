@@ -251,7 +251,7 @@ assert.match(arc1, /stripe_live_mode_enabled must be true or false/, "ARC1 does 
 assert.match(arc1, /arc1-checkout-offer-template-evidence-v1/, "ARC1 does not require signed offer-template preflight evidence");
 assert.match(arc1, /paymentLinkEvidenceIssuedMs<Date\.now\(\)-5\*60\*1000/, "ARC1 accepts stale offer-template preflight evidence");
 assert.match(arc1, /arc-checkout-offer-snapshot-signature-v2/, "ARC1 does not sign the immutable five-page private checkout offer");
-assert.match(arc1, /Checkout is available only through the private approval email/, "ARC1 does not render an inert public checkout notice");
+assert.match(arc1, /Review and payment are available through your private review link\./, "ARC1 does not render the exact inert private-review notice");
 assert.doesNotMatch(arc1, /checkout_url\s*:|payment_link_url\s*:/, "ARC1 exposes a public checkout URL");
 assert.match(arc1PaymentLink, /stripeApiVersion = "2026-07-29\.dahlia"/, "ARC1 offer-template preflight does not pin the Stripe API version");
 assert.match(arc1PaymentLink, /\/v1\/prices\/\$\{encodeURIComponent\(expectedPriceId\)\}/, "ARC1 offer-template preflight does not read the exact Price and Product");

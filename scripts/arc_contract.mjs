@@ -175,7 +175,7 @@ export function buildPreviewFolder(businessName, trustedEventPrefix) {
 }
 
 function injectPreviewToolbar(html) {
-  const markup = `<aside class="arc-preview-toolbar" aria-label="ARC preview purchase"><span><strong>ARC preview</strong>Built for this business. Purchase only if approved.</span><span data-arc-checkout-private>Checkout is available only through the private approval email.</span></aside>`;
+  const markup = `<aside class="arc-preview-toolbar" aria-label="ARC preview purchase"><span><strong>ARC preview</strong>Built for this business. Purchase only if approved.</span><span data-arc-checkout-private>Review and payment are available through your private review link.</span></aside>`;
   if (!/<\/body>/i.test(html)) throw new Error("ARC_TEMPLATE_INVALID: closing body tag is missing");
   return html.replace(/<\/body>/i, `${markup}\n</body>`) + "\n";
 }

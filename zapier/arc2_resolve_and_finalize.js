@@ -31,7 +31,7 @@ const OFFER_CONTRACT_ID = "arc-fixed-five-page-offer-v1";
 const DELIVERABLE = "fixed-five-page-marketing-website-v1";
 const TERMS_VERSION = "2026-08-25";
 const STRIPE_API_VERSION = "2026-07-29.dahlia";
-const PREVIEW_TOOLBAR = '<aside class="arc-preview-toolbar" aria-label="ARC preview status"><span><strong>ARC preview</strong>Five-page website concept for this business.</span><span data-arc-checkout-private>Checkout is available only through the private approval email.</span></aside>';
+const PREVIEW_TOOLBAR = '<aside class="arc-preview-toolbar" aria-label="ARC preview status"><span><strong>ARC preview</strong>Five-page website concept for this business.</span><span data-arc-checkout-private>Review and payment are available through your private review link.</span></aside>';
 const CONTENT_SECURITY_POLICY = "default-src 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; script-src-attr 'none'; connect-src 'none'; font-src 'self' data:; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 const HEADERS_FILE = `/*\n  Content-Security-Policy: ${CONTENT_SECURITY_POLICY}\n  X-Content-Type-Options: nosniff\n  X-Frame-Options: DENY\n  Referrer-Policy: strict-origin-when-cross-origin\n  Permissions-Policy: camera=(), microphone=(), geolocation=()\n`;
 const SAFE_CAPS = Object.freeze({

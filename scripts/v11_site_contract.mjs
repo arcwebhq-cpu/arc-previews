@@ -73,7 +73,7 @@ const TEMPLATE_KEYS = Object.freeze([
   "EXPECTED_MEDIA_PROFILE"
 ]);
 
-const PREVIEW_TOOLBAR = '<aside class="arc-preview-toolbar" aria-label="ARC preview status"><span><strong>ARC preview</strong>Five-page website concept for this business.</span><span data-arc-checkout-private>Checkout is available only through the private approval email.</span></aside>';
+const PREVIEW_TOOLBAR = '<aside class="arc-preview-toolbar" aria-label="ARC preview status"><span><strong>ARC preview</strong>Five-page website concept for this business.</span><span data-arc-checkout-private>Review and payment are available through your private review link.</span></aside>';
 
 function clean(value) {
   return String(value ?? "").trim();

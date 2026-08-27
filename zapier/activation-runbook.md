@@ -57,8 +57,8 @@ This runbook records the blocker; it does not authorize a bypass.
    and a durable create-only ingress claim. Pointing
    `ARC_INTAKE_ARC1_ENDPOINT` directly at a Zapier hook therefore fails the
    acknowledgement contract.
-2. **The first-party adapter code is deployed but not activated.** The current
-   ARC Netlify bundle contains the committed default-OFF Blob adapter that
+2. **The first-party adapter is code-complete only.** The current ARC Netlify
+   bundle contains the committed default-OFF Blob adapter that
    validates the signed envelope, authoritative content-addressed asset indexes
    and bytes, atomically claims ingress, returns the exact signed ACK, and
    queues a bounded downstream hook dispatch. That deployed code has not been

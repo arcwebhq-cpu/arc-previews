@@ -86,7 +86,8 @@ or `file_path`. Publication creates or reuses a draft PR containing exactly the 
 and any receipt-bound content-addressed assets. The merge gate verifies the customer folder bytes
 without incorrectly pinning unrelated repository content, so publishing another customer's site
 does not invalidate an earlier approved preview. The email gate then performs an authoritative
-GitHub Pages readback of all five routes before a private approval email can be authorized.
+GitHub Pages readback of all five routes before it can authorize the automated email containing
+the private review link.
 
 All ARC1 network, persistence, provider-work, PR-email, and private-checkout controls default to
 off. A Catch Hook HTTP 200 is not durability evidence. Activation requires encrypted secret
@@ -105,10 +106,10 @@ concept. Checkout, lead collection, scripts, remote runtime dependencies, and em
 disabled; the three home-page photos are ARC-owned, content-addressed WebP assets with recorded
 provenance.
 
-Customer Pages previews use the same exact five-page V11 route contract and contain only an inert
-notice that checkout is available through a private approval email. The Pages allowlist excludes
-QA fixtures, legacy previews, paid bundles, source, configuration, tests, dependencies, and every
-private checkout capability or evidence value.
+Customer Pages previews use the same exact five-page V11 route contract and contain only the inert
+notice, “Review and payment are available through your private review link.” The Pages allowlist
+excludes QA fixtures, legacy previews, paid bundles, source, configuration, tests, dependencies,
+and every private checkout capability or evidence value.
 
 ## Private checkout and Stripe
 

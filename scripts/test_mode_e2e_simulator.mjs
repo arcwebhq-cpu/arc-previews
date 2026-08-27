@@ -59,7 +59,7 @@ export function createSyntheticStripeTestHandoffSimulator({
       JSON.stringify(previewPages.map(page => page?.path)) !== JSON.stringify(SYNTHETIC_HTML_PATHS) ||
       previewPages.some(page => !page || typeof page !== "object" || Array.isArray(page) || typeof page.html !== "string" ||
         !page.html.includes("ARC Client Master Template v11.0") ||
-        !page.html.includes("Checkout is available only through the private approval email.") ||
+        !page.html.includes("Review and payment are available through your private review link.") ||
         /buy\.stripe\.com|\bplink_[A-Za-z0-9]+|client_reference_id|v[34]_[A-Za-z0-9_-]{135}/i.test(page.html))) {
     throw new TypeError("ARC_SYNTHETIC_E2E_INVALID: exact ordered inert ARC five-page v11 bundle required");
   }

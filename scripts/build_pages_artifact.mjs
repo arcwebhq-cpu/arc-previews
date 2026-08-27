@@ -264,7 +264,7 @@ function validateV10CustomerPreview(html, folder) {
     throw new Error(`ARC_PAGES_INVALID: ${label} source proof hash mismatch`);
   }
 
-  const inertNotice=(html.match(/<span data-arc-checkout-private>Checkout is available only through the private approval email\.<\/span>/g)||[]).length;
+  const inertNotice=(html.match(/<span data-arc-checkout-private>Review and payment are available through your private review link\.<\/span>/g)||[]).length;
   if(inertNotice!==1||/buy\.stripe\.com|\bplink_[A-Za-z0-9]+|client_reference_id|arc-checkout-config|v[34]_[A-Za-z0-9_-]{135}/i.test(html)){
     throw new Error(`ARC_PAGES_INVALID: ${label} must contain one inert checkout notice and no private checkout capability/evidence`);
   }
@@ -297,7 +297,7 @@ function validateV11CustomerPreview(pages, folder) {
         attribute(bodyTags[0], "data-arc-page") !== page.key) {
       throw new Error(`ARC_PAGES_INVALID: ${label} must be the bound v11 preview page`);
     }
-    const inertNotice = (html.match(/<span data-arc-checkout-private>Checkout is available only through the private approval email\.<\/span>/g) || []).length;
+    const inertNotice = (html.match(/<span data-arc-checkout-private>Review and payment are available through your private review link\.<\/span>/g) || []).length;
     const toolbarCount = (html.match(/<aside class="arc-preview-toolbar"/g) || []).length;
     if (inertNotice !== 1 || toolbarCount !== 1) {
       throw new Error(`ARC_PAGES_INVALID: ${label} must contain one exact inert checkout notice`);

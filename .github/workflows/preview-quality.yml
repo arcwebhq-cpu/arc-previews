@@ -14,17 +14,24 @@ jobs:
     name: ARC preview quality/preview-quality
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      pages: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: arcwebhq-cpu/arc-site
-          ref: f7ee8e69962bba3010bb2c32c4bff4d22c1fb8cc
-          path: .arc-site-contract
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: npm
+      - name: Require GitHub Actions-only Pages publication
+        run: node scripts/verify_pages_source.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: arcwebhq-cpu/arc-site
+          ref: f84c303e0d34045a3929383e538e209790763f5e
+          path: .arc-site-contract
       - run: npm ci
       - name: Install pinned ARC site contract dependencies
         run: npm ci --prefix .arc-site-contract
@@ -65,6 +72,10 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Recheck GitHub Actions-only Pages publication
+        run: node scripts/verify_pages_source.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Build strict Pages allowlist
         run: npm run build:pages
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0

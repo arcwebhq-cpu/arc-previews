@@ -165,6 +165,12 @@ assert.doesNotMatch(validatorSource, /inputData\.(?:html_content|file_path)\b/,
   "active V11 validator must not consume singular-page values");
 assert.doesNotMatch(validatorSource, /\bfetch\s*\(|\bXMLHttpRequest\b|api\.github\.com/,
   "the local validator must not perform network or publication work");
+assert.match(validatorSource, /offer\.customer_creation\s*!==\s*"always"/,
+  "the validator must require the canonical Checkout Session customer creation policy");
+assert.match(validatorSource, /offer\.submit_type\s*!==\s*"pay"/,
+  "the validator must require the canonical Checkout Session submit type");
+assert.doesNotMatch(validatorSource, /name_collection_required|billing_address_collection/,
+  "the signed V11 offer must omit noncanonical Checkout Session collection fields");
 assert.equal(Object.keys(validated).some(key => /^(?:customer_email|lead_notification_email|claim_recipient_email|checkout_url)$|_private$/.test(key)), false,
   "validator output must remain log-safe and exclude private recipients or checkout capability");
 

@@ -122,9 +122,10 @@ assert.match(assetPublisherSource, /authorized_image_reviewer_id_sha256/);
 assert.match(assetPublisherSource, /arc1-asset-visual-review-signature-v1\\n\$\{assetVisualReviewKeyId\}\\n/);
 assert.match(injectorSource, /ARC1_LEGACY_INTAKE_DISABLED/);
 assert.match(injectorSource, /Confirmed rights and no visible watermark v1/);
-assert.match(linkSource, /readback_contract!=="product-tax-code-bound-v1"/);
-assert.match(linkSource, /readback_contract:"product-tax-code-bound-v1"/);
-assert.match(linkSource, /product_tax_code:offer\.product_tax_code/);
+assert.match(linkSource, /throw new Error\("ARC1_LEGACY_PAYMENT_LINK_RETIRED:/);
+assert.doesNotMatch(linkSource,
+  /\binputData\b|\bfetch\s*\(|api\.stripe\.com|\/v1\/payment_links|stripe_api_key|payment_link_id|\bplink_|buy\.stripe\.com/i,
+  "Frozen receipt compatibility evidence must not keep the retired Payment Link writer executable.");
 assert.match(adapterSource, /ARC2_CHECKOUT_SESSION_ADAPTER_PAUSED/);
 assert.match(adapterSource, /arc2-handoff-artifact-evidence-v4/);
 assert.doesNotMatch(adapterSource,
@@ -132,8 +133,9 @@ assert.doesNotMatch(adapterSource,
 assert.match(retiredResolverSource, /throw new Error\("ARC2_RETIRED_RESOLVER:/);
 assert.doesNotMatch(retiredResolverSource,
   /api\.stripe\.com|stripe_api_key|private_link_reverse_state|payment_link_id|buy\.stripe\.com|\bplink_/i);
-assert.match(deliveryGateSource, /"tax_amount_minor_units", "taxability_reasons", "line_item_taxes_sha256"/);
-assert.match(deliveryGateSource, /payment\.taxability_reasons/);
+assert.match(deliveryGateSource, /throw new Error\("ARC2_LEGACY_DELIVERY_EMAIL_GATE_RETIRED:/);
+assert.doesNotMatch(deliveryGateSource,
+  /\binputData\b|\bfetch\s*\(|api\.stripe\.com|stripe_api_key|payment_link_id|\bplink_|buy\.stripe\.com|send_delivery_email/i);
 
 const fixture = fixtures[0];
 const intake = createTestIntakeEvidence({
@@ -175,4 +177,4 @@ for (const relative of ["./arc2_claim_contract.mjs", "./arc2_delivery_email_gate
   });
 }
 
-console.log("ARC frozen receipt-v1 clean-cutover contract passed: no dual-read compatibility, legacy intake disabled, authority-bound image reviews, retired Payment Link resolver fail-closed, and exact Payment Evidence V4 tax audit shape.");
+console.log("ARC frozen receipt-v1 clean-cutover contract passed: no dual-read compatibility, legacy intake disabled, authority-bound image reviews, and all Payment Link-era delivery paths retired fail-closed.");

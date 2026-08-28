@@ -98,8 +98,9 @@ resumes through signed PR-check, merge,
 exact Pages-byte, delivered preview-email, authenticated `APPROVE_AND_PAY`, and private Checkout
 Session authorization receipts. Every mutation uses create/CAS-or-exact persistence, an
 issuer-scoped Ed25519 receipt, a short atomic authorization lease, a stable idempotency key, and an
-immutable private provider-request digest. The older pre-review Payment Link scripts are legacy
-replay components and are forbidden from the active V11 ordered steps.
+immutable private provider-request digest. The older pre-review Payment Link filenames are
+unconditional retirement shims that throw before parsing input or accessing a provider; they
+cannot enter the active V11 ordered steps under any flag.
 The PR publisher and merge gate each have a zero-network `PREPARE_REQUEST` phase and an `EXECUTE`
 phase that independently verifies a signed atomic lease-consumption receipt before GitHub access.
 Their Ed25519 trust root is pinned into a deployment bundle, never accepted from mapped Zap input;
@@ -138,8 +139,9 @@ authenticated provider `DELIVERED` receipt; queued or accepted is not delivery.
 
 Checkout becomes eligible only after the customer selects `APPROVE_AND_PAY` in that private portal.
 `REQUEST_CHANGES` creates a new immutable five-page preview and a new invite, for at most two
-revision rounds. The older pre-review Payment Link state machine remains default-off for frozen
-legacy replay and is no longer part of ARC1's ordered flow. The retained checkout contracts are:
+revision rounds. The older pre-review Payment Link writer, verifier, and lifecycle are permanently
+retired fail-closed. Only static clean-cutover compatibility evidence remains. The V11 checkout
+contracts are:
 
 - Offer snapshot and recipient reservation: V2
 - Readiness core and observation: V2
@@ -156,12 +158,14 @@ checkout capability. Its signed V2 evidence binds the live offer configuration. 
 snapshot binds one approved five-page preview; the preview folder; all five route paths and
 whole-site digest; ARC account hash; Product and Price; $5,000 one-time subtotal;
 exclusive tax behavior; advisor-confirmed Product tax code; expected active tax registrations;
-automatic destination tax; required billing address; business and individual name collection;
-adult purchaser acknowledgement; and the exact payment-success redirect.
+automatic destination tax; `customer_creation=always`; `submit_type=pay`; adult purchaser
+acknowledgement; and the exact payment-success redirect. The provider request intentionally omits
+both `billing_address_collection` and `name_collection`, allowing Stripe Checkout and automatic tax
+to collect only the required address inputs without adding a second name-collection surface.
 
 Checkout uses Stripe's dynamic payment-method selection and never exposes a Checkout Session URL,
 Session ID, checkout reference, policy, or readiness evidence on a public page. The older Payment
-Link create/lifecycle contracts are retained only as disabled legacy replay artifacts.
+Link create/lifecycle code has been replaced by unconditional throw-only retirement shims.
 
 `ARC_STRIPE_LIVE_MODE_ENABLED` is fail-closed: missing or `false` selects test-mode contracts, and
 only exact `true` selects live credentials and resources. This repository leaves live events,
@@ -172,7 +176,7 @@ Checkout Session creation, legacy Payment Link mutation, and real charges off.
 `checkout.session.completed` and `checkout.session.async_payment_succeeded` are notifications, not
 payment proof. ARC2 retrieves the authenticated configured-mode Session with expanded line-item
 taxes and verifies paid status, the exact private V4 reverse reservation, line item, destination
-tax, Product tax-code readback, address, names, adult
+tax, Product tax-code readback, address, adult
 acknowledgement, retained terms digest, tax-registration snapshot, and immutable five-page source
 before fulfillment may advance. The expanded tax amounts must reconcile to the Session total, and a
 zero-tax result must carry a recognized Stripe `taxability_reason`. The ambiguous `not_collecting`

@@ -245,6 +245,11 @@ for (const fixture of allFixtures) {
   assert.equal(snapshot.offer_contract_id, offerContractId);
   assert.equal(snapshot.deliverable, deliverable);
   assert.equal(snapshot.page_count, 5);
+  assert.equal(snapshot.customer_creation, "always");
+  assert.equal(snapshot.submit_type, "pay");
+  assert.equal(Object.hasOwn(snapshot, "name_collection"), false);
+  assert.equal(Object.hasOwn(snapshot, "name_collection_required"), false);
+  assert.equal(Object.hasOwn(snapshot, "billing_address_collection"), false);
   assert.deepEqual(snapshot.preview_paths, exactArtifactPreviewPaths(output.preview_folder));
   assert.equal(snapshot.approval_content_sha256, output.approval_content_sha256);
   assert.equal(snapshot.published_preview_bundle_sha256, output.published_preview_bundle_sha256);

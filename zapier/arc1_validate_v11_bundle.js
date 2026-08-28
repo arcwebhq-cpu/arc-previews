@@ -525,7 +525,7 @@ const offerFields = [
   "adult_acknowledgement_key", "amount_subtotal_minor_units", "approval_content_sha256", "asset_publication_receipt_sha256",
   "automatic_tax_enabled", "checkout_binding_key_id", "checkout_redirect_url", "configuration_sha256", "currency",
   "customer_address_source", "deliverable", "environment", "lead_route_form_name", "lead_route_mode", "lead_route_recipient_hmac_sha256",
-  "livemode", "name_collection_required", "offer_contract_id", "page_count", "preview_folder", "preview_paths", "preview_source_repository",
+  "customer_creation", "livemode", "offer_contract_id", "page_count", "preview_folder", "preview_paths", "preview_source_repository",
   "price_id", "price_tax_behavior", "product_id", "product_tax_code", "production_content_sha256", "public_folder_prefix",
   "published_preview_bundle_sha256", "quantity", "render_bundle_sha256", "scope", "stripe_account_id_sha256", "stripe_api_version",
   "submit_type", "tax_contract_version", "tax_registrations", "tax_registrations_sha256", "tax_settings_status", "terms_document_sha256",
@@ -550,7 +550,7 @@ if (offerSha !== clean(inputData.checkout_offer_snapshot_sha256).toLowerCase() |
     offer.customer_address_source !== "stripe_checkout_customer_details.address" || offer.price_tax_behavior !== "exclusive" ||
     offer.tax_contract_version !== "arc-tax-v1" || offer.tax_settings_status !== "active" ||
     !Array.isArray(offer.tax_registrations) || !offer.tax_registrations.length || offer.tax_registrations.length > 100 ||
-    offer.adult_acknowledgement_key !== "adultpurchaserack" || offer.name_collection_required !== true || offer.submit_type !== "auto" ||
+    offer.adult_acknowledgement_key !== "adultpurchaserack" || offer.customer_creation !== "always" || offer.submit_type !== "pay" ||
     offer.checkout_redirect_url !== "https://arcweb.onl/payment-success/?session_id={CHECKOUT_SESSION_ID}" ||
     offer.stripe_api_version !== "2026-07-29.dahlia" || !/^price_[A-Za-z0-9]+$/.test(offer.price_id) ||
     !/^prod_[A-Za-z0-9]+$/.test(offer.product_id) || !/^txcd_[0-9]{8}$/.test(offer.product_tax_code) ||
@@ -566,7 +566,7 @@ const stableCheckout = {
   price_tax_behavior: offer.price_tax_behavior, product_tax_code: offer.product_tax_code, tax_contract_version: offer.tax_contract_version,
   tax_settings_status: offer.tax_settings_status, tax_registrations: offer.tax_registrations,
   tax_registrations_sha256: offer.tax_registrations_sha256, adult_acknowledgement_key: offer.adult_acknowledgement_key,
-  name_collection_required: offer.name_collection_required, submit_type: offer.submit_type,
+  customer_creation: offer.customer_creation, submit_type: offer.submit_type,
   checkout_redirect_url: offer.checkout_redirect_url, stripe_api_version: offer.stripe_api_version
 };
 if (await sha256(canonicalJson(stableCheckout)) !== offer.configuration_sha256 ||

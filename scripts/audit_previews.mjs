@@ -212,10 +212,12 @@ assert.equal(launchCompositions.size, 5, "The five launch niches must use five d
 const legacyV10Validator = await readFile(path.join(root, "arc_step7_validator.js"), "utf8");
 const v11BundleValidator = await readFile(path.join(root, "zapier/arc1_validate_v11_bundle.js"), "utf8");
 const contentSanitizer = await readFile(path.join(root, "scripts/content_sanitizer.mjs"), "utf8");
+const legacyPaymentLinkFinalizer = await readFile(path.join(root, "scripts/finalize_site.mjs"), "utf8");
 const arc1 = await readFile(path.join(root, "zapier/arc1_inject.js"), "utf8");
 const arc1CheckoutOffer = await readFile(path.join(root, "zapier/arc1_verify_checkout_offer.js"), "utf8");
 const legacyArc1PaymentLink = await readFile(path.join(root, "zapier/arc1_verify_payment_link.js"), "utf8");
 const arc1PrivateCheckout = await readFile(path.join(root, "zapier/arc1_private_checkout_link.js"), "utf8");
+const arc1PrivateCheckoutLifecycle = await readFile(path.join(root, "zapier/arc1_private_checkout_lifecycle.js"), "utf8");
 const arc2 = await readFile(path.join(root, "zapier/arc2_checkout_session_artifact_adapter.js"), "utf8");
 const retiredArc2Resolver = await readFile(path.join(root, "zapier/arc2_resolve_and_finalize.js"), "utf8");
 const arc2LeadRouteVerifier = await readFile(path.join(root, "zapier/arc2_verify_lead_route_staging.js"), "utf8");
@@ -226,9 +228,10 @@ const arc2PrPublisher = await readFile(path.join(root, "zapier/arc2_publish_deli
 const arc2PrMerge = await readFile(path.join(root, "zapier/arc2_merge_delivery_pr.js"), "utf8");
 const arc2EmailGate = await readFile(path.join(root, "zapier/arc2_delivery_email_gate.js"), "utf8");
 const arc2CustomerControl = await readFile(path.join(root, "zapier/arc2_verify_customer_control.js"), "utf8");
+const activationRunbook = await readFile(path.join(root, "zapier/activation-runbook.md"), "utf8");
 new Function("inputData", legacyV10Validator);
 new Function("inputData", `return (async () => {${v11BundleValidator}})()`);
-for (const source of [arc1, arc1CheckoutOffer, legacyArc1PaymentLink, arc1PrivateCheckout, arc2, retiredArc2Resolver, arc1PrPublisher, arc1PrMerge, arc1EmailGate, arc2LeadRouteVerifier, arc2PrPublisher, arc2PrMerge, arc2EmailGate, arc2CustomerControl]) {
+for (const source of [arc1, arc1CheckoutOffer, legacyArc1PaymentLink, arc1PrivateCheckout, arc1PrivateCheckoutLifecycle, arc2, retiredArc2Resolver, arc1PrPublisher, arc1PrMerge, arc1EmailGate, arc2LeadRouteVerifier, arc2PrPublisher, arc2PrMerge, arc2EmailGate, arc2CustomerControl]) {
   new Function("inputData", "fetch", "Buffer", `return (async () => {${source}})()`);
 }
 assert.ok(legacyV10Validator.includes("customer_email_not_exposed_pass"), "Legacy V10 validator does not block requester-email exposure");
@@ -287,18 +290,38 @@ assert.match(arc1CheckoutOffer, /tax\/registrations/, "ARC1 Checkout Session off
 assert.match(arc1CheckoutOffer, /price\.tax_behavior/, "ARC1 Checkout Session offer preflight does not require exclusive tax behavior");
 assert.match(arc1CheckoutOffer, /product\.tax_code/, "ARC1 Checkout Session offer preflight does not verify the Product tax code");
 assert.match(arc1CheckoutOffer, /adultpurchaserack/, "ARC1 Checkout Session offer preflight uses an invalid or stale custom-field key");
+assert.match(arc1CheckoutOffer, /customer_creation:\s*"always"/, "ARC1 Checkout Session offer preflight does not bind customer_creation=always");
+assert.match(arc1CheckoutOffer, /submit_type:\s*"pay"/, "ARC1 Checkout Session offer preflight does not bind submit_type=pay");
+assert.doesNotMatch(arc1CheckoutOffer, /name_collection_required|billing_address_collection/,
+  "ARC1 Checkout Session offer preflight binds a field omitted by the canonical Session request");
 assert.match(arc1CheckoutOffer, /price\.active !== true/, "ARC1 Checkout Session offer preflight does not require an active Price before checkout authorization");
 assert.doesNotMatch(arc1CheckoutOffer, /payment[_ -]?link|buy\.stripe\.com|\bplink_|\/v1\/checkout\/sessions/i,
   "Active Checkout Session offer preflight reads, mutates, or exposes checkout capability");
-assert.doesNotMatch(arc1PrivateCheckout, /set\("payment_method_types|payment_method_types\[0\]/,
-  "Private checkout creation pins payment methods instead of allowing Stripe dynamic payment methods");
 assert.match(arc1CheckoutOffer, /checkout_redirect_url:\s*redirectUrl/, "ARC1 Checkout Session offer preflight does not bind the exact success redirect");
 assert.match(arc1CheckoutOffer, /https:\/\/arcweb\.onl\/payment-success\/\?session_id=\{CHECKOUT_SESSION_ID\}/, "ARC1 Checkout Session offer preflight does not pin the static ARC payment-success URL");
-assert.match(arc1PrivateCheckout, /restrictions\[completed_sessions\]\[limit\]",\s*"1"/, "Private checkout creation does not enforce a one-completed-Session Link");
-assert.match(arc1PrivateCheckout, /private_checkout_provider_mutation_enabled/, "Private checkout provider mutation lacks a distinct default-off gate");
-assert.match(arc1PrivateCheckout, /private_checkout_ready_tag_mutation_enabled/, "Private checkout READY tag mutation lacks a distinct default-off gate");
-assert.match(arc1PrivateCheckout, /arc-checkout-ready-v4/, "Private checkout does not create the post-readiness immutable five-page READY tag");
-assert.match(arc1PrivateCheckout, /link_reverse_state_write_required/, "Private checkout does not require a durable Link-ID reverse mapping before activation");
+assert.match(legacyArc1PaymentLink, /throw new Error\("ARC1_LEGACY_PAYMENT_LINK_VERIFIER_RETIRED:/,
+  "Legacy Payment Link verifier is not an unconditional retirement shim");
+assert.match(arc1PrivateCheckout, /throw new Error\("ARC1_LEGACY_PAYMENT_LINK_RETIRED:/,
+  "Legacy Payment Link writer is not an unconditional retirement shim");
+assert.match(arc1PrivateCheckoutLifecycle, /throw new Error\("ARC1_LEGACY_PAYMENT_LINK_LIFECYCLE_RETIRED:/,
+  "Legacy Payment Link lifecycle is not an unconditional retirement shim");
+assert.doesNotMatch(`${legacyArc1PaymentLink}\n${arc1PrivateCheckout}\n${arc1PrivateCheckoutLifecycle}`,
+  /\binputData\b|\bfetch\s*\(|api\.stripe\.com|\/v1\/payment_links|stripe_api_key|payment_link_id|\bplink_|buy\.stripe\.com/i,
+  "A retired ARC1 Payment Link component retains executable provider or lifecycle logic");
+for (const name of (await readdir(path.join(root, "zapier"))).filter(name => name.endsWith(".js"))) {
+  const source = await readFile(path.join(root, "zapier", name), "utf8");
+  assert.doesNotMatch(source, /\/v1\/payment_links/i,
+    `${name} retains an executable Stripe Payment Links provider endpoint`);
+}
+assert.match(activationRunbook, /unconditional retirement shims/,
+  "Activation runbook still implies that a legacy Payment Link component can run");
+assert.match(activationRunbook, /cannot be activated by any\s+flag/,
+  "Activation runbook does not prohibit every legacy Payment Link activation path");
+assert.match(legacyPaymentLinkFinalizer, /throw new Error\("ARC_LEGACY_PAYMENT_LINK_FINALIZER_RETIRED:/,
+  "Legacy singular-site Payment Link finalizer is not an unconditional retirement shim");
+assert.doesNotMatch(legacyPaymentLinkFinalizer,
+  /\bprocess\.argv\b|\bwriteFile\s*\(|payment_link_id|\bplink_|buy\.stripe\.com/i,
+  "Retired singular-site finalizer retains executable Payment Link-era delivery logic");
 assert.match(arc2, /ARC2_CHECKOUT_SESSION_ADAPTER_PAUSED/, "ARC2 Checkout Session artifact adapter is not default-OFF");
 assert.doesNotMatch(arc2, /api\.stripe\.com|stripe_api_key|private_link_reverse_state|payment_link_id|buy\.stripe\.com|\bplink_/i,
   "ARC2 artifact adapter still reads Stripe or a retired Payment Link authority");
@@ -320,6 +343,10 @@ assert.doesNotMatch(arc2, /payment_evidence\s*:/,
 // while rewriting them into the self-contained Netlify bundle; it must then
 // reject any remaining preview-host dependency before signing artifacts.
 assert.match(arc2, /arc-checkout-offer-snapshot-v2/, "ARC2 does not require the immutable Checkout Session offer snapshot");
+assert.match(arc2, /offer\.customer_creation !== "always"/, "ARC2 does not require customer_creation=always");
+assert.match(arc2, /offer\.submit_type !== "pay"/, "ARC2 does not require submit_type=pay");
+assert.doesNotMatch(arc2, /name_collection_required|billing_address_collection/,
+  "ARC2 binds a field omitted by the canonical Session request");
 assert.match(arc2, /html = html\.split\(asset\.sourceUrl\)\.join\(`\/\$\{asset\.path\}`\)/, "ARC2 does not rewrite exact signed preview asset URLs to local bundle paths");
 assert.match(arc2, /arcwebhq-cpu\\\.github\\\.io\\\/arc-previews/, "ARC2 does not reject remaining preview-host dependencies before signing");
 assert.match(arc2, /preview_source_commit_sha:\s*sourceCommitSha/, "ARC2 does not expose its immutable preview-source commit binding");
@@ -353,23 +380,10 @@ assert.match(arc1EmailGate, /checkout_url_exposure_allowed:\s*false/, "ARC1 publ
 for (const [label, source] of [["publisher", arc2PrPublisher], ["merge", arc2PrMerge], ["customer control", arc2CustomerControl]]) {
   assert.match(source.split("\n").slice(0, 4).join("\n"), /ARC_LEGACY_HANDOFF_DISABLED/, `Legacy ARC2 ${label} does not fail closed before work`);
 }
-assert.match(arc2EmailGate, /email_claim_binding_secret/, "ARC2 delivery-email recipient claim lacks a private binding secret");
-assert.match(arc2EmailGate, /durable_outbox_claim_verified:\s*true/, "ARC2 email does not require the already-durable CLAIMED outbox authority");
-assert.match(arc2EmailGate, /state_write_required_before_email:\s*false/, "ARC2 email incorrectly requires a second pre-send write after the CLAIMED outbox is verified");
-assert.match(arc2EmailGate, /sent_state_write_required_after_provider_ack:\s*true/, "ARC2 email does not require the post-provider SENT transition");
-assert.match(arc2EmailGate, /outbox_claim_key_hmac_sha256:\s*emailClaimKeyHmacSha256/, "ARC2 email does not return the authenticated outbox key for the SENT transition");
-assert.match(arc2EmailGate, /arc2-claim-state-evidence-signature-v3/, "ARC2 email lacks fresh signed deploy-and-claim send authority");
-assert.match(arc2EmailGate, /netlify-deploy-and-claim-final-deploy/, "ARC2 email uses the wrong claim-state scope");
-assert.match(arc2EmailGate, /artifact manifest SHA-256 mismatch/, "ARC2 email does not recompute the artifact manifest hash");
-assert.match(arc2EmailGate, /arc2-payment-evidence-signature-v4/, "ARC2 email does not verify v4 five-page payment evidence");
-assert.match(arc2EmailGate, /arc-private-checkout-policy-v2/, "ARC2 email does not bind the immutable five-page private checkout policy");
-assert.match(arc2EmailGate, /retired_checkout_binding_keys_json/, "ARC2 email cannot verify retained checkout binding keys");
-assert.match(arc2EmailGate, /recipient is not the reserved claim recipient/, "ARC2 email does not bind delivery to the reserved claim recipient");
-assert.doesNotMatch(arc2EmailGate, /expected_payment_link_id|expectedPriceId|expected_product_tax_code/, "ARC2 email still depends on mutable current checkout configuration");
-assert.match(arc2EmailGate, /stripe_account_id_sha256/, "ARC2 email does not bind the authenticated ARC Stripe account hash");
-assert.match(arc2EmailGate, /authoritative-stripe-checkout-session/, "ARC2 email does not require authoritative Checkout Session evidence");
-assert.match(arc2EmailGate, /payment_evidence_sha256/, "ARC2 email is not bound to payment evidence");
-assert.doesNotMatch(arc2EmailGate, /WAITING_FOR_PAGES|pages_base_url|github\.io/i, "ARC2 email still depends on public Pages delivery");
-assert.doesNotMatch(arc2EmailGate, /businessName/, "ARC2 email interpolates an unbound business name");
+assert.match(arc2EmailGate, /throw new Error\("ARC2_LEGACY_DELIVERY_EMAIL_GATE_RETIRED:/,
+  "Legacy Zapier delivery-email gate is not an unconditional retirement shim");
+assert.doesNotMatch(arc2EmailGate,
+  /\binputData\b|\bfetch\s*\(|api\.stripe\.com|stripe_api_key|payment_link_id|\bplink_|buy\.stripe\.com|send_delivery_email/i,
+  "Retired Zapier delivery-email gate retains executable Payment Link-era policy");
 
 console.log(`Static audit passed: ${previewFiles.length}/${previewFiles.length} unlisted noindex previews, ${showcaseManifest.length} inert public showcase aliases, zero public paid-delivery artifacts, ${qaFiles.length} legacy QA sites, ${launchFixtures.length} launch fixtures, and ${v10Manifest.length} total v10 profile fixtures.`);

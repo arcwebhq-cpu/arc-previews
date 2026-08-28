@@ -415,17 +415,13 @@
     ],
     "legacy_pre_review_payment_link": {
       "legacy_only": true,
+      "status": "retired-unconditional-fail-closed",
       "allowed_in_active_v11_order": false,
-      "all_provider_mutations_enabled": false,
-      "steps": [
-        "zapier/arc1_verify_payment_link.js",
-        "zapier/arc1_private_checkout_link.js#PREPARE",
-        "zapier/arc1_private_checkout_link.js#AUTHORIZE_MUTATION",
-        "zapier/arc1_private_checkout_link.js#CREATE",
-        "zapier/arc1_private_checkout_link.js#PERSIST_REVERSE",
-        "zapier/arc1_private_checkout_link.js#ACTIVATE",
-        "zapier/arc1_private_checkout_link.js#FINALIZE"
-      ]
+      "provider_execution_allowed": false,
+      "provider_endpoint_present": false,
+      "writer_source": "zapier/arc1_private_checkout_link.js",
+      "retirement_error": "ARC1_LEGACY_PAYMENT_LINK_RETIRED",
+      "compatibility_evidence": "zapier/receipt-v1-clean-cutover.json"
     },
     "publish_mode": "pull-request-only",
     "direct_main_publish_allowed": false,
@@ -846,56 +842,32 @@
     },
     "private_checkout_link": {
       "legacy_only": true,
-    "source": "zapier/arc1_private_checkout_link.js",
-    "automation_enabled": false,
-    "provider_mutation_enabled": false,
-    "private_url_exposure_enabled": false,
-    "ready_tag_mutation_enabled": false,
-    "durable_cas_adapter_verified": false,
-    "states": ["PREPARED", "MUTATION_STARTED", "LINK_CREATED", "ACTIVE"],
-    "phases": ["PREPARE", "AUTHORIZE_MUTATION", "CREATE", "PERSIST_REVERSE", "ACTIVATE", "FINALIZE"],
-    "offer_snapshot_version": "arc-checkout-offer-snapshot-v2",
-    "recipient_reservation_version": "arc1-checkout-recipient-reservation-v2",
-    "readiness_core_version": "arc1-preview-readiness-core-v2",
-    "readiness_observation_version": "arc1-preview-readiness-observation-v2",
-    "checkout_policy_version": "arc-private-checkout-policy-v2",
-    "checkout_reference_version": "arc-checkout-reference-v4",
-    "offer_contract_id": "arc-fixed-five-page-offer-v1",
-    "deliverable": "fixed-five-page-marketing-website-v1",
-    "page_count": 5,
-    "preview_path_order": ["about/index.html", "contact/index.html", "process/index.html", "services/index.html", "index.html"],
-    "create_before_provider_mutation_required": true,
-    "mutation_latch_exact_schema_hmac_required": true,
-    "bounded_cursor_reconciliation_required": true,
-    "one_use_completed_sessions_limit": 1,
-    "payment_method_selection": "dynamic",
-    "reverse_index_authority": "authenticated-session-payment-link-id-to-v4-reference",
-    "client_reference_id_authoritative": false,
-    "public_link_url_or_reference_allowed": false,
-    "renewable_provider_offer_readiness_verified": true,
-    "offer_expiry_and_link_deactivation_verified": true,
-    "unpaid_link_lifecycle": {
-      "source": "zapier/arc1_private_checkout_lifecycle.js",
-      "contract_verified": true,
-      "lifecycle_enabled": false,
-      "state_commit_enabled": false,
-      "deactivation_adapter_enabled": false,
-      "renewal_adapter_enabled": false,
-      "provider_adapter_live_verified": false,
-      "provider_adapter_direct_network_access_allowed": false,
-      "checkout_url_output_allowed": false,
-      "states": ["ACTIVE", "DEACTIVATION_AUTHORIZED", "DEACTIVATED", "RENEWAL_AUTHORIZED"],
-      "phases": ["ENROLL_ACTIVE", "REQUEST_DEACTIVATION", "CONFIRM_DEACTIVATION", "AUTHORIZE_RENEWAL", "FINALIZE_RENEWAL"],
-      "maximum_link_ttl_seconds": 604800,
-      "maximum_renewal_preflight_age_seconds": 120,
-      "deactivation_requires_active_false_readback": true,
-      "deactivation_requires_completed_sessions_count_zero": true,
-      "renewal_requires_distinct_link_id": true,
-      "precreate_offer_tax_and_readiness_rerun_required": true,
-      "postcreate_prefinalize_offer_tax_and_readiness_rerun_required": true,
-      "payment_method_selection": "dynamic"
-    }
-  },
+      "source": "zapier/arc1_private_checkout_link.js",
+      "status": "retired-unconditional-fail-closed-shim",
+      "retirement_error": "ARC1_LEGACY_PAYMENT_LINK_RETIRED",
+      "executable": false,
+      "allowed_in_active_v11_order": false,
+      "provider_execution_allowed": false,
+      "network_access_allowed": false,
+      "payment_link_endpoint_present": false,
+      "compatibility_evidence": {
+        "source": "zapier/receipt-v1-clean-cutover.json",
+        "legacy_receipts_accepted": false,
+        "regeneration_required": true
+      },
+      "legacy_verifier": {
+        "source": "zapier/arc1_verify_payment_link.js",
+        "status": "retired-unconditional-fail-closed-shim",
+        "retirement_error": "ARC1_LEGACY_PAYMENT_LINK_VERIFIER_RETIRED",
+        "executable": false
+      },
+      "legacy_lifecycle": {
+        "source": "zapier/arc1_private_checkout_lifecycle.js",
+        "status": "retired-unconditional-fail-closed-shim",
+        "retirement_error": "ARC1_LEGACY_PAYMENT_LINK_LIFECYCLE_RETIRED",
+        "executable": false
+      }
+    },
     "private_state": {
       "provider": "encrypted-private-CAS-adapter",
       "provider_selected": false,
@@ -1104,8 +1076,7 @@
       "fresh_v3_or_mixed_pair_allowed": false,
       "exact_frozen_existing_v3_replay_only": true,
       "adult_acknowledgement_key": "adultpurchaserack",
-      "adult_acknowledgement_value": "accepted",
-      "required_collected_names": ["business_name", "individual_name"]
+      "adult_acknowledgement_value": "accepted"
     },
     "checkout_configuration": {
     "checkout_session_url_public": null,
@@ -1122,16 +1093,12 @@
         "option_label": "I confirm",
         "option_value": "accepted"
       },
-      "name_collection": {
-        "business": { "enabled": true, "optional": false },
-        "individual": { "enabled": true, "optional": false }
-      },
       "automatic_tax_enabled": true,
       "active_tax_registration_readback_required": true,
       "washington_sales_tax_registration_required_before_arc_sale": true,
       "destination_address_source": "stripe_checkout_customer_details.address",
       "product_tax_code_advisor_confirmation_required": true,
-      "submit_type": "auto",
+      "submit_type": "pay",
     "payment_method_selection": "dynamic",
       "promotion_codes_allowed": false,
       "optional_items_allowed": false,
@@ -1139,8 +1106,7 @@
       "adjustable_quantity_enabled": false,
       "phone_collection_enabled": false,
       "invoice_creation_enabled": false,
-      "customer_creation": "if_required",
-      "billing_address_collection": "required",
+      "customer_creation": "always",
       "shipping_address_collection_enabled": false,
       "tax_id_collection_enabled": false,
     "terms_version_metadata_source": "signed-private-policy",
@@ -1278,6 +1244,14 @@
       "allowed_in_active_v11_flow": false,
       "provider_execution_allowed": false,
       "replacement_status": "replaced-by-default-off-checkout-session-artifact-adapter"
+    },
+    "retired_delivery_email_gate": {
+      "source": "zapier/arc2_delivery_email_gate.js",
+      "status": "retired-unconditional-fail-closed-shim",
+      "retirement_error": "ARC2_LEGACY_DELIVERY_EMAIL_GATE_RETIRED",
+      "allowed_in_active_v11_flow": false,
+      "executable": false,
+      "replacement": "arc-site/netlify/lib/arc2-transactional-email-worker-core.mjs"
     },
     "legacy_steps_fail_closed": true,
     "fulfillment_idempotency": {
@@ -1621,7 +1595,6 @@
     "satisfies_required_test_scenarios": false,
     "stripe_mode": "test",
     "stripe_api_version": "2026-07-29.dahlia",
-    "billing_address_collection": "required",
     "niches": ["roofing", "hvac", "remodeling", "landscaping", "auto-detailing"],
     "scenarios": ["paid-happy-path", "duplicate-replay", "unpaid-then-async-success", "expiry-deactivation-renewal", "refund-and-dispute-halt"]
   },

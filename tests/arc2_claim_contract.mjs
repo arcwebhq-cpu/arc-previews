@@ -158,8 +158,8 @@ function buildScenario(options = {}) {
     tax_registrations: taxRegistrations,
     tax_registrations_sha256: digest(canonicalJson(taxRegistrations)),
     adult_acknowledgement_key: "adultpurchaserack",
-    name_collection_required: true,
-    submit_type: "auto",
+    customer_creation: "always",
+    submit_type: "pay",
     checkout_redirect_url: "https://arcweb.onl/payment-success/?session_id={CHECKOUT_SESSION_ID}",
     stripe_api_version: "2026-07-29.dahlia"
   };
@@ -390,6 +390,10 @@ function mockFetch(scenario, { completedReplay = false, corruptAsset = false, om
 
 assert.doesNotThrow(() => new AsyncFunction("inputData", "fetch", "Buffer", source));
 assert.doesNotMatch(source, /api\.stripe\.com|stripe_api_key|private_link_reverse_state|payment_link_id|buy\.stripe\.com|\bplink_/i);
+assert.match(source, /offer\.customer_creation !== "always"/);
+assert.match(source, /offer\.submit_type !== "pay"/);
+assert.doesNotMatch(source, /name_collection_required|billing_address_collection/,
+  "the active ARC2 signed offer consumer must match the canonical Session request");
 assert.match(source, /\/internal\/payment-arc2\/start/);
 assert.match(source, /ARC2_CHECKOUT_SESSION_ADAPTER_PAUSED/);
 assert.doesNotMatch(retiredSource, /api\.stripe\.com|stripe_api_key|private_link_reverse_state|buy\.stripe\.com|\bplink_/i);

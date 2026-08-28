@@ -36,21 +36,18 @@ for(const [name,source,args] of [
   ["delivery gate",deliveryGate,["inputData","Buffer"]]
 ])assert.doesNotThrow(()=>new AsyncFunction(...args,source),`${name} Code step must compile`);
 
-for(const source of [privateCheckout,siteCore,deliveryGate]){
+for(const source of [siteCore]){
   assert.match(source,/arc-private-checkout-policy-v2/);
   assert.match(source,/arc2-payment-evidence-v4|arc-checkout-reference-v4/);
 }
-assert.doesNotMatch(privateCheckout,/payment_method_types/);
+assert.match(privateCheckout,/throw new Error\("ARC1_LEGACY_PAYMENT_LINK_RETIRED:/);
+assert.match(privateCheckoutLifecycle,/throw new Error\("ARC1_LEGACY_PAYMENT_LINK_LIFECYCLE_RETIRED:/);
+assert.doesNotMatch(`${privateCheckout}\n${privateCheckoutLifecycle}`,
+  /\binputData\b|\bfetch\s*\(|api\.stripe\.com|\/v1\/payment_links|stripe_api_key|payment_link_id|\bplink_|buy\.stripe\.com/i);
 assert.doesNotMatch(artifactAdapter,/api\.stripe\.com|stripe_api_key|private_link_reverse_state|payment_link_id|buy\.stripe\.com|\bplink_|payment_method_types/i);
 assert.match(retiredResolver,/throw new Error\("ARC2_RETIRED_RESOLVER:/);
 assert.doesNotMatch(retiredResolver,/api\.stripe\.com|stripe_api_key|private_link_reverse_state|payment_link_id|buy\.stripe\.com|\bplink_/i);
 assert.doesNotMatch(siteCore,/payment_method_types|payment_methods/);
-assert.match(privateCheckout,/completed_sessions\]\[limit\].*1/s);
-assert.match(privateCheckout,/state_hmac_sha256/);
-assert.match(privateCheckout,/starting_after/);
-assert.match(privateCheckoutLifecycle,/DEACTIVATION_AUTHORIZED/);
-assert.match(privateCheckoutLifecycle,/rerun offer and tax readiness immediately before/);
-assert.doesNotMatch(privateCheckoutLifecycle,/api\.stripe\.com|stripe_api_key|\bfetch\s*\(|payment_method_types/i);
 assert.match(artifactAdapter,/arc-checkout-offer-snapshot-v2/);
 assert.match(artifactAdapter,/arc2-handoff-artifact-evidence-v4/);
 assert.match(artifactAdapter,/https:\/\/arcweb\.onl\/internal\/payment-arc2\/start/);
@@ -68,23 +65,21 @@ assert.match(siteService,/checkout-reference-index/);
 assert.match(siteService,/duplicate-payment-review/);
 assert.match(siteService,/assertHandoffFulfillmentAllowed/);
 assert.match(siteStart,/reversal_control_ready/);
-assert.match(deliveryGate,/retired_checkout_binding_keys_json/);
-assert.match(deliveryGate,/selectedCheckoutSecret/);
-assert.match(deliveryGate,/reserved claim recipient/);
-assert.doesNotMatch(deliveryGate,/expected_payment_link_id|expectedPriceId|arc2-payment-evidence-signature-v[23]/);
+assert.match(deliveryGate,/throw new Error\("ARC2_LEGACY_DELIVERY_EMAIL_GATE_RETIRED:/);
+assert.doesNotMatch(deliveryGate,
+  /\binputData\b|\bfetch\s*\(|api\.stripe\.com|stripe_api_key|payment_link_id|\bplink_|buy\.stripe\.com|send_delivery_email/i);
 
 assert.equal(wiring.live_complete,false);
-assert.equal(wiring.arc1.private_checkout_link.automation_enabled,false);
-assert.equal(wiring.arc1.private_checkout_link.provider_mutation_enabled,false);
-assert.equal(wiring.arc1.private_checkout_link.private_url_exposure_enabled,false);
-assert.equal(wiring.arc1.private_checkout_link.ready_tag_mutation_enabled,false);
-assert.equal(wiring.arc1.private_checkout_link.durable_cas_adapter_verified,false);
-assert.deepEqual(wiring.arc1.private_checkout_link.phases,["PREPARE","AUTHORIZE_MUTATION","CREATE","PERSIST_REVERSE","ACTIVATE","FINALIZE"]);
-assert.equal(wiring.arc1.private_checkout_link.payment_method_selection,"dynamic");
-assert.equal(wiring.arc1.private_checkout_link.unpaid_link_lifecycle.lifecycle_enabled,false);
-assert.equal(wiring.arc1.private_checkout_link.unpaid_link_lifecycle.deactivation_adapter_enabled,false);
-assert.equal(wiring.arc1.private_checkout_link.unpaid_link_lifecycle.renewal_adapter_enabled,false);
-assert.equal(wiring.arc1.private_checkout_link.unpaid_link_lifecycle.provider_adapter_live_verified,false);
+assert.equal(wiring.arc1.private_checkout_link.status,"retired-unconditional-fail-closed-shim");
+assert.equal(wiring.arc1.private_checkout_link.executable,false);
+assert.equal(wiring.arc1.private_checkout_link.provider_execution_allowed,false);
+assert.equal(wiring.arc1.private_checkout_link.network_access_allowed,false);
+assert.equal(wiring.arc1.private_checkout_link.payment_link_endpoint_present,false);
+assert.equal(wiring.arc1.private_checkout_link.legacy_verifier.executable,false);
+assert.equal(wiring.arc1.private_checkout_link.legacy_lifecycle.executable,false);
+assert.equal(wiring.arc1.ordered_steps.includes("arc-site/review-checkout:create-one-approved-private-checkout-session"),true);
+assert.equal(wiring.arc2.retired_delivery_email_gate.executable,false);
+assert.equal(wiring.arc2.final_delivery_email.source,"arc-site/netlify/lib/arc2-transactional-email-worker-core.mjs");
 assert.equal(wiring.arc2.payment_evidence_gate.evidence_version,"arc2-payment-evidence-v4");
 assert.equal(wiring.arc2.artifact_evidence_gate.evidence_version,"arc2-handoff-artifact-evidence-v4");
 assert.equal(wiring.provider_deployment_v11.roles.arc2.checkout_session_evidence_adapter,

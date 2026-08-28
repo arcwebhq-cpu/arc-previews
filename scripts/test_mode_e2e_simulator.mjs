@@ -11,6 +11,10 @@ export const SYNTHETIC_HTML_PATHS = Object.freeze([
 ]);
 
 const SUPPORTED_NICHES = new Set(["roofing", "hvac", "remodeling", "landscaping", "auto_detailing"]);
+const CHECKOUT_EVENTS = new Set([
+  "checkout.session.completed",
+  "checkout.session.async_payment_succeeded"
+]);
 const REVERSAL_EVENTS = new Set([
   "charge.dispute.created",
   "charge.dispute.updated",
@@ -32,7 +36,6 @@ const canonicalJson = value => {
   }
   throw new TypeError("ARC_SYNTHETIC_E2E_INVALID: canonical JSON value");
 };
-
 const sha256 = value => createHash("sha256").update(value).digest("hex");
 const exactIso = (value, label) => {
   const milliseconds = Date.parse(value);
@@ -41,7 +44,7 @@ const exactIso = (value, label) => {
   }
   return milliseconds;
 };
-const assertTestIdentifier = (value, pattern, label) => {
+const assertIdentifier = (value, pattern, label) => {
   if (!pattern.test(String(value ?? ""))) throw new TypeError(`ARC_SYNTHETIC_E2E_INVALID: ${label}`);
 };
 
@@ -69,7 +72,7 @@ export function createSyntheticStripeTestHandoffSimulator({
   const processedEvents = new Map();
   const paidSessions = new Map();
   let state = "PREVIEW_READY";
-  let activeLink = null;
+  let checkout = null;
   let lastPayment = null;
   let handoff = null;
   let handoffCount = 0;
@@ -89,68 +92,74 @@ export function createSyntheticStripeTestHandoffSimulator({
     if (value.livemode !== false) throw new Error("ARC_SYNTHETIC_E2E_BLOCKED: simulator accepts test mode only");
   };
 
-  const activateLink = configuration => {
+  const authorizeCheckout = configuration => {
+    if (state !== "PREVIEW_READY") throw new Error("ARC_SYNTHETIC_E2E_BLOCKED: checkout authorization is single-use");
     if (configuration?.payment_method_types !== undefined || configuration?.payment_method_selection !== "dynamic") {
       throw new Error("ARC_SYNTHETIC_E2E_BLOCKED: Stripe dynamic payment methods are required");
     }
-    if (configuration.checkout_policy_version !== "arc-private-checkout-policy-v2" ||
-        configuration.offer_contract_id !== "arc-fixed-five-page-offer-v1" ||
+    if (configuration.payment_link !== null) {
+      throw new Error("ARC_SYNTHETIC_E2E_BLOCKED: V11 Checkout Session payment_link must be null");
+    }
+    if (configuration.offer_contract_id !== "arc-fixed-five-page-offer-v1" ||
         configuration.deliverable !== "fixed-five-page-marketing-website-v1" || configuration.page_count !== 5 ||
+        configuration.amount_subtotal_minor_units !== SYNTHETIC_SUBTOTAL_MINOR_UNITS || configuration.currency !== "usd" ||
         configuration.automatic_tax_enabled !== true || configuration.tax_settings_status !== "active" ||
         !Array.isArray(configuration.active_tax_registration_states) || !configuration.active_tax_registration_states.includes("WA") ||
-        configuration.billing_address_collection !== "required" || configuration.destination_address_required !== true) {
-      throw new Error("ARC_SYNTHETIC_E2E_BLOCKED: active tax registration and destination-address collection are required");
+        configuration.customer_creation !== "always" || configuration.submit_type !== "pay" ||
+        configuration.destination_address_source !== "stripe_checkout_customer_details.address") {
+      throw new Error("ARC_SYNTHETIC_E2E_BLOCKED: canonical private Checkout Session configuration required");
     }
-    assertTestIdentifier(configuration.payment_link_id, /^plink_[A-Za-z0-9]+$/, "Payment Link id");
-    const activatedAt = exactIso(configuration.activated_at, "Link activation");
-    const expiresAt = exactIso(configuration.expires_at, "Link expiry");
-    if (expiresAt <= activatedAt || expiresAt - activatedAt > 7 * 24 * 60 * 60 * 1000) {
-      throw new Error("ARC_SYNTHETIC_E2E_BLOCKED: bounded private Link expiry required");
+    assertIdentifier(configuration.checkout_session_id, /^cs_test_[A-Za-z0-9_]+$/, "Checkout Session id");
+    assertIdentifier(configuration.checkout_reference, /^v4_[A-Za-z0-9_-]{135}$/, "checkout reference");
+    const createdAt = exactIso(configuration.created_at, "checkout creation");
+    const expiresAt = exactIso(configuration.expires_at, "checkout expiry");
+    if (expiresAt <= createdAt || expiresAt - createdAt > 30 * 60 * 1000) {
+      throw new Error("ARC_SYNTHETIC_E2E_BLOCKED: bounded Checkout Session expiry required");
     }
-    activeLink = {
-      paymentLinkId: configuration.payment_link_id,
-      generation: configuration.generation,
-      activatedAt,
+    checkout = {
+      sessionId: configuration.checkout_session_id,
+      reference: configuration.checkout_reference,
+      createdAt,
       expiresAt,
-      active: true,
-      completedSessions: 0,
       taxRegistrationStates: [...configuration.active_tax_registration_states].sort()
     };
-    state = "LINK_ACTIVE";
+    state = "CHECKOUT_AUTHORIZED";
     return snapshot();
   };
 
   const validateSession = session => {
     requireProviderProof(session);
-    assertTestIdentifier(session.id, /^cs_test_[A-Za-z0-9_]+$/, "Checkout Session id");
-    if (!activeLink || session.payment_link_id !== activeLink.paymentLinkId || activeLink.active !== true) {
-      throw new Error("ARC_SYNTHETIC_E2E_BLOCKED: session is not bound to the active private Link");
+    if (!checkout || now().getTime() >= checkout.expiresAt) {
+      throw new Error("ARC_SYNTHETIC_E2E_BLOCKED: fresh approved Checkout Session required");
+    }
+    if (session.id !== checkout.sessionId || session.client_reference_id !== checkout.reference || session.payment_link !== null) {
+      throw new Error("ARC_SYNTHETIC_E2E_BLOCKED: authenticated Session is not the approval-bound private Checkout Session");
     }
     if (session.amount_subtotal !== SYNTHETIC_SUBTOTAL_MINOR_UNITS || !Number.isSafeInteger(session.amount_tax) || session.amount_tax < 0 ||
         session.amount_total !== session.amount_subtotal + session.amount_tax || session.currency !== "usd" ||
         session.automatic_tax_enabled !== true || session.automatic_tax_status !== "complete" ||
-        session.billing_address_complete !== true || session.destination_address_complete !== true ||
-        session.price_tax_behavior !== "exclusive" || session.tax_settings_status !== "active" ||
-        session.tax_registration_snapshot_status !== "active") {
-      throw new Error("ARC_SYNTHETIC_E2E_BLOCKED: authenticated $5,000 plus Stripe Tax session contract failed");
+        session.destination_address_complete !== true || session.price_tax_behavior !== "exclusive" ||
+        session.tax_settings_status !== "active" || session.tax_registration_snapshot_status !== "active") {
+      throw new Error("ARC_SYNTHETIC_E2E_BLOCKED: authenticated $5,000 plus Stripe Tax Session contract failed");
     }
-    if (session.tax_jurisdiction_applies === true && session.amount_tax <= 0) {
-      throw new Error("ARC_SYNTHETIC_E2E_BLOCKED: applicable synthetic tax jurisdiction must produce nonzero tax");
+    if (session.taxability_reason === "standard_rated" && session.amount_tax <= 0) {
+      throw new Error("ARC_SYNTHETIC_E2E_BLOCKED: standard-rated destination must produce nonzero tax");
     }
-    if (session.tax_jurisdiction_applies === false && session.amount_tax !== 0) {
-      throw new Error("ARC_SYNTHETIC_E2E_BLOCKED: non-applicable synthetic tax jurisdiction must remain zero");
+    if (session.taxability_reason === "not_taxable" && session.amount_tax !== 0) {
+      throw new Error("ARC_SYNTHETIC_E2E_BLOCKED: nontaxable destination must remain zero tax");
     }
-    if (session.tax_jurisdiction_applies === true && !activeLink.taxRegistrationStates.includes(session.destination_state)) {
+    if (!["standard_rated", "not_taxable"].includes(session.taxability_reason)) {
+      throw new Error("ARC_SYNTHETIC_E2E_BLOCKED: unsupported taxability reason");
+    }
+    if (session.taxability_reason === "standard_rated" && !checkout.taxRegistrationStates.includes(session.destination_state)) {
       throw new Error("ARC_SYNTHETIC_E2E_BLOCKED: destination tax registration is not active");
     }
   };
 
   const checkoutEvent = event => {
     if (!event || typeof event !== "object" || Array.isArray(event)) throw new TypeError("ARC_SYNTHETIC_E2E_INVALID: checkout event");
-    assertTestIdentifier(event.id, /^evt_[A-Za-z0-9_]+$/, "Stripe event id");
-    if (!new Set(["checkout.session.completed", "checkout.session.async_payment_succeeded"]).has(event.type)) {
-      throw new Error("ARC_SYNTHETIC_E2E_BLOCKED: unsupported checkout event");
-    }
+    assertIdentifier(event.id, /^evt_[A-Za-z0-9_]+$/, "Stripe event id");
+    if (!CHECKOUT_EVENTS.has(event.type)) throw new Error("ARC_SYNTHETIC_E2E_BLOCKED: unsupported checkout event");
     const digest = sha256(canonicalJson(event));
     const replay = processedEvents.get(event.id);
     if (replay) {
@@ -160,27 +169,19 @@ export function createSyntheticStripeTestHandoffSimulator({
     validateSession(event.session);
     let result;
     if (event.session.payment_status !== "paid") {
-      if (event.type !== "checkout.session.completed") {
-        throw new Error("ARC_SYNTHETIC_E2E_BLOCKED: async success event is not paid");
-      }
+      if (event.type !== "checkout.session.completed") throw new Error("ARC_SYNTHETIC_E2E_BLOCKED: async success event is not paid");
       state = "PAYMENT_PENDING";
       result = { state, handoffReady: false, fulfillmentClaimConsumed: false, idempotentReplay: false };
     } else {
+      const sessionDigest = sha256(canonicalJson(event.session));
       const existing = paidSessions.get(event.session.id);
-      if (existing && existing.digest !== sha256(canonicalJson(event.session))) {
-        throw new Error("ARC_SYNTHETIC_E2E_CONFLICT: paid session replay changed authenticated facts");
-      }
-      if (!existing) {
-        paidSessions.set(event.session.id, { digest: sha256(canonicalJson(event.session)) });
-        activeLink.completedSessions += 1;
-      }
-      if (activeLink.completedSessions !== 1) throw new Error("ARC_SYNTHETIC_E2E_BLOCKED: private Link completed-session limit exceeded");
+      if (existing && existing !== sessionDigest) throw new Error("ARC_SYNTHETIC_E2E_CONFLICT: paid Session replay changed authenticated facts");
+      if (!existing) paidSessions.set(event.session.id, sessionDigest);
       lastPayment = {
         checkoutSessionId: event.session.id,
         paymentIntentId: event.session.payment_intent_id,
         chargeId: event.session.charge_id,
-        amountTotal: event.session.amount_total,
-        digest: sha256(canonicalJson(event.session))
+        digest: sessionDigest
       };
       state = "PAYMENT_VERIFIED";
       result = { state, handoffReady: false, fulfillmentClaimConsumed: true, idempotentReplay: Boolean(existing) };
@@ -189,65 +190,41 @@ export function createSyntheticStripeTestHandoffSimulator({
     return result;
   };
 
+  const expireCheckout = () => {
+    if (!checkout || lastPayment || now().getTime() < checkout.expiresAt) {
+      throw new Error("ARC_SYNTHETIC_E2E_BLOCKED: unpaid Checkout Session is not expired");
+    }
+    state = "CHECKOUT_EXPIRED";
+    return snapshot();
+  };
+
   const prepareHandoff = () => {
     if (state === "HALTED") throw new Error("ARC_SYNTHETIC_E2E_HALTED: reversal prevents handoff");
     if (state === "HANDOFF_READY" && handoff) return { ...handoff, idempotent_replay: true };
-    if (!lastPayment || state !== "PAYMENT_VERIFIED") throw new Error("ARC_SYNTHETIC_E2E_BLOCKED: authenticated paid session required before handoff");
-    if (!handoff) {
-      handoffCount += 1;
-      handoff = {
-        version: "arc-synthetic-five-page-test-handoff-v2",
-        synthetic: true,
-        external_provider_proof: false,
-        niche,
-        preview_folder: previewFolder,
-        offer_contract_id: "arc-fixed-five-page-offer-v1",
-        deliverable: "fixed-five-page-marketing-website-v1",
-        page_count: 5,
-        preview_paths: SYNTHETIC_HTML_PATHS.map(path => `${previewFolder}/${path}`),
-        production_content_sha256: productionContentSha256,
-        checkout_session_id_sha256: sha256(lastPayment.checkoutSessionId),
-        payment_evidence_sha256: lastPayment.digest,
-        artifact_binding_sha256: sha256(`${previewFolder}\n${productionContentSha256}\n${lastPayment.digest}`)
-      };
-    }
+    if (!lastPayment || state !== "PAYMENT_VERIFIED") throw new Error("ARC_SYNTHETIC_E2E_BLOCKED: authenticated paid Session required before handoff");
+    handoffCount += 1;
+    handoff = {
+      version: "arc-synthetic-five-page-test-handoff-v3",
+      synthetic: true,
+      external_provider_proof: false,
+      niche,
+      preview_folder: previewFolder,
+      offer_contract_id: "arc-fixed-five-page-offer-v1",
+      deliverable: "fixed-five-page-marketing-website-v1",
+      page_count: 5,
+      preview_paths: SYNTHETIC_HTML_PATHS.map(path => `${previewFolder}/${path}`),
+      production_content_sha256: productionContentSha256,
+      checkout_session_id_sha256: sha256(lastPayment.checkoutSessionId),
+      payment_evidence_sha256: lastPayment.digest,
+      artifact_binding_sha256: sha256(`${previewFolder}\n${productionContentSha256}\n${lastPayment.digest}`)
+    };
     state = "HANDOFF_READY";
     return { ...handoff, idempotent_replay: false };
   };
 
-  const expireLink = () => {
-    if (!activeLink || !activeLink.active || now().getTime() < activeLink.expiresAt) {
-      throw new Error("ARC_SYNTHETIC_E2E_BLOCKED: Link is not expired");
-    }
-    if (activeLink.completedSessions !== 0) throw new Error("ARC_SYNTHETIC_E2E_BLOCKED: paid Link cannot enter unpaid expiry lifecycle");
-    state = "LINK_EXPIRED";
-    return snapshot();
-  };
-
-  const deactivateExpiredLink = evidence => {
-    requireProviderProof(evidence);
-    if (state !== "LINK_EXPIRED" || evidence.payment_link_id !== activeLink?.paymentLinkId || evidence.active !== false ||
-        evidence.completed_sessions_count !== 0) {
-      throw new Error("ARC_SYNTHETIC_E2E_BLOCKED: exact inactive unpaid Link readback required");
-    }
-    activeLink.active = false;
-    state = "LINK_DEACTIVATED";
-    return snapshot();
-  };
-
-  const renewLink = configuration => {
-    if (state !== "LINK_DEACTIVATED" || configuration.predecessor_payment_link_id !== activeLink?.paymentLinkId ||
-        configuration.payment_link_id === activeLink.paymentLinkId || configuration.precreate_offer_and_tax_ready !== true ||
-        configuration.precreate_preview_ready !== true || configuration.postcreate_offer_and_tax_ready !== true ||
-        configuration.postcreate_preview_ready !== true) {
-      throw new Error("ARC_SYNTHETIC_E2E_BLOCKED: deactivated predecessor plus fresh pre/post renewal proofs required");
-    }
-    return activateLink({ ...configuration, generation: activeLink.generation + 1 });
-  };
-
   const reversalEvent = event => {
     if (!event || typeof event !== "object" || Array.isArray(event)) throw new TypeError("ARC_SYNTHETIC_E2E_INVALID: reversal event");
-    assertTestIdentifier(event.id, /^evt_[A-Za-z0-9_]+$/, "Stripe reversal event id");
+    assertIdentifier(event.id, /^evt_[A-Za-z0-9_]+$/, "Stripe event id");
     requireProviderProof(event);
     if (!REVERSAL_EVENTS.has(event.type) || !lastPayment || event.payment_intent_id !== lastPayment.paymentIntentId ||
         event.charge_id !== lastPayment.chargeId) {
@@ -273,11 +250,10 @@ export function createSyntheticStripeTestHandoffSimulator({
       niche,
       state,
       productionContentSha256,
-      paymentLinkId: activeLink?.paymentLinkId ?? null,
-      linkGeneration: activeLink?.generation ?? null,
+      checkoutSessionIdSha256: checkout ? sha256(checkout.sessionId) : null,
       handoffCount
     };
   }
 
-  return { activateLink, checkoutEvent, deactivateExpiredLink, expireLink, prepareHandoff, renewLink, reversalEvent, snapshot };
+  return { authorizeCheckout, checkoutEvent, expireCheckout, prepareHandoff, reversalEvent, snapshot };
 }

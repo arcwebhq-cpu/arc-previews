@@ -964,7 +964,7 @@ const checkoutOfferEvidenceFields=[
   "currency","quantity","terms_version","automatic_tax_enabled","customer_address_source",
   "terms_document_sha256",
   "price_tax_behavior","product_tax_code","tax_contract_version","tax_settings_status","tax_registrations_sha256",
-  "tax_registrations","adult_acknowledgement_key","name_collection_required","submit_type","checkout_redirect_url",
+  "tax_registrations","adult_acknowledgement_key","customer_creation","submit_type","checkout_redirect_url",
   "stripe_api_version","configuration_sha256","issued_at"
 ];
 if(!checkoutOfferEvidence||typeof checkoutOfferEvidence!=="object"||Array.isArray(checkoutOfferEvidence)||
@@ -1003,8 +1003,8 @@ if(checkoutOfferEvidence.version!=="arc1-checkout-offer-evidence-v2"||
   checkoutOfferEvidence.tax_settings_status!=="active"||
   !Array.isArray(checkoutOfferEvidence.tax_registrations)||checkoutOfferEvidence.tax_registrations.length<1||checkoutOfferEvidence.tax_registrations.length>100||
   !/^[a-f0-9]{64}$/.test(clean(checkoutOfferEvidence.tax_registrations_sha256))||
-  checkoutOfferEvidence.adult_acknowledgement_key!=="adultpurchaserack"||checkoutOfferEvidence.name_collection_required!==true||
-  checkoutOfferEvidence.submit_type!=="auto"||checkoutOfferEvidence.checkout_redirect_url!=="https://arcweb.onl/payment-success/?session_id={CHECKOUT_SESSION_ID}"||
+  checkoutOfferEvidence.adult_acknowledgement_key!=="adultpurchaserack"||checkoutOfferEvidence.customer_creation!=="always"||
+  checkoutOfferEvidence.submit_type!=="pay"||checkoutOfferEvidence.checkout_redirect_url!=="https://arcweb.onl/payment-success/?session_id={CHECKOUT_SESSION_ID}"||
   checkoutOfferEvidence.stripe_api_version!=="2026-07-29.dahlia"||
   !/^[a-f0-9]{64}$/.test(clean(checkoutOfferEvidence.configuration_sha256))||
   !Number.isFinite(checkoutOfferEvidenceIssuedMs)||new Date(checkoutOfferEvidenceIssuedMs).toISOString()!==checkoutOfferEvidenceIssuedAt||
@@ -1049,7 +1049,7 @@ const stableCheckoutConfiguration={
   product_tax_code:checkoutOfferEvidence.product_tax_code,tax_contract_version:checkoutOfferEvidence.tax_contract_version,
   tax_settings_status:checkoutOfferEvidence.tax_settings_status,tax_registrations:checkoutOfferEvidence.tax_registrations,
   tax_registrations_sha256:checkoutOfferEvidence.tax_registrations_sha256,adult_acknowledgement_key:checkoutOfferEvidence.adult_acknowledgement_key,
-  name_collection_required:checkoutOfferEvidence.name_collection_required,submit_type:checkoutOfferEvidence.submit_type,
+  customer_creation:checkoutOfferEvidence.customer_creation,submit_type:checkoutOfferEvidence.submit_type,
   checkout_redirect_url:checkoutOfferEvidence.checkout_redirect_url,stripe_api_version:checkoutOfferEvidence.stripe_api_version
 };
 if(await sha256Text(canonicalJson(stableCheckoutConfiguration))!==checkoutOfferEvidence.configuration_sha256){

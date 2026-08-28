@@ -50,8 +50,8 @@ export function createTestCheckoutOfferEvidence({
     tax_registrations: taxRegistrations,
     tax_registrations_sha256: taxRegistrationsSha256,
     adult_acknowledgement_key: "adultpurchaserack",
-    name_collection_required: true,
-    submit_type: "auto",
+    customer_creation: "always",
+    submit_type: "pay",
     checkout_redirect_url: "https://arcweb.onl/payment-success/?session_id={CHECKOUT_SESSION_ID}",
     stripe_api_version: "2026-07-29.dahlia"
   });
@@ -76,8 +76,8 @@ export function createTestCheckoutOfferEvidence({
     tax_registrations: taxRegistrations,
     tax_registrations_sha256: taxRegistrationsSha256,
     adult_acknowledgement_key: "adultpurchaserack",
-    name_collection_required: true,
-    submit_type: "auto",
+    customer_creation: "always",
+    submit_type: "pay",
     checkout_redirect_url: "https://arcweb.onl/payment-success/?session_id={CHECKOUT_SESSION_ID}",
     stripe_api_version: "2026-07-29.dahlia",
     configuration_sha256: sha256(configuration),

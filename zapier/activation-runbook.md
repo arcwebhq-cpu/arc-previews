@@ -283,10 +283,15 @@ workflow and must not be represented as one.
     `HOOK_ACCEPTED` record became `REVIEW_REQUIRED` with its review index. Turn
     the migration flag back off before continuing. Never silently treat an old
     hook acceptance as consumer completion.
-12. Keep `arc1_verify_payment_link.js`, `arc1_private_checkout_link.js`, and its
-   lifecycle step outside the active V11 order. They are default-OFF frozen
-   pre-review Payment Link replay components, not the approved private Checkout
-   Session flow.
+12. Treat `arc1_verify_payment_link.js`, `arc1_private_checkout_link.js`, and
+   `arc1_private_checkout_lifecycle.js` as unconditional retirement shims. Each
+   throws before input parsing or network access and cannot be activated by any
+   flag. Keep their static receipt compatibility evidence only; V11 uses
+   `arc1_verify_checkout_offer.js` plus the first-party private Checkout Session
+   endpoint. The Payment Link-era `arc2_delivery_email_gate.js` is retired the
+   same way; final delivery belongs only to the first-party transactional worker.
+   `scripts/finalize_site.mjs` is also a throw-only retirement shim; use the V11
+   five-page production finalizer and Checkout Session handoff.
 13. Enforce approved rolling/day limits from the durable work record.
 14. Before any preview-repository push, verify GitHub Pages is configured with
    GitHub Actions as its only publication source. A branch/root publisher must

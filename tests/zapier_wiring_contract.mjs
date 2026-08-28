@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import {
   ARC1_GENERATION_CONTRACT_SHA256,
   ARC1_GENERATION_CONTRACT_VERSION,
@@ -334,17 +334,13 @@ assert.equal(contract.arc1.ordered_steps.some(step => /arc1_verify_payment_link|
   "Legacy pre-review Payment Link steps must never enter the active V11 order.");
 assert.deepEqual(contract.arc1.legacy_pre_review_payment_link, {
   legacy_only: true,
+  status: "retired-unconditional-fail-closed",
   allowed_in_active_v11_order: false,
-  all_provider_mutations_enabled: false,
-  steps: [
-    "zapier/arc1_verify_payment_link.js",
-    "zapier/arc1_private_checkout_link.js#PREPARE",
-    "zapier/arc1_private_checkout_link.js#AUTHORIZE_MUTATION",
-    "zapier/arc1_private_checkout_link.js#CREATE",
-    "zapier/arc1_private_checkout_link.js#PERSIST_REVERSE",
-    "zapier/arc1_private_checkout_link.js#ACTIVATE",
-    "zapier/arc1_private_checkout_link.js#FINALIZE"
-  ]
+  provider_execution_allowed: false,
+  provider_endpoint_present: false,
+  writer_source: "zapier/arc1_private_checkout_link.js",
+  retirement_error: "ARC1_LEGACY_PAYMENT_LINK_RETIRED",
+  compatibility_evidence: "zapier/receipt-v1-clean-cutover.json"
 });
 assert.equal(contract.arc1.publish_mode, "pull-request-only");
 assert.equal(contract.arc1.direct_main_publish_allowed, false);
@@ -486,6 +482,9 @@ assert.match(activationRunbook, /Authoritative V11 provider map/);
 assert.match(activationRunbook, /native Netlify Form submission\s+is not an ARC1 trigger/);
 assert.match(activationRunbook, /Resend-native Netlify worker/);
 assert.match(activationRunbook, /V11 has no active Payment Link path/);
+assert.match(activationRunbook, /unconditional retirement shims/);
+assert.match(activationRunbook, /throws before input parsing or network access/);
+assert.match(activationRunbook, /cannot be activated by any\s+flag/);
 assert.match(activationRunbook, /Zapier Tables is not an atomic authority/);
 assert.match(activationRunbook, /ARC_EXPECTED_PRODUCT_TAX_CODE/);
 assert.match(activationRunbook, /prefer canonical\s+`NETLIFY_ADMIN_PAT`/);
@@ -929,7 +928,9 @@ assert.match(arc1CheckoutOfferSource, /adultpurchaserack/);
 assert.doesNotMatch(arc1CheckoutOfferSource, /payment[_ -]?link|buy\.stripe\.com|\bplink_|\/v1\/checkout\/sessions/i);
 assert.match(arc1InjectSource, /checkout_offer_evidence_private/);
 assert.match(arc1InjectSource, /checkoutOfferEvidenceIssuedMs<Date\.now\(\)-5\*60\*1000/);
-assert.match(arc1LegacyPaymentLinkSource, /payment_link_evidence_private/);
+assert.match(arc1LegacyPaymentLinkSource, /throw new Error\("ARC1_LEGACY_PAYMENT_LINK_VERIFIER_RETIRED:/);
+assert.doesNotMatch(arc1LegacyPaymentLinkSource,
+  /\binputData\b|\bfetch\s*\(|api\.stripe\.com|\/v1\/payment_links|stripe_api_key|payment_link_id|\bplink_|buy\.stripe\.com/i);
 
 assert.deepEqual(contract.arc2.trigger.events, [
   "checkout.session.completed",
@@ -1008,7 +1009,7 @@ assert.deepEqual(contract.arc2.required_session_contract.preview_path_order,
 assert.equal(contract.arc2.required_session_contract.fresh_v3_or_mixed_pair_allowed, false);
 assert.equal(contract.arc2.required_session_contract.exact_frozen_existing_v3_replay_only, true);
 assert.equal(contract.arc2.required_session_contract.adult_acknowledgement_key, "adultpurchaserack");
-assert.deepEqual(contract.arc2.required_session_contract.required_collected_names, ["business_name", "individual_name"]);
+assert.equal(Object.hasOwn(contract.arc2.required_session_contract, "required_collected_names"), false);
 assert.equal(contract.arc2.checkout_configuration.automatic_tax_enabled, true);
 assert.equal(contract.arc2.checkout_configuration.checkout_session_url_public, null);
 assert.equal(Object.hasOwn(contract.arc2.checkout_configuration, "payment_link_url_public"), false);
@@ -1017,13 +1018,14 @@ assert.equal(contract.arc2.checkout_configuration.active_tax_registration_readba
 assert.equal(contract.arc2.checkout_configuration.washington_sales_tax_registration_required_before_arc_sale, true);
 assert.equal(contract.arc2.checkout_configuration.destination_address_source, "stripe_checkout_customer_details.address");
 assert.equal(contract.arc2.checkout_configuration.price_active_required_at_preflight, true);
-assert.equal(contract.arc2.checkout_configuration.submit_type, "auto");
+assert.equal(contract.arc2.checkout_configuration.submit_type, "pay");
 assert.equal(contract.arc2.checkout_configuration.payment_method_selection, "dynamic");
 assert.equal(contract.arc2.checkout_configuration.completed_session_limit, 1);
-assert.deepEqual(contract.arc2.checkout_configuration.name_collection, {
-  business: { enabled: true, optional: false },
-  individual: { enabled: true, optional: false }
-});
+assert.equal(contract.arc2.checkout_configuration.customer_creation, "always");
+assert.equal(Object.hasOwn(contract.arc2.checkout_configuration, "name_collection"), false,
+  "The canonical Session request must omit name_collection.");
+assert.equal(Object.hasOwn(contract.arc2.checkout_configuration, "billing_address_collection"), false,
+  "The canonical Session request must let automatic tax collect only its required address inputs.");
 assert.deepEqual(contract.arc2.stripe_public_details_urls, {
   terms_path: "/terms/",
   privacy_path: "/privacy/",
@@ -1043,48 +1045,26 @@ assert.match(arc2CheckoutSessionAdapterSource, /ARC2_CHECKOUT_SESSION_ADAPTER_PA
 assert.match(retiredArc2ResolverSource, /throw new Error\("ARC2_RETIRED_RESOLVER:/);
 assert.doesNotMatch(retiredArc2ResolverSource,
   /api\.stripe\.com|stripe_api_key|private_link_reverse_state|payment_link_id|buy\.stripe\.com|\bplink_/i);
-assert.match(arc1PrivateCheckoutSource, /MUTATION_STARTED/);
-assert.match(arc1PrivateCheckoutSource, /starting_after/);
-assert.doesNotMatch(arc1PrivateCheckoutSource,/payment_method_types/);
-assert.equal(contract.arc1.private_checkout_link.automation_enabled,false);
-assert.equal(contract.arc1.private_checkout_link.durable_cas_adapter_verified,false);
-assert.equal(contract.arc1.private_checkout_link.payment_method_selection,"dynamic");
-assert.equal(contract.arc1.private_checkout_link.offer_snapshot_version,"arc-checkout-offer-snapshot-v2");
-assert.equal(contract.arc1.private_checkout_link.recipient_reservation_version,"arc1-checkout-recipient-reservation-v2");
-assert.equal(contract.arc1.private_checkout_link.readiness_core_version,"arc1-preview-readiness-core-v2");
-assert.equal(contract.arc1.private_checkout_link.readiness_observation_version,"arc1-preview-readiness-observation-v2");
-assert.equal(contract.arc1.private_checkout_link.checkout_policy_version,"arc-private-checkout-policy-v2");
-assert.equal(contract.arc1.private_checkout_link.checkout_reference_version,"arc-checkout-reference-v4");
-assert.equal(contract.arc1.private_checkout_link.offer_contract_id,"arc-fixed-five-page-offer-v1");
-assert.equal(contract.arc1.private_checkout_link.deliverable,"fixed-five-page-marketing-website-v1");
-assert.equal(contract.arc1.private_checkout_link.page_count,5);
-assert.deepEqual(contract.arc1.private_checkout_link.preview_path_order,["about/index.html","contact/index.html","process/index.html","services/index.html","index.html"]);
-assert.equal(contract.arc1.private_checkout_link.reverse_index_authority,"authenticated-session-payment-link-id-to-v4-reference");
-assert.match(arc1PrivateCheckoutSource,/arc-checkout-offer-snapshot-signature-v2/);
-assert.match(arc1PrivateCheckoutSource,/arc1-checkout-recipient-reservation-signature-v2/);
-assert.match(arc1PrivateCheckoutSource,/arc1-preview-readiness-core-signature-v2/);
-assert.match(arc1PrivateCheckoutSource,/arc1-preview-readiness-observation-signature-v2/);
-assert.match(arc1PrivateCheckoutSource,/arc-checkout-reference-v4/);
-assert.match(arc1PrivateCheckoutSource,/arc-checkout-ready-v4/);
-assert.doesNotMatch(arc1PrivateCheckoutSource,/arc-checkout-reference-v3|arc-checkout-ready-v3|arc_v3_ref/);
-assert.equal(contract.arc1.private_checkout_link.renewable_provider_offer_readiness_verified,true);
-assert.equal(contract.arc1.private_checkout_link.offer_expiry_and_link_deactivation_verified,true);
-assert.deepEqual(contract.arc1.private_checkout_link.unpaid_link_lifecycle.phases,["ENROLL_ACTIVE","REQUEST_DEACTIVATION","CONFIRM_DEACTIVATION","AUTHORIZE_RENEWAL","FINALIZE_RENEWAL"]);
-assert.deepEqual(contract.arc1.private_checkout_link.unpaid_link_lifecycle.states,["ACTIVE","DEACTIVATION_AUTHORIZED","DEACTIVATED","RENEWAL_AUTHORIZED"]);
-assert.equal(contract.arc1.private_checkout_link.unpaid_link_lifecycle.contract_verified,true);
-assert.equal(contract.arc1.private_checkout_link.unpaid_link_lifecycle.lifecycle_enabled,false);
-assert.equal(contract.arc1.private_checkout_link.unpaid_link_lifecycle.state_commit_enabled,false);
-assert.equal(contract.arc1.private_checkout_link.unpaid_link_lifecycle.deactivation_adapter_enabled,false);
-assert.equal(contract.arc1.private_checkout_link.unpaid_link_lifecycle.renewal_adapter_enabled,false);
-assert.equal(contract.arc1.private_checkout_link.unpaid_link_lifecycle.provider_adapter_live_verified,false);
-assert.equal(contract.arc1.private_checkout_link.unpaid_link_lifecycle.provider_adapter_direct_network_access_allowed,false);
-assert.equal(contract.arc1.private_checkout_link.unpaid_link_lifecycle.checkout_url_output_allowed,false);
-assert.equal(contract.arc1.private_checkout_link.unpaid_link_lifecycle.maximum_renewal_preflight_age_seconds,120);
-assert.equal(contract.arc1.private_checkout_link.unpaid_link_lifecycle.payment_method_selection,"dynamic");
-assert.match(arc1PrivateCheckoutLifecycleSource,/DEACTIVATION_AUTHORIZED/);
-assert.match(arc1PrivateCheckoutLifecycleSource,/rerun offer and tax readiness immediately before/);
-assert.match(arc1PrivateCheckoutLifecycleSource,/post-create offer\/tax and preview-readiness reruns/);
-assert.doesNotMatch(arc1PrivateCheckoutLifecycleSource,/api\.stripe\.com|stripe_api_key|\bfetch\s*\(|payment_method_types/i);
+assert.match(arc1PrivateCheckoutSource, /throw new Error\("ARC1_LEGACY_PAYMENT_LINK_RETIRED:/);
+assert.match(arc1PrivateCheckoutLifecycleSource, /throw new Error\("ARC1_LEGACY_PAYMENT_LINK_LIFECYCLE_RETIRED:/);
+assert.doesNotMatch(`${arc1LegacyPaymentLinkSource}\n${arc1PrivateCheckoutSource}\n${arc1PrivateCheckoutLifecycleSource}`,
+  /\binputData\b|\bfetch\s*\(|api\.stripe\.com|\/v1\/payment_links|stripe_api_key|payment_link_id|\bplink_|buy\.stripe\.com/i);
+assert.equal(contract.arc1.private_checkout_link.status,"retired-unconditional-fail-closed-shim");
+assert.equal(contract.arc1.private_checkout_link.executable,false);
+assert.equal(contract.arc1.private_checkout_link.allowed_in_active_v11_order,false);
+assert.equal(contract.arc1.private_checkout_link.provider_execution_allowed,false);
+assert.equal(contract.arc1.private_checkout_link.network_access_allowed,false);
+assert.equal(contract.arc1.private_checkout_link.payment_link_endpoint_present,false);
+assert.equal(contract.arc1.private_checkout_link.compatibility_evidence.legacy_receipts_accepted,false);
+assert.equal(contract.arc1.private_checkout_link.compatibility_evidence.regeneration_required,true);
+assert.equal(contract.arc1.private_checkout_link.legacy_verifier.executable,false);
+assert.equal(contract.arc1.private_checkout_link.legacy_lifecycle.executable,false);
+
+for (const name of (await readdir(new URL("../zapier/", import.meta.url))).filter(name => name.endsWith(".js"))) {
+  const source = await read(`../zapier/${name}`);
+  assert.doesNotMatch(source, /\/v1\/payment_links/i,
+    `${name} retains an executable Stripe Payment Links provider endpoint`);
+}
 
 const flow = contract.arc2.required_future_flow;
 assert.deepEqual(flow, [
@@ -1250,16 +1230,24 @@ assert.equal(contract.arc2.final_delivery_email.source,
 assert.equal(contract.arc2.final_delivery_email.provider, "resend");
 assert.equal(contract.arc2.final_delivery_email.webhook_source,
   "arc-site/netlify/functions/resend-webhook.mjs");
+assert.deepEqual(contract.arc2.retired_delivery_email_gate, {
+  source: "zapier/arc2_delivery_email_gate.js",
+  status: "retired-unconditional-fail-closed-shim",
+  retirement_error: "ARC2_LEGACY_DELIVERY_EMAIL_GATE_RETIRED",
+  allowed_in_active_v11_flow: false,
+  executable: false,
+  replacement: "arc-site/netlify/lib/arc2-transactional-email-worker-core.mjs"
+});
 assert.equal(contract.arc2.payment_evidence_gate.evidence_version, "arc2-payment-evidence-v4");
 assert.equal(contract.arc2.payment_evidence_gate.evidence_scope, "authoritative-stripe-checkout-session");
 assert.equal(contract.arc2.payment_evidence_gate.taxability_reasons_retained_in_signed_evidence, true);
 assert.equal(contract.arc2.payment_evidence_gate.line_item_taxes_sha256_retained_in_signed_evidence, true);
 assert.equal(contract.arc2.payment_evidence_gate.signature_prefix, "arc2-payment-evidence-signature-v4\\n{mode}\\n");
-assert.match(emailGateSource, /FINAL_DEPLOY_READY/);
-assert.match(emailGateSource, /netlify-deploy-and-claim-final-deploy/);
-assert.match(emailGateSource, /claim_recipient_email_sha256/);
-assert.match(emailGateSource, /retiredKeys/);
-assert.doesNotMatch(emailGateSource, /businessName/);
+assert.match(emailGateSource, /throw new Error\("ARC2_LEGACY_DELIVERY_EMAIL_GATE_RETIRED:/);
+assert.doesNotMatch(emailGateSource,
+  /\binputData\b|\bfetch\s*\(|api\.stripe\.com|stripe_api_key|payment_link_id|\bplink_|buy\.stripe\.com|send_delivery_email/i);
+assert.equal(contract.arc2.required_future_flow.includes("zapier/arc2_delivery_email_gate.js"), false);
+assert.equal(contract.arc2.required_future_flow.includes("arc-site/resend-transactional-worker:send-final-delivery-with-durable-idempotency"), true);
 
 assert.equal(contract.lead_routing.authoritative_inbox_attestation.source, null);
 assert.equal(contract.lead_routing.authoritative_inbox_attestation.external_configuration_verified, false);
@@ -1410,7 +1398,6 @@ assert.deepEqual(contract.synthetic_validation, {
   satisfies_required_test_scenarios: false,
   stripe_mode: "test",
   stripe_api_version: "2026-07-29.dahlia",
-  billing_address_collection: "required",
   niches: ["roofing", "hvac", "remodeling", "landscaping", "auto-detailing"],
   scenarios: ["paid-happy-path", "duplicate-replay", "unpaid-then-async-success", "expiry-deactivation-renewal", "refund-and-dispute-halt"]
 });

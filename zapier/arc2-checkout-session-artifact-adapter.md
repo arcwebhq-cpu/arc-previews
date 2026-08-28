@@ -33,6 +33,11 @@ Map the retained signed ARC1 evidence into:
 
 The GitHub credential must be read-only for `arcwebhq-cpu/arc-previews`. The adapter reads only the exact signed blob IDs for zero to three content-addressed assets. It performs no GitHub mutation.
 
+The signed offer must match the first-party Checkout Session producer exactly: `automatic_tax=true`,
+`customer_creation=always`, and `submit_type=pay`. Both `name_collection` and
+`billing_address_collection` are omitted from the provider request; ARC2 rejects the older signed
+offer shape that required names or forced a billing address.
+
 For the guarded first-party start request, map:
 
 - `payment_arc2_worker_url=https://arcweb.onl/internal/payment-arc2/start`

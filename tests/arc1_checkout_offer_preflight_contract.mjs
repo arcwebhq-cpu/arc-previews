@@ -71,6 +71,11 @@ assert.equal(evidence.product_id, productId);
 assert.equal(evidence.terms_document_sha256, termsDocumentSha256);
 assert.equal(evidence.terms_version, "2026-08-25");
 assert.equal(evidence.stripe_api_version, "2026-07-29.dahlia");
+assert.equal(evidence.customer_creation, "always");
+assert.equal(evidence.submit_type, "pay");
+assert.equal(Object.hasOwn(evidence, "name_collection"), false);
+assert.equal(Object.hasOwn(evidence, "name_collection_required"), false);
+assert.equal(Object.hasOwn(evidence, "billing_address_collection"), false);
 assert.doesNotMatch(verified.checkout_offer_evidence_private, /buy\.stripe\.com|\bplink_/i);
 assert.doesNotMatch(source, /payment[_ -]?link|buy\.stripe\.com|\bplink_|\/v1\/checkout\/sessions/i,
   "active offer preflight must not read, mutate, or expose checkout capability");

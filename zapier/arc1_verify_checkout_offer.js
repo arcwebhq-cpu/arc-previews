@@ -222,8 +222,8 @@ const configDigest = await sha256Hex(canonicalJson({
   tax_registrations: registrationSnapshots,
   tax_registrations_sha256: taxRegistrationsSha256,
   adult_acknowledgement_key: "adultpurchaserack",
-  name_collection_required: true,
-  submit_type: "auto",
+  customer_creation: "always",
+  submit_type: "pay",
   checkout_redirect_url: redirectUrl,
   stripe_api_version: stripeApiVersion
 }));
@@ -249,8 +249,8 @@ const evidencePrivate = canonicalJson({
   tax_registrations: registrationSnapshots,
   tax_registrations_sha256: taxRegistrationsSha256,
   adult_acknowledgement_key: "adultpurchaserack",
-  name_collection_required: true,
-  submit_type: "auto",
+  customer_creation: "always",
+  submit_type: "pay",
   checkout_redirect_url: redirectUrl,
   stripe_api_version: stripeApiVersion,
   configuration_sha256: configDigest,
@@ -275,4 +275,3 @@ return {
   checkout_offer_evidence_sha256: await sha256Hex(evidencePrivate),
   checkout_offer_evidence_hmac_sha256: [...new Uint8Array(signature)].map(byte => byte.toString(16).padStart(2, "0")).join("")
 };
-

@@ -1,8 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash, createHmac } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import path from "node:path";
-import { pathToFileURL } from "node:url";
 
 import { fixtures } from "../fixtures/v11_industries.mjs";
 import {
@@ -11,389 +9,305 @@ import {
   finalizeV11ProductionSite
 } from "../scripts/v11_production_finalizer.mjs";
 import { canonicalJson, renderV11Site, sha256 } from "../scripts/v11_site_contract.mjs";
-const siteRoot = path.resolve(process.env.ARC_SITE_DIR || "../arc-site");
-const { normalizeStartPayload } = await import(pathToFileURL(path.join(siteRoot, "netlify/lib/arc2-handoff-core.mjs")).href);
-const { startHandoff } = await import(pathToFileURL(path.join(siteRoot, "netlify/lib/arc2-handoff-service.mjs")).href);
 
-const resolverSource = await readFile(new URL("../zapier/arc2_resolve_and_finalize.js", import.meta.url), "utf8");
+const source = await readFile(new URL("../zapier/arc2_checkout_session_artifact_adapter.js", import.meta.url), "utf8");
+const retiredSource = await readFile(new URL("../zapier/arc2_resolve_and_finalize.js", import.meta.url), "utf8");
 const template = await readFile(new URL("../ARC_MASTER_TEMPLATE_V11.html", import.meta.url), "utf8");
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-const runResolverSource = new AsyncFunction("inputData", "fetch", "Buffer", resolverSource);
-const fixture = fixtures[0];
-const checkoutSecret = "arc2-v4-resolver-checkout-binding-secret-0123456789";
-const artifactSecret = "arc2-v4-resolver-artifact-evidence-secret-0123456789";
-const publicationSecret = "arc2-v4-publication-receipt-secret-0123456789";
-const checkoutKeyId = "01";
-const accountId = "acct_ArcV4ResolverContract";
-const accountSha256 = sha256(accountId);
-const sessionId = "cs_test_ArcV4ResolverContract";
-const paymentLinkId = "plink_ArcV4ResolverContract";
-const priceId = "price_ArcV4ResolverContract";
-const productId = "prod_ArcV4ResolverContract";
-const productTaxCode = "txcd_12345678";
-const sourceCommitSha = "1".repeat(40);
-const sourceTreeSha = "2".repeat(40);
-const claimEmail = "buyer@example.test";
-const payerEmail = "payer@example.test";
-const leadEmail = "leads@example.test";
-const nowSeconds = Math.floor(Date.now() / 1000);
-const taxRegistrations = [{ country: "US", id: "taxreg_ArcWashington", state: "WA", type: "state_sales_tax" }];
+const runAdapter = new AsyncFunction("inputData", "fetch", "Buffer", source);
+const runRetired = new AsyncFunction("inputData", "fetch", "Buffer", retiredSource);
 
+const checkoutSecret = "arc2-checkout-session-binding-secret-0123456789";
+const artifactSecret = "arc2-checkout-session-artifact-secret-0123456789";
+const publicationSecret = "arc2-checkout-session-publication-secret-0123456789";
+const workerSecret = "arc2-checkout-session-worker-secret-0123456789";
+const checkoutKeyId = "01";
+const sessionId = "cs_test_ArcReviewCheckout123456";
+const sourceCommitSha = "1".repeat(40);
+const claimEmail = "buyer@example.test";
+const leadEmail = "leads@example.test";
+const workerUrl = "https://arcweb.onl/internal/payment-arc2/start";
 const digest = value => createHash("sha256").update(value).digest("hex");
 const mac = (secret, message) => createHmac("sha256", secret).update(message).digest("hex");
 const gitSha = value => createHash("sha1").update(value).digest("hex");
 
-function boundedJpeg(size, fill) {
+function boundedJpeg(size = 512, fill = 0x41) {
   const prefix = Buffer.from([
-    0xff, 0xd8,
-    0xff, 0xc0, 0x00, 0x0b, 0x08, 0x00, 0x01, 0x00, 0x01, 0x01, 0x01, 0x11, 0x00,
+    0xff, 0xd8, 0xff, 0xc0, 0x00, 0x0b, 0x08, 0x00, 0x01, 0x00, 0x01, 0x01, 0x01, 0x11, 0x00,
     0xff, 0xda, 0x00, 0x08, 0x01, 0x01, 0x00, 0x00, 0x3f, 0x00
   ]);
   return Buffer.concat([prefix, Buffer.alloc(size - prefix.length - 2, fill), Buffer.from([0xff, 0xd9])], size);
 }
 
-function checkoutCreateBody(policy, metadata, includeIntent) {
-  const params = new URLSearchParams();
-  const set = (name, value) => params.append(name, String(value));
-  set("line_items[0][price]", policy.price_id); set("line_items[0][quantity]", "1");
-  set("automatic_tax[enabled]", "true"); set("billing_address_collection", "required");
-  set("consent_collection[terms_of_service]", "required"); set("custom_fields[0][key]", "adultpurchaserack");
-  set("custom_fields[0][label][type]", "custom"); set("custom_fields[0][label][custom]", "I am 18+ and authorized to buy for this business");
-  set("custom_fields[0][optional]", "false"); set("custom_fields[0][type]", "dropdown");
-  set("custom_fields[0][dropdown][options][0][label]", "I confirm"); set("custom_fields[0][dropdown][options][0][value]", "accepted");
-  set("name_collection[business][enabled]", "true"); set("name_collection[business][optional]", "false");
-  set("name_collection[individual][enabled]", "true"); set("name_collection[individual][optional]", "false");
-  set("after_completion[type]", "redirect"); set("after_completion[redirect][url]", policy.checkout_redirect_url);
-  set("restrictions[completed_sessions][limit]", "1"); set("allow_promotion_codes", "false");
-  set("customer_creation", "if_required"); set("invoice_creation[enabled]", "false");
-  set("phone_number_collection[enabled]", "false"); set("tax_id_collection[enabled]", "false"); set("submit_type", "auto");
-  for (const name of Object.keys(metadata).sort()) if (name !== "arc_intent_sha256") set(`metadata[${name}]`, metadata[name]);
-  if (includeIntent) set("metadata[arc_intent_sha256]", metadata.arc_intent_sha256);
-  return params.toString();
-}
-
-function publishedManifest(rendered) {
+function assetReview(assets) {
   return {
-    version: "arc-v11-published-preview-bundle-v1",
-    pages: V11_PRODUCTION_HTML_PATHS.map(path => {
-      const page = rendered.pages.find(item => item.path === path);
-      return { path, sha256: sha256(page.html), size: Buffer.byteLength(page.html) };
-    })
+    version: "arc-customer-image-visual-review-v1",
+    scope: "human-visible-watermark-and-rights-review",
+    decision: "APPROVED_FOR_PUBLICATION",
+    reviewer_type: "AUTHORIZED_HUMAN",
+    reviewer_id_sha256: "a".repeat(64),
+    policy_version: "arc-image-provenance-policy-v1",
+    review_method: "HUMAN_VISUAL_INSPECTION_FULL_RESOLUTION",
+    review_validity: "CONTENT_DIGEST_BOUND_NO_EXPIRY",
+    automated_screening: "PASSED_DETERMINISTIC_INDICATORS_ONLY",
+    automated_screening_version: "arc-deterministic-image-screen-v1",
+    pixel_level_watermark_certainty: false,
+    watermark_free_guarantee: false,
+    reviewed_at: "2026-08-25T11:30:00.000Z",
+    rights_basis: "CUSTOMER_CONFIRMED_OWNERSHIP_OR_LICENSE",
+    filename_screening: "PASSED_OR_UNAVAILABLE_FROM_FIRST_PARTY_INTAKE",
+    source_host_screening: "HTTPS_SYNTAX_AND_STOCK_HOST_DENYLIST_SCREENED",
+    visible_watermark_screening: "NO_VISIBLE_WATERMARK_FOUND",
+    stock_preview_screening: "NO_VISIBLE_STOCK_PREVIEW_MARKER_FOUND",
+    assets: assets.map(asset => ({ content_type: "image/jpeg", path: asset.path, sha256: digest(asset.bytes) }))
   };
 }
 
-function reviewedAssets(assets) {
-  return {
-    assets,
-    assetReview: {
-      version: "arc-customer-image-visual-review-v1",
-      scope: "human-visible-watermark-and-rights-review",
-      decision: "APPROVED_FOR_PUBLICATION",
-      reviewer_type: "AUTHORIZED_HUMAN",
-      reviewer_id_sha256: "a".repeat(64),
-      policy_version: "arc-image-provenance-policy-v1",
-      review_method: "HUMAN_VISUAL_INSPECTION_FULL_RESOLUTION",
-      review_validity: "CONTENT_DIGEST_BOUND_NO_EXPIRY",
-      automated_screening: "PASSED_DETERMINISTIC_INDICATORS_ONLY",
-      automated_screening_version: "arc-deterministic-image-screen-v1",
-      pixel_level_watermark_certainty: false,
-      watermark_free_guarantee: false,
-      reviewed_at: "2026-08-25T11:30:00.000Z",
-      rights_basis: "CUSTOMER_CONFIRMED_OWNERSHIP_OR_LICENSE",
-      filename_screening: "PASSED_OR_UNAVAILABLE_FROM_FIRST_PARTY_INTAKE",
-      source_host_screening: "HTTPS_SYNTAX_AND_STOCK_HOST_DENYLIST_SCREENED",
-      visible_watermark_screening: "NO_VISIBLE_WATERMARK_FOUND",
-      stock_preview_screening: "NO_VISIBLE_STOCK_PREVIEW_MARKER_FOUND",
-      assets: assets.map(asset => ({
-        content_type: asset.path.endsWith(".png") ? "image/png" : asset.path.endsWith(".jpg") ? "image/jpeg" : "image/webp",
-        path: asset.path,
-        sha256: asset.path.match(/assets\/([a-f0-9]{64})\./)[1]
-      })).sort((left, right) => left.path.localeCompare(right.path))
-    }
-  };
-}
-
-function renderScenario({ noForm = false, noAssets = false } = {}) {
+function renderedScenario({ noAsset = false, noForm = false } = {}) {
+  const fixture = fixtures[0];
   const baseContent = noForm ? {
     ...fixture.content,
     CONTACT_ACTION_HTML: '<a href="https://booking.example.test/start">Book through the scheduling service</a>'
   } : fixture.content;
   const initial = renderV11Site(template, baseContent, { trustedEventPrefix: fixture.id });
-  if (noAssets) {
-    const finalized = finalizeV11ProductionSite(initial, { assets: [] });
-    return { rendered: initial, finalized, asset: null };
-  }
-  const assetBytes = boundedJpeg(512, 0x41);
-  const assetDigest = sha256(assetBytes);
+  if (noAsset) return { rendered: initial, finalized: finalizeV11ProductionSite(initial, { assets: [] }), asset: null };
+  const bytes = boundedJpeg();
+  const assetDigest = digest(bytes);
   const sourceUrl = `https://arcwebhq-cpu.github.io/arc-previews/${initial.folder}/assets/${assetDigest}.jpg`;
   const content = {
     ...baseContent,
     HERO_MEDIA_HTML: `<picture><source srcset="${sourceUrl} 1x"><img src="${sourceUrl}" alt="Customer supplied project"></picture>`
   };
   const rendered = renderV11Site(template, content, { trustedEventPrefix: fixture.id, heroImageUrl: sourceUrl });
-  const asset = { path: `assets/${assetDigest}.jpg`, bytes: assetBytes, sourceUrl };
-  const finalized = finalizeV11ProductionSite(rendered, reviewedAssets([asset]));
-  return { rendered, finalized, asset };
+  const asset = { path: `assets/${assetDigest}.jpg`, bytes, sourceUrl };
+  return {
+    rendered,
+    finalized: finalizeV11ProductionSite(rendered, { assets: [asset], assetReview: assetReview([asset]) }),
+    asset
+  };
+}
+
+function renderBundle(rendered, finalized) {
+  const finalizedByPath = new Map(finalized.pages.map(page => [page.path, page]));
+  const publishedManifest = {
+    version: "arc-v11-published-preview-bundle-v1",
+    pages: V11_PRODUCTION_HTML_PATHS.map(path => {
+      const page = rendered.pages.find(item => item.path === path);
+      return { path, sha256: page.publishedSha256, size: Buffer.byteLength(page.html) };
+    })
+  };
+  return canonicalJson({
+    version: "arc1-five-page-render-bundle-v1",
+    scope: "private-sanitized-five-page-preview-render",
+    runtime_version: "arc1-inject-v11-render-runtime-v1",
+    site_contract_version: "arc-five-page-site-v1",
+    template_version: "11.0",
+    offer_contract_id: "arc-fixed-five-page-offer-v1",
+    deliverable: "fixed-five-page-marketing-website-v1",
+    preview_folder: rendered.folder,
+    page_count: 5,
+    logical_page_paths: rendered.pages.map(page => page.path),
+    preview_paths: V11_PRODUCTION_HTML_PATHS.map(path => `${rendered.folder}/${path}`),
+    lead_route_mode: finalized.leadRouteMode,
+    lead_route_form_name: finalized.leadRouteFormName,
+    pages: rendered.pages.map(page => ({
+      key: page.key,
+      label: page.label,
+      path: page.path,
+      repository_path: page.filePath,
+      url: page.url,
+      approval_html: page.approvalHtml,
+      approval_sha256: page.approvalSha256,
+      approval_size: Buffer.byteLength(page.approvalHtml),
+      published_html: page.html,
+      published_sha256: page.publishedSha256,
+      published_size: Buffer.byteLength(page.html),
+      production_sha256: finalizedByPath.get(page.path).sha256,
+      production_size: finalizedByPath.get(page.path).size
+    })),
+    approval_manifest: rendered.approvalManifest,
+    approval_manifest_sha256: rendered.approvalBundleSha256,
+    published_preview_manifest: publishedManifest,
+    published_preview_bundle_sha256: digest(canonicalJson(publishedManifest)),
+    production_content_sha256: finalized.productionContentSha256
+  });
 }
 
 function buildScenario(options = {}) {
-  const { rendered, finalized, asset } = renderScenario(options);
-  const scenarioProductTaxCode = options.productTaxCode || productTaxCode;
-  const folder = rendered.folder;
-  const previewPaths = V11_PRODUCTION_HTML_PATHS.map(path => `${folder}/${path}`);
-  const assetGitSha = asset ? gitSha(asset.bytes) : "";
-  const publicationEntries = asset ? [{
-    asset_id: "9".repeat(64),
+  const { rendered, finalized, asset } = renderedScenario(options);
+  const bundle = renderBundle(rendered, finalized);
+  const bundleValue = JSON.parse(bundle);
+  const bundleSha256 = digest(bundle);
+  const taxRegistrations = [{ country: "US", id: "taxreg_ArcWashington", state: "WA", type: "state_sales_tax" }];
+  const stableCheckout = {
+    stripe_account_id_sha256: "b".repeat(64),
+    livemode: false,
+    price_id: "price_ArcFivePage5000",
+    product_id: "prod_ArcFivePageWebsite",
+    amount_subtotal_minor_units: 500000,
+    currency: "usd",
+    quantity: 1,
+    terms_version: "2026-08-25",
+    terms_document_sha256: "c".repeat(64),
+    automatic_tax_enabled: true,
+    customer_address_source: "stripe_checkout_customer_details.address",
+    price_tax_behavior: "exclusive",
+    product_tax_code: "txcd_12345678",
+    tax_contract_version: "arc-tax-v1",
+    tax_settings_status: "active",
+    tax_registrations: taxRegistrations,
+    tax_registrations_sha256: digest(canonicalJson(taxRegistrations)),
+    adult_acknowledgement_key: "adultpurchaserack",
+    customer_creation: "always",
+    submit_type: "pay",
+    checkout_redirect_url: "https://arcweb.onl/payment-success/?session_id={CHECKOUT_SESSION_ID}",
+    stripe_api_version: "2026-07-29.dahlia"
+  };
+  const publicationEntry = asset ? {
+    asset_id: "d".repeat(64),
     content_type: "image/jpeg",
-    git_blob_sha1: assetGitSha,
+    git_blob_sha1: gitSha(asset.bytes),
     public_url: asset.sourceUrl,
-    repository_path: `${folder}/${asset.path}`,
+    repository_path: `${rendered.folder}/${asset.path}`,
     role: "hero_image_file",
-    sha256: sha256(asset.bytes),
+    sha256: digest(asset.bytes),
     size_bytes: asset.bytes.length
-  }] : [];
+  } : null;
   const publication = canonicalJson({
     version: "arc1-public-asset-publication-receipt-v1",
     scope: "github-content-addressed-preview-assets",
     bridge_contract_sha256: "da1bb4fc84f9871bdec1029d90ff21dfbdabd1e92fe14e838779f06578e426c2",
-    delivery_id: "3".repeat(64),
-    bridge_evidence_sha256: "4".repeat(64),
-    private_asset_receipt_sha256: "5".repeat(64),
-    intake_evidence_sha256: "6".repeat(64),
-    intake_state_digest_sha256: "7".repeat(64),
-    asset_manifest_sha256: "8".repeat(64),
+    delivery_id: "1".repeat(64),
+    bridge_evidence_sha256: "2".repeat(64),
+    private_asset_receipt_sha256: "3".repeat(64),
+    intake_evidence_sha256: "4".repeat(64),
+    intake_state_digest_sha256: "5".repeat(64),
+    asset_manifest_sha256: "6".repeat(64),
     asset_permission: asset ? "Confirmed rights and no visible watermark v1" : "",
     asset_visual_review_authority_verified: Boolean(asset),
     asset_visual_review_key_id: asset ? "01" : "",
-    asset_visual_review_reviewer_id_sha256: asset ? sha256("authorized-image-reviewer") : "",
-    asset_visual_review_sha256: asset ? sha256("digest-bound-asset-visual-review") : "",
+    asset_visual_review_reviewer_id_sha256: asset ? "7".repeat(64) : "",
+    asset_visual_review_sha256: asset ? "8".repeat(64) : "",
     repository: "arcwebhq-cpu/arc-previews",
     base_branch: "main",
-    preview_branch: `arc-preview/${folder.slice(-8)}`,
+    preview_branch: `arc-preview/${rendered.folder.slice(-8)}`,
     pages_base_url: "https://arcwebhq-cpu.github.io/arc-previews",
-    public_folder_prefix: folder.slice(-8),
-    preview_folder: folder,
-    entries: publicationEntries,
+    public_folder_prefix: rendered.folder.slice(-8),
+    preview_folder: rendered.folder,
+    entries: asset ? [publicationEntry] : [],
     status: asset ? "HUMAN_REVIEWED_CONTENT_ADDRESSED" : "NO_PUBLIC_UPLOADS"
   });
-  const publicationSha256 = sha256(publication);
-  const leadRouteMode = finalized.leadRouteMode;
-  const leadRouteFormName = finalized.leadRouteFormName;
-  const leadRecipientHmac = leadRouteMode === "netlify_form"
+  const publicationSha256 = digest(publication);
+  const leadHmac = finalized.leadRouteMode === "netlify_form"
     ? mac(checkoutSecret, `arc-checkout-lead-recipient-v1\ntest\n${leadEmail}`) : "";
-  const offerSnapshotSha256 = "a".repeat(64);
+  const offer = canonicalJson({
+    version: "arc-checkout-offer-snapshot-v2",
+    scope: "immutable-approved-five-page-preview-private-checkout-offer",
+    offer_contract_id: "arc-fixed-five-page-offer-v1",
+    deliverable: "fixed-five-page-marketing-website-v1",
+    page_count: 5,
+    preview_folder: rendered.folder,
+    preview_paths: bundleValue.preview_paths,
+    preview_source_repository: "arcwebhq-cpu/arc-previews",
+    public_folder_prefix: rendered.folder.slice(-8),
+    approval_content_sha256: rendered.approvalBundleSha256,
+    published_preview_bundle_sha256: bundleValue.published_preview_bundle_sha256,
+    production_content_sha256: finalized.productionContentSha256,
+    render_bundle_sha256: bundleSha256,
+    lead_route_mode: finalized.leadRouteMode,
+    lead_route_form_name: finalized.leadRouteFormName,
+    checkout_binding_key_id: checkoutKeyId,
+    environment: "arc-production",
+    lead_route_recipient_hmac_sha256: leadHmac,
+    asset_publication_receipt_sha256: publicationSha256,
+    ...stableCheckout,
+    configuration_sha256: digest(canonicalJson(stableCheckout))
+  });
+  const offerSha256 = digest(offer);
   const recipient = canonicalJson({
     version: "arc1-checkout-recipient-reservation-v2",
     scope: "private-recipients-for-approved-five-page-checkout",
     offer_contract_id: "arc-fixed-five-page-offer-v1",
     deliverable: "fixed-five-page-marketing-website-v1",
     page_count: 5,
-    preview_folder: folder,
-    preview_paths: previewPaths,
+    preview_folder: rendered.folder,
+    preview_paths: bundleValue.preview_paths,
     approval_content_sha256: rendered.approvalBundleSha256,
-    published_preview_bundle_sha256: sha256(canonicalJson(publishedManifest(rendered))),
+    published_preview_bundle_sha256: bundleValue.published_preview_bundle_sha256,
     production_content_sha256: finalized.productionContentSha256,
-    checkout_offer_snapshot_sha256: offerSnapshotSha256,
+    checkout_offer_snapshot_sha256: offerSha256,
     checkout_binding_key_id: checkoutKeyId,
     stripe_mode: "test",
-    lead_route_mode: leadRouteMode,
-    lead_route_form_name: leadRouteFormName,
-    lead_route_recipient_hmac_sha256: leadRecipientHmac,
-    lead_notification_email: leadRouteMode === "netlify_form" ? leadEmail : "",
+    lead_route_mode: finalized.leadRouteMode,
+    lead_route_form_name: finalized.leadRouteFormName,
+    lead_route_recipient_hmac_sha256: leadHmac,
+    lead_notification_email: finalized.leadRouteMode === "netlify_form" ? leadEmail : "",
     claim_recipient_email: claimEmail,
-    claim_recipient_email_sha256: sha256(claimEmail)
+    claim_recipient_email_sha256: digest(claimEmail)
   });
-  const recipientSha256 = sha256(recipient);
-  const policy = canonicalJson({
-    version: "arc-private-checkout-policy-v2",
-    scope: "one-approved-five-page-preview-one-private-payment-link",
-    checkout_binding_key_id: checkoutKeyId,
-    stripe_mode: "test",
-    stripe_account_id_sha256: accountSha256,
-    price_id: priceId,
-    product_id: productId,
-    amount_subtotal_minor_units: 500000,
-    currency: "usd",
-    quantity: 1,
-    terms_version: "2026-08-25",
-    terms_document_sha256: "b".repeat(64),
-    automatic_tax_enabled: true,
-    customer_address_source: "stripe_checkout_customer_details.address",
-    price_tax_behavior: "exclusive",
-    product_tax_code: scenarioProductTaxCode,
-    tax_contract_version: "arc-tax-v1",
-    tax_registrations: taxRegistrations,
-    tax_registrations_sha256: sha256(canonicalJson(taxRegistrations)),
-    adult_acknowledgement_key: "adultpurchaserack",
-    name_collection_required: true,
-    checkout_redirect_url: "https://arcweb.onl/payment-success/?session_id={CHECKOUT_SESSION_ID}",
-    completed_sessions_limit: 1,
-    stripe_api_version: "2026-07-29.dahlia",
-    offer_contract_id: "arc-fixed-five-page-offer-v1",
-    deliverable: "fixed-five-page-marketing-website-v1",
-    page_count: 5,
-    preview_source_repository: "arcwebhq-cpu/arc-previews",
-    preview_folder: folder,
-    preview_paths: previewPaths,
-    approval_content_sha256: rendered.approvalBundleSha256,
-    content_sha256: sha256(canonicalJson(publishedManifest(rendered))),
-    published_site_sha256: finalized.productionContentSha256,
-    source_commit_sha: sourceCommitSha,
-    source_tree_sha: sourceTreeSha,
-    asset_publication_receipt_sha256: publicationSha256,
-    lead_route_recipient_hmac_sha256: leadRecipientHmac,
-    claim_recipient_email_sha256: sha256(claimEmail),
-    readiness_core_sha256: "c".repeat(64),
-    offer_snapshot_sha256: offerSnapshotSha256,
-    recipient_reservation_sha256: recipientSha256
-  });
-  const policySha256 = sha256(policy);
-  const referencePayload = Buffer.concat([
-    Buffer.from(checkoutKeyId, "hex"),
-    Buffer.from(folder.slice(-8), "hex"),
-    Buffer.from(rendered.approvalBundleSha256, "hex"),
-    Buffer.from(policySha256, "hex")
-  ]);
-  const referenceMac = createHmac("sha256", checkoutSecret)
-    .update("arc-checkout-reference-v4\narcwebhq-cpu/arc-previews\narc-production\nstripe-test\n")
-    .update(referencePayload).digest();
-  const checkoutReference = `v4_${Buffer.concat([referencePayload, referenceMac]).toString("base64url")}`;
-  const checkoutReferenceSha256 = sha256(checkoutReference);
-  const metadata = {
-    arc_intent_sha256: "",
-    arc_policy_sha256: policySha256,
-    arc_preview_commit: sourceCommitSha,
-    arc_v4_ref: checkoutReference,
-    arc_v4_ref_sha256: checkoutReferenceSha256,
-    tax_contract_version: "arc-tax-v1",
-    terms_document_sha256: "b".repeat(64),
-    terms_version: "2026-08-25"
+  const approvalReceiptSha256 = "9".repeat(64);
+  const immutable = {
+    schema: "arc-payment-arc2-start-binding-v2",
+    review_session_binding_sha256: "a".repeat(64),
+    invite_hmac_sha256: "b".repeat(64),
+    payment_binding_sha256: "c".repeat(64),
+    payment_receipt_sha256: "d".repeat(64),
+    payment_state_event_sha256: "e".repeat(64),
+    approval_receipt_sha256: approvalReceiptSha256,
+    approval_receipt_hmac_sha256: "f".repeat(64),
+    preview_manifest_sha256: finalized.artifactManifestSha256,
+    preview_content_sha256: finalized.productionContentSha256,
+    brief_sha256: "1".repeat(64),
+    recipient_email_sha256: digest(claimEmail),
+    payer_email_sha256: "2".repeat(64),
+    checkout_session_id_hmac_sha256: "3".repeat(64),
+    payment_intent_id_hmac_sha256: "4".repeat(64),
+    stripe_account_id_sha256: stableCheckout.stripe_account_id_sha256,
+    livemode: false,
+    scope_version: "arc-fixed-five-page-offer-v1",
+    authorization_expires_at: new Date(Date.now() + 60 * 60_000).toISOString()
   };
-  metadata.arc_intent_sha256 = sha256(checkoutCreateBody(JSON.parse(policy), metadata, false));
-  const createRequestSha256 = sha256(checkoutCreateBody(JSON.parse(policy), metadata, true));
-  const paymentLinkUrl = "https://buy.stripe.com/test_ArcV4Resolver";
-  const linkReceipt = canonicalJson({
-    version: "arc-private-checkout-link-receipt-v1",
-    scope: "validated-one-use-private-payment-link",
-    payment_link_id: paymentLinkId,
-    payment_link_url_sha256: sha256(paymentLinkUrl),
-    checkout_reference_sha256: checkoutReferenceSha256,
-    checkout_policy_sha256: policySha256,
-    provider_intent_sha256: metadata.arc_intent_sha256,
-    create_request_sha256: createRequestSha256,
-    stripe_mode: "test",
-    stripe_account_id_sha256: accountSha256,
-    credential_key_id: "arc_test_rak_v4",
-    readback_contract: "product-tax-code-bound-v1",
-    readback_sha256: sha256(canonicalJson({ id: paymentLinkId, active: true, livemode: false, url_sha256: sha256(paymentLinkUrl),
-      metadata, completed_sessions_limit: 1, price_id: priceId, product_id: productId, product_tax_code: scenarioProductTaxCode }))
+  const claim = canonicalJson({
+    accepted: true,
+    outbox_key: `payment-arc2-start-outbox/${"5".repeat(64)}`,
+    state: "CLAIMED",
+    idempotent_replay: false,
+    immutable_binding_sha256: digest(canonicalJson(immutable)),
+    claim_attempt_count: 1,
+    lease_expires_at: new Date(Date.now() + 5 * 60_000).toISOString(),
+    arc2_start_receipt_sha256: null,
+    payload: immutable
   });
-  const reverse = canonicalJson({
-    version: "arc-private-checkout-link-reverse-v1",
-    scope: "private-link-id-to-approved-reference",
-    link_id_hmac_sha256: mac(checkoutSecret, `arc-private-checkout-link-id-key-v1\ntest\n${paymentLinkId}`),
-    payment_link_id: paymentLinkId,
-    checkout_reference: checkoutReference,
-    checkout_reference_sha256: checkoutReferenceSha256,
-    checkout_policy_private: policy,
-    checkout_policy_sha256: policySha256,
-    checkout_recipient_reservation_private: recipient,
-    checkout_recipient_reservation_hmac_sha256: mac(checkoutSecret, `arc1-checkout-recipient-reservation-signature-v2\ntest\n${recipient}`),
-    link_receipt_private: linkReceipt,
-    link_receipt_sha256: sha256(linkReceipt),
-    link_receipt_hmac_sha256: mac(checkoutSecret, `arc-private-checkout-link-receipt-signature-v1\ntest\n${linkReceipt}`)
-  });
-
-  const product = { object: "product", id: productId, tax_code: scenarioProductTaxCode };
-  const price = { object: "price", id: priceId, livemode: false, type: "one_time", currency: "usd", unit_amount: 500000,
-    custom_unit_amount: null, recurring: null, tax_behavior: "exclusive", product };
-  const lineItem = { object: "item", quantity: 1, currency: "usd", amount_subtotal: 500000, amount_discount: 0,
-    amount_tax: 50000, amount_total: 550000, taxes: [{ amount: 50000, taxability_reason: "standard_rated" }], price };
-  const adultField = [{ key: "adultpurchaserack", type: "dropdown", optional: false,
-    label: { type: "custom", custom: "I am 18+ and authorized to buy for this business" },
-    dropdown: { options: [{ label: "I confirm", value: "accepted" }], value: "accepted" } }];
-  const session = {
-    object: "checkout.session", id: sessionId, created: nowSeconds - 30, livemode: false, mode: "payment", status: "complete", payment_status: "paid",
-    currency: "usd", amount_subtotal: 500000, amount_total: 550000, total_details: { amount_tax: 50000, amount_discount: 0, amount_shipping: 0 },
-    automatic_tax: { enabled: true, status: "complete" }, payment_link: paymentLinkId, client_reference_id: checkoutReference,
-    consent: { terms_of_service: "accepted" }, metadata, custom_fields: adultField,
-    collected_information: { business_name: "ZXQ Business 918273", individual_name: "ZXQ Purchaser 918273" },
-    customer_details: { email: payerEmail, phone: null, tax_exempt: "none",
-      address: { line1: "918273 Secluded Avenue", line2: "", city: "Zqxville", state: "WA", postal_code: "98101", country: "US" } },
-    customer_email: payerEmail,
-    line_items: { object: "list", has_more: false, data: [lineItem] },
-    payment_intent: { object: "payment_intent", id: "pi_ArcV4ResolverContract", status: "succeeded", livemode: false,
-      amount: 550000, amount_received: 550000, currency: "usd", latest_charge: { object: "charge", id: "ch_ArcV4ResolverContract",
-        created: nowSeconds - 10, paid: true, captured: true, refunded: false, amount_refunded: 0, disputed: false, status: "succeeded",
-        livemode: false, payment_intent: "pi_ArcV4ResolverContract", amount: 550000, currency: "usd" } }
-  };
-  const paidLink = {
-    object: "payment_link", id: paymentLinkId, livemode: false, active: true, url: paymentLinkUrl,
-    restrictions: { completed_sessions: { limit: 1 } }, automatic_tax: { enabled: true }, billing_address_collection: "required",
-    consent_collection: { terms_of_service: "required" }, allow_promotion_codes: false, custom_fields: adultField.map(field => ({ ...field, dropdown: { options: field.dropdown.options } })),
-    name_collection: { business: { enabled: true, optional: false }, individual: { enabled: true, optional: false } }, submit_type: "auto",
-    after_completion: { type: "redirect", redirect: { url: "https://arcweb.onl/payment-success/?session_id={CHECKOUT_SESSION_ID}" } },
-    customer_creation: "if_required", invoice_creation: { enabled: false }, phone_number_collection: { enabled: false }, tax_id_collection: { enabled: false },
-    shipping_address_collection: null, optional_items: [], metadata,
-    line_items: { object: "list", has_more: false, data: [{ quantity: 1, price }] }
-  };
-
-  const pageShaByPath = new Map(rendered.pages.map(page => [page.path, gitSha(page.path)]));
-  const blobs = new Map(rendered.pages.map(page => [pageShaByPath.get(page.path), Buffer.from(page.html)]));
-  if (asset) blobs.set(assetGitSha, asset.bytes);
-  const treeItems = [
-    { path: folder, type: "tree", mode: "040000", sha: gitSha(folder) },
-    ...["about", "contact", "process", "services", ...(asset ? ["assets"] : [])].map(name =>
-      ({ path: `${folder}/${name}`, type: "tree", mode: "040000", sha: gitSha(`${folder}/${name}`) })),
-    ...V11_PRODUCTION_HTML_PATHS.map(path => ({ path: `${folder}/${path}`, type: "blob", mode: "100644", sha: pageShaByPath.get(path), size: blobs.get(pageShaByPath.get(path)).length })),
-    ...(asset ? [{ path: `${folder}/${asset.path}`, type: "blob", mode: "100644", sha: assetGitSha, size: asset.bytes.length }] : [])
-  ];
   const inputs = {
-    checkout_session_id: sessionId,
-    stripe_api_key: "rk_test_ArcV4ResolverContract0123456789",
+    arc2_checkout_session_adapter_enabled: "true",
+    payment_arc2_start_enabled: "false",
     stripe_live_mode_enabled: "false",
+    checkout_session_id: sessionId,
+    payment_arc2_claim_token: "arc2ClaimToken_012345678901234567890123456789",
+    payment_arc2_claim_private: claim,
     checkout_binding_key_id: checkoutKeyId,
     checkout_binding_secret: checkoutSecret,
     retired_checkout_binding_keys_json: "{}",
-    handoff_artifact_evidence_secret: artifactSecret,
-    private_link_reverse_state: reverse,
+    checkout_offer_snapshot_private: offer,
+    checkout_offer_snapshot_sha256: offerSha256,
+    checkout_offer_snapshot_hmac_sha256: mac(checkoutSecret, `arc-checkout-offer-snapshot-signature-v2\ntest\n${offer}`),
+    render_bundle_private: bundle,
+    render_bundle_sha256: bundleSha256,
+    checkout_recipient_reservation_private: recipient,
+    checkout_recipient_reservation_sha256: digest(recipient),
+    checkout_recipient_reservation_hmac_sha256: mac(checkoutSecret, `arc1-checkout-recipient-reservation-signature-v2\ntest\n${recipient}`),
     asset_publication_receipt_private: publication,
     asset_publication_receipt_sha256: publicationSha256,
     asset_publication_receipt_hmac_sha256: mac(publicationSecret, `arc1-public-asset-publication-receipt-v1\n${publication}`),
     asset_publication_receipt_secret: publicationSecret,
-    preview_source_github_owner: "arcwebhq-cpu",
-    preview_source_github_repo: "arc-previews",
-    preview_source_github_branch: "main",
-    github_token: "github-token",
+    handoff_artifact_evidence_secret: artifactSecret,
+    payment_arc2_worker_secret: workerSecret,
+    payment_arc2_worker_url: workerUrl,
+    preview_source_commit_sha: sourceCommitSha,
+    github_token: "github_pat_ArcReadOnlyAssets0123456789",
     provider_operation_timeout_ms: "25000"
   };
-  return { inputs, rendered, finalized, asset, policy, reverse, publication, recipient, linkReceipt, checkoutReference,
-    checkoutReferenceSha256, metadata, session, paidLink, treeItems, blobs, pageShaByPath };
-}
-
-function mockFetch(scenario, mutations = {}) {
-  const calls = [];
-  const requests = [];
-  const fetch = async (url, options = {}) => {
-    calls.push(String(url));
-    requests.push({ url: String(url), options });
-    if (url === "https://api.stripe.com/v1/account") return jsonResponse({ object: "account", id: accountId });
-    if (String(url).includes("/v1/checkout/sessions/")) return jsonResponse(scenario.session);
-    if (String(url).includes("/v1/payment_links/")) return jsonResponse(scenario.paidLink);
-    if (String(url).includes("/git/ref/")) return jsonResponse({ ref: `refs/tags/arc-checkout-ready-v4/${scenario.checkoutReferenceSha256}`,
-      object: { type: "commit", sha: sourceCommitSha } });
-    if (String(url).endsWith(`/git/commits/${sourceCommitSha}`)) return jsonResponse({ sha: sourceCommitSha, tree: { sha: sourceTreeSha } });
-    if (String(url).includes(`/git/trees/${sourceTreeSha}`)) return jsonResponse({ sha: sourceTreeSha, truncated: false,
-      tree: mutations.treeItems || scenario.treeItems });
-    const blobSha = String(url).split("/git/blobs/")[1];
-    if (blobSha) {
-      const bytes = mutations.blobs?.get(blobSha) || scenario.blobs.get(blobSha);
-      if (!bytes) return jsonResponse({ message: "Not Found" }, 404);
-      return jsonResponse({ sha: blobSha, encoding: "base64", size: bytes.length, content: bytes.toString("base64") });
-    }
-    throw new Error(`Unexpected resolver request: ${url}`);
-  };
-  return { fetch, calls, requests };
+  return { inputs, rendered, finalized, asset, publicationEntry, immutable, approvalReceiptSha256 };
 }
 
 function jsonResponse(value, status = 200) {
@@ -401,302 +315,202 @@ function jsonResponse(value, status = 200) {
   return new Response(body, { status, headers: { "content-type": "application/json", "content-length": String(Buffer.byteLength(body)) } });
 }
 
-async function runScenario(scenario, mutations) {
-  const mocked = mockFetch(scenario, mutations);
-  return { output: await runResolverSource(scenario.inputs, mocked.fetch, Buffer), calls: mocked.calls, requests: mocked.requests };
+function mockFetch(scenario, { completedReplay = false, corruptAsset = false, omitStartReceipt = false, tamperStartReceipt = false, workerStatus = 200 } = {}) {
+  const calls = [];
+  let startBody = null;
+  const fetch = async (url, options = {}) => {
+    calls.push({ url: String(url), options });
+    if (String(url).startsWith("https://api.github.com/")) {
+      assert.equal(options.method, "GET");
+      assert.equal(options.headers.Authorization, `Bearer ${scenario.inputs.github_token}`);
+      const bytes = corruptAsset ? Buffer.from(scenario.asset.bytes).fill(0x42, 30, 40) : scenario.asset.bytes;
+      return jsonResponse({
+        sha: scenario.publicationEntry.git_blob_sha1,
+        encoding: "base64",
+        size: bytes.length,
+        content: bytes.toString("base64")
+      });
+    }
+    if (url === workerUrl) {
+      assert.equal(options.method, "POST");
+      assert.equal(options.headers.Authorization, `Bearer ${workerSecret}`);
+      startBody = JSON.parse(options.body);
+      if (completedReplay) {
+        return jsonResponse({
+          accepted: true,
+          outbox_key: JSON.parse(scenario.inputs.payment_arc2_claim_private).outbox_key,
+          state: "COMPLETED",
+          idempotent_replay: true,
+          immutable_binding_sha256: digest(canonicalJson(scenario.immutable)),
+          claim_attempt_count: 1,
+          lease_expires_at: null,
+          arc2_start_receipt_sha256: "a".repeat(64)
+        });
+      }
+      const handoffId = "6".repeat(64);
+      const continuationReady = workerStatus === 200;
+      const handoffState = continuationReady ? "INVITATION_READY" : "PAYMENT_VERIFIED";
+      const startReceipt = canonicalJson({
+        schema: "arc2-review-handoff-start-receipt-v2",
+        accepted: true,
+        handoff_id: handoffId,
+        started_at: new Date().toISOString(),
+        payment_evidence_sha256: "8".repeat(64),
+        artifact_evidence_sha256: digest(startBody.artifact_evidence),
+        bridge_immutable_binding_sha256: digest(canonicalJson(scenario.immutable)),
+        review_session_binding_sha256: scenario.immutable.review_session_binding_sha256,
+        checkout_session_id_hmac_sha256: scenario.immutable.checkout_session_id_hmac_sha256,
+        payment_intent_id_hmac_sha256: scenario.immutable.payment_intent_id_hmac_sha256,
+        recipient_email_sha256: tamperStartReceipt ? "0".repeat(64) : scenario.immutable.recipient_email_sha256,
+        payer_email_sha256: scenario.immutable.payer_email_sha256,
+        handoff_state: handoffState,
+        reversal_control_ready: continuationReady,
+        continuation_ready: continuationReady
+      });
+      return jsonResponse({
+        accepted: true,
+        outbox_key: JSON.parse(scenario.inputs.payment_arc2_claim_private).outbox_key,
+        state: workerStatus === 202 ? "PENDING" : "COMPLETED",
+        idempotent_replay: false,
+        immutable_binding_sha256: digest(canonicalJson(scenario.immutable)),
+        claim_attempt_count: 1,
+        lease_expires_at: workerStatus === 202 ? null : null,
+        arc2_start_receipt_sha256: workerStatus === 202 ? null : digest(startReceipt),
+        handoff_id: handoffId,
+        handoff_state: handoffState,
+        reversal_control_ready: continuationReady,
+        ...(!omitStartReceipt ? { start_receipt: startReceipt, start_receipt_hmac_sha256: "7".repeat(64) } : {}),
+        ...(workerStatus === 202 ? { retry_required: true } : {})
+      }, workerStatus);
+    }
+    throw new Error(`unexpected network request ${url}`);
+  };
+  return { fetch, calls, get startBody() { return startBody; } };
 }
 
-function setSessionTax(scenario, { amount, reason, state }) {
-  scenario.session.total_details.amount_tax = amount;
-  scenario.session.amount_total = 500000 + amount;
-  scenario.session.line_items.data[0].amount_tax = amount;
-  scenario.session.line_items.data[0].amount_total = 500000 + amount;
-  scenario.session.line_items.data[0].taxes = reason == null ? [] : [{ amount, taxability_reason: reason }];
-  scenario.session.payment_intent.amount = 500000 + amount;
-  scenario.session.payment_intent.amount_received = 500000 + amount;
-  scenario.session.payment_intent.latest_charge.amount = 500000 + amount;
-  scenario.session.customer_details.address.state = state;
-}
+assert.doesNotThrow(() => new AsyncFunction("inputData", "fetch", "Buffer", source));
+assert.doesNotMatch(source, /api\.stripe\.com|stripe_api_key|private_link_reverse_state|payment_link_id|buy\.stripe\.com|\bplink_/i);
+assert.match(source, /offer\.customer_creation !== "always"/);
+assert.match(source, /offer\.submit_type !== "pay"/);
+assert.doesNotMatch(source, /name_collection_required|billing_address_collection/,
+  "the active ARC2 signed offer consumer must match the canonical Session request");
+assert.match(source, /\/internal\/payment-arc2\/start/);
+assert.match(source, /ARC2_CHECKOUT_SESSION_ADAPTER_PAUSED/);
+assert.doesNotMatch(retiredSource, /api\.stripe\.com|stripe_api_key|private_link_reverse_state|buy\.stripe\.com|\bplink_/i);
+await assert.rejects(runRetired({}, async () => { throw new Error("network must not run"); }, Buffer), /ARC2_RETIRED_RESOLVER/);
+
+let pausedCalls = 0;
+const paused = await runAdapter({}, async () => { pausedCalls += 1; throw new Error("paused adapter must not use network"); }, Buffer);
+assert.equal(paused.status, "ARC2_CHECKOUT_SESSION_ADAPTER_PAUSED");
+assert.equal(paused.artifact_resolution_performed, false);
+assert.equal(paused.payment_arc2_start_request_performed, false);
+assert.equal(pausedCalls, 0);
 
 const scenario = buildScenario();
-const first = await runScenario(scenario);
-const second = await runScenario(scenario);
-assert.equal(first.output.status, "READY_FOR_CLAIMABLE_DEPLOY");
-assert.equal(first.output.provider_write_allowed_by_this_step, false);
-assert.equal(first.output.external_deploy_write_allowed_by_this_step, false);
-assert.equal(first.output.claim_invitation_allowed_by_this_step, false);
-assert.equal(first.output.email_allowed_by_this_step, false);
-for (const flag of ["stripe_provider_write_allowed_by_this_step", "github_provider_write_allowed_by_this_step",
-  "netlify_provider_write_allowed_by_this_step", "state_write_allowed_by_this_step", "delivery_email_send_allowed_by_this_step"]) {
-  assert.equal(first.output[flag], false, `${flag} must remain false in the read-only resolver`);
-}
-assert.equal(first.output.terms_version, "2026-08-25");
-assert.deepEqual(first.output.production_page_paths, V11_PRODUCTION_HTML_PATHS);
-assert.deepEqual(first.output.preview_paths, V11_PRODUCTION_HTML_PATHS.map(path => `${scenario.rendered.folder}/${path}`));
-for (const request of first.requests.filter(item => item.url.startsWith("https://api.stripe.com/"))) {
-  assert.equal(request.options.method, "GET");
-  assert.equal(request.options.headers["Stripe-Version"], "2026-07-29.dahlia");
-  assert.match(request.options.headers.Authorization, /^Basic [A-Za-z0-9+/]+=*$/);
-}
-assert.ok(first.calls.some(url => url.includes("expand%5B%5D=line_items.data.taxes")),
-  "authoritative Session retrieval must expand line-item taxes for taxability_reason validation");
-for (const request of first.requests.filter(item => item.url.startsWith("https://api.github.com/"))) {
-  assert.equal(request.options.method, "GET");
-  assert.equal(request.options.headers.Authorization, "Bearer github-token");
-  assert.equal(request.options.headers["X-GitHub-Api-Version"], "2022-11-28");
-}
-assert.equal(first.calls.filter(url => url.includes("/git/blobs/") && scenario.pageShaByPath.has([...scenario.pageShaByPath].find(([, sha]) => url.endsWith(sha))?.[0])).length, 5);
-for (const path of V11_PRODUCTION_HTML_PATHS) {
-  assert.equal(first.calls.filter(url => url.endsWith(`/git/blobs/${scenario.pageShaByPath.get(path)}`)).length, 1, `${path} must be read exactly once`);
-}
-assert.equal(first.output.production_content_sha256, scenario.finalized.productionContentSha256);
-assert.equal(first.output.bundle_fingerprint, scenario.finalized.bundleFingerprint);
-assert.equal(first.output.artifact_manifest_sha256, scenario.finalized.artifactManifestSha256);
-assert.equal(first.output.deploy_artifacts_private, scenario.finalized.deployArtifactsJson);
-assert.equal(first.output.handoff_artifact_evidence_private, second.output.handoff_artifact_evidence_private, "evidence must be deterministic for one Charge timestamp");
-assert.equal(first.output.payment_evidence_private, second.output.payment_evidence_private);
-assert.equal(first.output.handoff_start_payload_private, second.output.handoff_start_payload_private);
-assert.equal(Object.hasOwn(first.output, "production_content_base64"), false, "Home-only production fallback must be removed");
-assert.equal(Object.hasOwn(first.output, "preview_file_path"), false, "singular preview fallback must be removed");
-assert.match(resolverSource, /paidLinkProductTaxCode/,
-  "paid resolution must read back the authenticated Payment Link Product tax code");
+const resolvedMock = mockFetch(scenario);
+const resolved = await runAdapter(scenario.inputs, resolvedMock.fetch, Buffer);
+assert.equal(resolved.status, "READY_FOR_FIRST_PARTY_PAYMENT_ARC2_START");
+assert.equal(resolved.payment_arc2_start_request_performed, false);
+assert.equal(resolved.artifact_count, 7);
+assert.equal(resolved.artifact_manifest_sha256, scenario.finalized.artifactManifestSha256);
+assert.equal(resolved.production_content_sha256, scenario.finalized.productionContentSha256);
+assert.equal(resolved.bundle_fingerprint, scenario.finalized.bundleFingerprint);
+assert.equal(resolved.checkout_session_id_sha256, digest(sessionId));
+assert.equal(resolved.outbox_key_sha256, digest(JSON.parse(scenario.inputs.payment_arc2_claim_private).outbox_key));
+assert.equal(Object.hasOwn(resolved, "checkout_session_id"), false);
+assert.equal(Object.hasOwn(resolved, "outbox_key"), false);
+assert.equal(resolvedMock.calls.length, 1);
+assert.match(resolvedMock.calls[0].url, /^https:\/\/api\.github\.com\/repos\/arcwebhq-cpu\/arc-previews\/git\/blobs\//);
 
-const sessionProductTaxDriftScenario = buildScenario();
-sessionProductTaxDriftScenario.session.line_items.data[0].price.product.tax_code = "txcd_87654321";
-await assert.rejects(runScenario(sessionProductTaxDriftScenario), /ARC_TAX_REVIEW_REQUIRED: current Checkout Product tax code differs/,
-  "current Product tax-code drift must stop automatic fulfillment and route to manual tax review");
-
-const paidLinkTaxDriftScenario = buildScenario();
-paidLinkTaxDriftScenario.paidLink.line_items.data[0].price = {
-  ...paidLinkTaxDriftScenario.paidLink.line_items.data[0].price,
-  product: { ...paidLinkTaxDriftScenario.paidLink.line_items.data[0].price.product, tax_code: "txcd_87654321" }
-};
-await assert.rejects(runScenario(paidLinkTaxDriftScenario), /ARC_TAX_REVIEW_REQUIRED: current Payment Link Product tax code differs/,
-  "current paid-Link Product tax-code drift must stop automatic fulfillment and route to manual tax review");
-
-const unexplainedZeroTaxScenario = buildScenario();
-setSessionTax(unexplainedZeroTaxScenario, { amount: 0, reason: null, state: "OR" });
-await assert.rejects(runScenario(unexplainedZeroTaxScenario), /line-item tax breakdown/,
-  "zero tax without expanded Stripe taxability evidence must fail closed");
-
-const unreconciledTaxScenario = buildScenario();
-unreconciledTaxScenario.session.line_items.data[0].taxes[0].amount -= 1;
-await assert.rejects(runScenario(unreconciledTaxScenario), /line-item tax breakdown/,
-  "expanded line-item taxes must exactly reconcile to Checkout total_details.amount_tax");
-
-const positiveReducedRateScenario = buildScenario();
-positiveReducedRateScenario.session.line_items.data[0].taxes[0].taxability_reason = "reduced_rated";
-await assert.rejects(runScenario(positiveReducedRateScenario), /line-item tax breakdown/,
-  "recognized non-standard positive-tax reasons remain fail-closed for review");
-
-const unregisteredNotCollectingScenario = buildScenario();
-setSessionTax(unregisteredNotCollectingScenario, { amount: 0, reason: "not_collecting", state: "OR" });
-await assert.rejects(runScenario(unregisteredNotCollectingScenario), /ARC_TAX_REVIEW_REQUIRED/,
-  "Stripe's ambiguous not_collecting reason must fail closed without making a legal conclusion about registration obligations");
-
-const unsupportedTaxScenario = buildScenario();
-setSessionTax(unsupportedTaxScenario, { amount: 0, reason: "not_supported", state: "OR" });
-await assert.rejects(runScenario(unsupportedTaxScenario), /unsupported-tax review/,
-  "Stripe's not_supported reason must fail closed for provider-support review");
-
-for (const reason of ["customer_exempt", "reverse_charge"]) {
-  const manualTaxEvidenceScenario = buildScenario();
-  setSessionTax(manualTaxEvidenceScenario, { amount: 0, reason, state: "OR" });
-  await assert.rejects(runScenario(manualTaxEvidenceScenario), /ARC_TAX_REVIEW_REQUIRED/,
-    `${reason} must stop automatic fulfillment until separately signed supporting tax evidence exists`);
-}
-
-const explainedZeroTaxScenario = buildScenario();
-setSessionTax(explainedZeroTaxScenario, { amount: 0, reason: "not_subject_to_tax", state: "OR" });
-assert.equal((await runScenario(explainedZeroTaxScenario)).output.status, "READY_FOR_CLAIMABLE_DEPLOY",
-  "a recognized non-ambiguous Stripe taxability reason may explain a zero-tax result");
-
-const exemptHolidayScenario = buildScenario();
-setSessionTax(exemptHolidayScenario, { amount: 0, reason: "product_exempt_holiday", state: "OR" });
-assert.equal((await runScenario(exemptHolidayScenario)).output.status, "READY_FOR_CLAIMABLE_DEPLOY",
-  "the official product_exempt_holiday reason is accepted as an explained zero-tax result");
-
-const futureUnknownReasonScenario = buildScenario();
-setSessionTax(futureUnknownReasonScenario, { amount: 0, reason: "future_unpinned_reason", state: "OR" });
-await assert.rejects(runScenario(futureUnknownReasonScenario), /line-item tax breakdown/,
-  "future taxability reasons must fail closed until the pinned API contract is reviewed");
-
-const advisorConfirmedNontaxableScenario = buildScenario({ productTaxCode: "txcd_00000000" });
-setSessionTax(advisorConfirmedNontaxableScenario, { amount: 0, reason: "not_collecting", state: "OR" });
-assert.equal((await runScenario(advisorConfirmedNontaxableScenario)).output.status, "READY_FOR_CLAIMABLE_DEPLOY",
-  "not_collecting is explained when both authenticated Products match the signed advisor-confirmed Stripe Nontaxable code");
-
-const registeredNotCollectingScenario = buildScenario();
-setSessionTax(registeredNotCollectingScenario, { amount: 0, reason: "not_collecting", state: "WA" });
-await assert.rejects(runScenario(registeredNotCollectingScenario), /applicable tax|ARC_TAX_REVIEW_REQUIRED/,
-  "not_collecting must fail closed when the destination is present in the signed active-registration snapshot");
-
-const artifactEvidence = JSON.parse(first.output.handoff_artifact_evidence_private);
-const paymentEvidence = JSON.parse(first.output.payment_evidence_private);
-const deployArtifacts = JSON.parse(first.output.deploy_artifacts_private);
-assert.equal(artifactEvidence.version, "arc2-handoff-artifact-evidence-v4");
-assert.equal(paymentEvidence.version, "arc2-payment-evidence-v4");
-assert.deepEqual(artifactEvidence.artifacts.map(entry => entry.path), ["_headers", scenario.asset.path, ...V11_PRODUCTION_HTML_PATHS]);
+const startedMock = mockFetch(scenario);
+const started = await runAdapter({ ...scenario.inputs, payment_arc2_start_enabled: "true" }, startedMock.fetch, Buffer);
+assert.equal(started.status, "PAYMENT_ARC2_START_COMPLETED");
+assert.equal(started.payment_arc2_start_request_performed, true);
+assert.equal(started.first_party_worker_may_perform_provider_mutations, true);
+assert.equal(started.provider_write_allowed_by_this_step, false);
+assert.equal(started.stripe_provider_write_allowed_by_this_step, false);
+assert.equal(started.github_provider_write_allowed_by_this_step, false);
+assert.equal(started.netlify_provider_write_allowed_by_this_step, false);
+assert.equal(started.checkout_session_id_sha256, digest(sessionId));
+assert.equal(started.outbox_key_sha256, digest(JSON.parse(scenario.inputs.payment_arc2_claim_private).outbox_key));
+assert.equal(Object.hasOwn(started, "checkout_session_id"), false);
+assert.equal(Object.hasOwn(started, "outbox_key"), false);
+assert.equal(startedMock.calls.length, 2);
+assert.deepEqual(Object.keys(startedMock.startBody).sort(), [
+  "artifact_evidence", "artifact_evidence_hmac_sha256", "checkout_session_id", "claim_token", "deploy_artifacts",
+  "lead_notification_email", "lead_route_recipient_hmac_sha256", "outbox_key"
+].sort());
+const evidence = JSON.parse(startedMock.startBody.artifact_evidence);
+const deployArtifacts = JSON.parse(startedMock.startBody.deploy_artifacts);
+assert.equal(evidence.version, "arc2-handoff-artifact-evidence-v4");
+assert.equal(evidence.checkout_config_snapshot_sha256, scenario.inputs.checkout_offer_snapshot_sha256);
+assert.equal(evidence.checkout_reference_sha256, digest(scenario.approvalReceiptSha256));
+assert.equal(evidence.artifact_manifest_sha256, scenario.finalized.artifactManifestSha256);
+assert.equal(evidence.production_content_sha256, scenario.finalized.productionContentSha256);
+assert.equal(evidence.preview_source_commit_sha, sourceCommitSha);
+assert.equal(startedMock.startBody.artifact_evidence_hmac_sha256,
+  mac(artifactSecret, `arc2-handoff-artifact-evidence-signature-v4\n${startedMock.startBody.artifact_evidence}`));
+assert.deepEqual(deployArtifacts.map(entry => entry.path), ["_headers", scenario.asset.path, ...V11_PRODUCTION_HTML_PATHS]);
 assert.equal(Buffer.from(deployArtifacts[0].content_base64, "base64").toString("utf8"), V11_PRODUCTION_HEADERS_FILE);
-assert.equal(artifactEvidence.preview_source_tag_sha256, sha256(`refs/tags/arc-checkout-ready-v4/${scenario.checkoutReferenceSha256}`));
-assert.equal(paymentEvidence.checkout_config_snapshot, scenario.policy);
-assert.equal(paymentEvidence.production_content_sha256, artifactEvidence.production_content_sha256);
-assert.equal(paymentEvidence.artifact_manifest_sha256, artifactEvidence.artifact_manifest_sha256);
-assert.equal(paymentEvidence.bundle_fingerprint, artifactEvidence.bundle_fingerprint);
-assert.equal(paymentEvidence.handoff_artifact_evidence_sha256, sha256(first.output.handoff_artifact_evidence_private));
-assert.deepEqual(paymentEvidence.taxability_reasons, ["standard_rated"]);
-assert.equal(paymentEvidence.line_item_taxes_sha256,
-  sha256(canonicalJson([{ amount_minor_units: 50000, taxability_reason: "standard_rated" }])));
-assert.deepEqual(first.output.taxability_reasons, ["standard_rated"]);
-assert.equal(first.output.line_item_taxes_sha256, paymentEvidence.line_item_taxes_sha256);
-assert.equal(first.output.payment_evidence_hmac_sha256,
-  mac(checkoutSecret, `arc2-payment-evidence-signature-v4\ntest\n${first.output.payment_evidence_private}`));
-assert.equal(first.output.handoff_artifact_evidence_hmac_sha256,
-  mac(artifactSecret, `arc2-handoff-artifact-evidence-signature-v4\n${first.output.handoff_artifact_evidence_private}`));
+assert.equal(Object.hasOwn(started, "payment_evidence_private"), false);
+assert.equal(Object.hasOwn(startedMock.startBody, "payment_evidence"), false);
+assert.equal(startedMock.calls.some(call => /stripe\.com/i.test(call.url)), false);
 
-const startInput = JSON.parse(first.output.handoff_start_payload_private);
-const siblingEnv = {
-  ARC_CHECKOUT_BINDING_SECRET: checkoutSecret,
-  ARC_CHECKOUT_BINDING_KEY_ID: checkoutKeyId,
-  ARC_RETIRED_CHECKOUT_BINDING_KEYS_JSON: "{}",
-  ARC_HANDOFF_ARTIFACT_EVIDENCE_SECRET: artifactSecret,
-  ARC_STRIPE_LIVE_MODE_ENABLED: "false"
-};
-const normalized = normalizeStartPayload(startInput, siblingEnv, new Date());
-assert.deepEqual(normalized.deployArtifacts.map(entry => entry.path), ["_headers", scenario.asset.path, ...V11_PRODUCTION_HTML_PATHS]);
-assert.equal(normalized.payment.value.version, "arc2-payment-evidence-v4");
-assert.equal(normalized.artifact.value.version, "arc2-handoff-artifact-evidence-v4");
-assert.equal(normalized.formName, scenario.finalized.leadRouteFormName);
+const completedReplayMock = mockFetch(scenario, { completedReplay: true });
+const completedReplay = await runAdapter({ ...scenario.inputs, payment_arc2_start_enabled: "true" }, completedReplayMock.fetch, Buffer);
+assert.equal(completedReplay.status, "PAYMENT_ARC2_START_COMPLETED");
+assert.equal(completedReplay.observed_start_receipt_sha256, "");
+assert.equal(completedReplay.first_party_start_receipt_sha256, "a".repeat(64));
+assert.equal(completedReplay.handoff_id, "");
+assert.equal(completedReplay.retry_required, false);
 
-class FakeStore {
-  values = new Map();
-  writes = 0;
-  counter = 0;
-  async getWithMetadata(key) {
-    const entry = this.values.get(key);
-    return entry ? { data: structuredClone(entry.data), etag: entry.etag, metadata: {} } : null;
-  }
-  async setJSON(key, data, options = {}) {
-    const current = this.values.get(key);
-    if (options.onlyIfNew && current) return { modified: false };
-    if (options.onlyIfMatch && current?.etag !== options.onlyIfMatch) return { modified: false };
-    const etag = `etag-${++this.counter}`;
-    this.values.set(key, { data: structuredClone(data), etag });
-    this.writes += 1;
-    return { modified: true, etag };
-  }
-}
-const startStore = new FakeStore();
-const startResult = await startHandoff(startInput, {
-  ...siblingEnv,
-  ARC_HANDOFF_STATE_SECRET: "arc2-sibling-state-secret-01234567890123456789",
-  ARC_STRIPE_CHECKOUT_LEDGER_ENABLED: "false",
-  ARC_STRIPE_CHECKOUT_LEDGER_REQUIRED: "false",
-  ARC_RUNTIME_ENVIRONMENT: "sandbox",
-  ARC_ALLOW_TEST_MODE_EVENTS: "true",
-  ARC_HANDOFF_ENABLED: "false",
-  ARC_EXPECTED_STRIPE_ACCOUNT_ID_SHA256: accountSha256,
-  ARC_STRIPE_ACCOUNT_VERIFICATION_KEY: "rk_test_arc2ResolverAccountRead0123456789",
-  ARC_STRIPE_LIVE_MODE_ENABLED: "false",
-  ARC_STRIPE_REVERSAL_CONTROL_REQUIRED: "true",
-  ARC_STRIPE_REVERSAL_WEBHOOK_ENABLED: "true",
-  ARC_STRIPE_REVERSAL_BINDING_ENABLED: "true",
-  ARC_STRIPE_REVERSAL_RECHECK_ENABLED: "true",
-  ARC_STRIPE_WEBHOOK_API_VERSION: "2026-07-29.dahlia",
-  ARC_STRIPE_WEBHOOK_SIGNING_SECRET: "arc2-webhook-signing-secret-01234567890123456789",
-  ARC_STRIPE_REVERSAL_HMAC_SECRET: "arc2-reversal-hmac-secret-01234567890123456789",
-  ARC_STRIPE_REVERSAL_BINDING_SECRET: "arc2-reversal-binding-secret-01234567890123456789",
-  ARC_STRIPE_REVERSAL_BINDING_ENDPOINT_SECRET: "arc2-reversal-binding-endpoint-secret-0123456789",
-  ARC_STRIPE_REVERSAL_RECHECK_SECRET: "arc2-reversal-recheck-secret-01234567890123456789",
-  ARC_STRIPE_REVERSAL_RECHECK_ENDPOINT_SECRET: "arc2-reversal-recheck-endpoint-secret-0123456789"
-}, {
-  store: startStore,
-  clock: () => new Date(),
-  uuid: () => "33333333-3333-4333-8333-333333333333",
-  fetch: async () => { throw new Error("fresh v4 bootstrap must reserve before provider access"); }
-});
-assert.equal(startResult.record.state, "PAYMENT_VERIFIED", "sibling start service must accept and reserve the exact resolver payload");
-assert.equal(startResult.reversalControlReady, false);
-assert.ok(startStore.writes >= 3, "start compatibility must exercise immutable reference/session reservations plus the handoff row");
+const retryMock = mockFetch(scenario, { workerStatus: 202 });
+const retry = await runAdapter({ ...scenario.inputs, payment_arc2_start_enabled: "true" }, retryMock.fetch, Buffer);
+assert.equal(retry.status, "PAYMENT_ARC2_START_RETRY_REQUIRED");
+assert.equal(retry.retry_required, true);
+assert.match(retry.observed_start_receipt_sha256, /^[a-f0-9]{64}$/);
+assert.equal(retry.first_party_start_receipt_sha256, "");
 
-const secondarySha = scenario.pageShaByPath.get("about/index.html");
-const tamperedBlobs = new Map(scenario.blobs);
-const secondaryBytes = Buffer.from(tamperedBlobs.get(secondarySha));
-secondaryBytes[secondaryBytes.indexOf(Buffer.from("About"))] ^= 1;
-tamperedBlobs.set(secondarySha, secondaryBytes);
-await assert.rejects(runScenario(scenario, { blobs: tamperedBlobs }), /published five-page manifest|approval manifest|v11 private preview/i,
-  "a secondary-page byte change must fail even when Home is untouched");
+const missingReceiptMock = mockFetch(scenario, { omitStartReceipt: true, workerStatus: 202 });
+await assert.rejects(
+  runAdapter({ ...scenario.inputs, payment_arc2_start_enabled: "true" }, missingReceiptMock.fetch, Buffer),
+  /first-party start binding/
+);
 
-for (const [label, mutate, expected] of [
-  ["missing page", items => items.filter(item => item.path !== `${scenario.rendered.folder}/process/index.html`), /missing or extra paths/],
-  ["extra page", items => [...items, { path: `${scenario.rendered.folder}/team/index.html`, type: "blob", mode: "100644", sha: "d".repeat(40), size: 10 }], /missing or extra paths/],
-  ["missing asset", items => items.filter(item => item.path !== `${scenario.rendered.folder}/${scenario.asset.path}`), /missing or extra paths/],
-  ["extra asset", items => [...items, { path: `${scenario.rendered.folder}/assets/${"e".repeat(64)}.png`, type: "blob", mode: "100644", sha: "e".repeat(40), size: 68 }], /missing or extra paths/]
-]) {
-  await assert.rejects(runScenario(scenario, { treeItems: mutate(scenario.treeItems) }), expected, label);
-}
-const oversizedPageTree = scenario.treeItems.map(item => item.path === `${scenario.rendered.folder}/about/index.html`
-  ? { ...item, size: 150001 } : item);
-await assert.rejects(runScenario(scenario, { treeItems: oversizedPageTree }), /missing|exceeds|binding/i, "per-page source cap must fail closed");
+const tamperedReceiptMock = mockFetch(scenario, { tamperStartReceipt: true, workerStatus: 202 });
+await assert.rejects(
+  runAdapter({ ...scenario.inputs, payment_arc2_start_enabled: "true" }, tamperedReceiptMock.fetch, Buffer),
+  /signed first-party start receipt/
+);
 
-let preflightNetworkCalls = 0;
-assert.doesNotMatch(resolverSource, /\(\?:sk\|rk\)/, "ARC2 must never accept unrestricted Stripe secret keys");
-await assert.rejects(runResolverSource({ ...scenario.inputs, stripe_api_key: "sk_test_arc_unrestricted_secret_1234567890" }, async () => {
-  preflightNetworkCalls += 1;
-  throw new Error("unrestricted Stripe key must fail before network");
-}, Buffer), /restricted Stripe test API key/);
-const v3Reverse = canonicalJson({ ...JSON.parse(scenario.reverse), checkout_reference: `v3_${scenario.checkoutReference.slice(3)}` });
-await assert.rejects(runResolverSource({ ...scenario.inputs, private_link_reverse_state: v3Reverse }, async () => {
-  preflightNetworkCalls += 1;
-  throw new Error("v3 must fail before network");
-}, Buffer), /requires an exact checkout reference v4 reservation/);
-const mixedPolicy = canonicalJson({ ...JSON.parse(scenario.policy), version: "arc-private-checkout-policy-v1" });
-const mixedReverse = canonicalJson({ ...JSON.parse(scenario.reverse), checkout_policy_private: mixedPolicy });
-await assert.rejects(runResolverSource({ ...scenario.inputs, private_link_reverse_state: mixedReverse }, async () => {
-  preflightNetworkCalls += 1;
-  throw new Error("mixed versions must fail before network");
-}, Buffer), /exact v4 five-page private checkout policy|policy binding/);
-await assert.rejects(runResolverSource({ ...scenario.inputs, asset_publication_receipt_hmac_sha256: "0".repeat(64) }, async () => {
-  preflightNetworkCalls += 1;
-  throw new Error("invalid publication HMAC must fail before network");
-}, Buffer), /publication receipt HMAC/);
-const legacyLinkReceiptObject = JSON.parse(scenario.linkReceipt);
-delete legacyLinkReceiptObject.readback_contract;
-const legacyLinkReceipt = canonicalJson(legacyLinkReceiptObject);
-const legacyLinkReverse = canonicalJson({
-  ...JSON.parse(scenario.reverse),
-  link_receipt_private: legacyLinkReceipt,
-  link_receipt_sha256: sha256(legacyLinkReceipt),
-  link_receipt_hmac_sha256: mac(checkoutSecret, `arc-private-checkout-link-receipt-signature-v1\ntest\n${legacyLinkReceipt}`)
-});
-await assert.rejects(runResolverSource({ ...scenario.inputs, private_link_reverse_state: legacyLinkReverse }, async () => {
-  preflightNetworkCalls += 1;
-  throw new Error("legacy Link receipt must fail before network");
-}, Buffer), /private Link receipt fields|v4 private Link receipt binding/);
-assert.equal(preflightNetworkCalls, 0,
-  "unrestricted credentials, fresh v3, mixed/cross pairs, unauthenticated publication receipts, and legacy Link receipts must fail before provider reads or mutations");
+const noFormScenario = buildScenario({ noAsset: true, noForm: true });
+const noForm = await runAdapter(noFormScenario.inputs, async () => { throw new Error("no-asset paused-start path needs no network"); }, Buffer);
+assert.equal(noForm.status, "READY_FOR_FIRST_PARTY_PAYMENT_ARC2_START");
+assert.equal(noForm.artifact_count, 6);
 
-const noFormScenario = buildScenario({ noForm: true });
-const noForm = await runScenario(noFormScenario);
-const noFormEvidence = JSON.parse(noForm.output.handoff_artifact_evidence_private);
-const noFormStart = JSON.parse(noForm.output.handoff_start_payload_private);
-assert.equal(noFormEvidence.lead_route_mode, "not_required");
-assert.equal(noFormEvidence.lead_route_form_name, "");
-assert.equal(noFormEvidence.lead_route_recipient_hmac_sha256, "");
-assert.equal(noFormStart.lead_notification_email, "");
-assert.equal(noFormStart.lead_route_recipient_hmac_sha256, "");
-assert.equal(normalizeStartPayload(noFormStart, siblingEnv, new Date()).formName, "");
+const badClaimValue = JSON.parse(scenario.inputs.payment_arc2_claim_private);
+badClaimValue.payload.preview_manifest_sha256 = "0".repeat(64);
+badClaimValue.immutable_binding_sha256 = digest(canonicalJson(badClaimValue.payload));
+let badClaimCalls = 0;
+const badClaimMock = mockFetch(scenario);
+await assert.rejects(runAdapter({ ...scenario.inputs, payment_arc2_claim_private: canonicalJson(badClaimValue) }, async (url, options) => {
+  badClaimCalls += 1;
+  return badClaimMock.fetch(url, options);
+}, Buffer), /artifact manifest binding/);
+assert.ok(badClaimCalls <= 1, "a manifest mismatch may read only its signed asset before failing and must never POST");
 
-const noAssetScenario = buildScenario({ noAssets: true });
-const noAsset = await runScenario(noAssetScenario);
-assert.equal(noAsset.output.artifact_count, 6, "zero approved assets must produce the exact six-artifact minimum");
-assert.deepEqual(JSON.parse(noAsset.output.deploy_artifacts_private).map(entry => entry.path),
-  ["_headers", ...V11_PRODUCTION_HTML_PATHS]);
-assert.equal(noAsset.output.deploy_artifacts_private, noAssetScenario.finalized.deployArtifactsJson);
+let badSignatureCalls = 0;
+await assert.rejects(runAdapter({ ...scenario.inputs, checkout_recipient_reservation_hmac_sha256: "0".repeat(64) }, async () => {
+  badSignatureCalls += 1;
+  throw new Error("signature failure must precede network");
+}, Buffer), /recipient reservation signature/);
+assert.equal(badSignatureCalls, 0);
 
-const mixedArtifactStart = { ...startInput, artifact_evidence: noForm.output.handoff_artifact_evidence_private,
-  artifact_evidence_hmac_sha256: noForm.output.handoff_artifact_evidence_hmac_sha256 };
-assert.throws(() => normalizeStartPayload(mixedArtifactStart, siblingEnv, new Date()), /binding|match|invalid|unbound/i,
-  "cross-paired v4 artifact/payment evidence must fail in the sibling normalizer");
+await assert.rejects(runAdapter({ ...scenario.inputs, checkout_session_id: "cs_live_wrongmode" }, async () => {
+  throw new Error("mode failure must precede network");
+}, Buffer), /configured-mode Checkout Session id/);
 
-console.log("ARC2 exact five-page v4 resolver and sibling handoff contract passed");
+const corruptMock = mockFetch(scenario, { corruptAsset: true });
+await assert.rejects(runAdapter(scenario.inputs, corruptMock.fetch, Buffer), /GitHub asset binding|signed asset media bytes/);
+
+console.log("ARC2 Checkout Session artifact adapter contract passed (paid outbox -> exact five pages -> first-party start; zero payment-provider reads).");

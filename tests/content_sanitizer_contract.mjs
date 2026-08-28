@@ -6,7 +6,7 @@ import { fixtures } from "../fixtures/v10_industries.mjs";
 import { renderPreview } from "../scripts/arc_contract.mjs";
 import { sanitizeStructuredMarkup } from "../scripts/content_sanitizer.mjs";
 import { createTestIntakeEvidence } from "./fixtures/intake_evidence.mjs";
-import { createTestPaymentLinkEvidence } from "./fixtures/payment_link_evidence.mjs";
+import { createTestCheckoutOfferEvidence } from "./fixtures/checkout_offer_evidence.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const template = await readFile(path.join(root, "ARC_MASTER_TEMPLATE.html"), "utf8");
@@ -21,7 +21,7 @@ const paymentLinkUrl = "https://buy.stripe.com/test_00000000000000";
 const checkoutBindingSecret = "arc-test-checkout-binding-secret-32-bytes-minimum";
 const leadRouteEvidenceSecret = "arc-test-lead-route-evidence-secret-32-bytes-minimum";
 const intakeContext = createTestIntakeEvidence();
-const paymentLinkContext = createTestPaymentLinkEvidence({ paymentLinkUrl });
+const checkoutOfferContext = createTestCheckoutOfferEvidence();
 const rendererOptions = {
   trustedEventPrefix: fixture.id,
   customerEmail: fixture.customerEmail,
@@ -39,7 +39,7 @@ const arc1Input = content => ({
   checkout_binding_key_id: "01",
   private_lead_notification_email: fixture.customerEmail,
   lead_route_evidence_secret: leadRouteEvidenceSecret,
-  ...paymentLinkContext.privateInputs,
+  ...checkoutOfferContext.privateInputs,
   ...intakeContext.privateInputs
 });
 

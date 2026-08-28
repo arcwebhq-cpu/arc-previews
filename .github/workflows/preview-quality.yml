@@ -30,7 +30,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: arcwebhq-cpu/arc-site
-          ref: f84c303e0d34045a3929383e538e209790763f5e
+          ref: c9fe3d2304bc6b37169c53055ab67edeb44a16ff
           path: .arc-site-contract
       - run: npm ci
       - name: Install pinned ARC site contract dependencies

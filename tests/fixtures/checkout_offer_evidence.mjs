@@ -7,12 +7,8 @@ const canonicalJson = value => {
 };
 const sha256 = value => createHash("sha256").update(value).digest("hex");
 
-export const testPaymentLinkEvidenceSecret = "arc-test-payment-link-evidence-secret-32-bytes-minimum";
-// Retained only for legacy negative fixtures. Current public artifacts and offer
-// evidence intentionally contain neither a Payment Link ID nor its URL.
-export const testPaymentLinkId = "plink_1ArcV10LegacyDisabled";
-export const testPaymentLinkUrl = "https://buy.stripe.com/test_LegacyDisabled";
-export const testPriceId = "price_1ArcV10Test5000";
+export const testCheckoutOfferEvidenceSecret = "arc-test-checkout-offer-evidence-secret-32-bytes-minimum";
+export const testPriceId = "price_1ArcV11Test5000";
 export const testProductId = "prod_ArcWebsiteService";
 export const testTermsVersion = "2026-08-25";
 export const testTermsDocumentSha256 = sha256("ARC terms 2026-08-25 immutable test document");
@@ -23,7 +19,7 @@ export const testTaxRegistrations = Object.freeze([
 export const testTaxRegistrationsSha256 = sha256(canonicalJson(testTaxRegistrations));
 export const testStripeAccountIdSha256 = sha256("acct_ArcBusinessTest");
 
-export function createTestPaymentLinkEvidence({
+export function createTestCheckoutOfferEvidence({
   priceId = testPriceId,
   productId = testProductId,
   termsVersion = testTermsVersion,
@@ -33,7 +29,7 @@ export function createTestPaymentLinkEvidence({
   taxRegistrationsSha256 = testTaxRegistrationsSha256,
   stripeAccountIdSha256 = testStripeAccountIdSha256,
   issuedAt = new Date().toISOString(),
-  secret = testPaymentLinkEvidenceSecret
+  secret = testCheckoutOfferEvidenceSecret
 } = {}) {
   const configuration = canonicalJson({
     stripe_account_id_sha256: stripeAccountIdSha256,
@@ -54,14 +50,14 @@ export function createTestPaymentLinkEvidence({
     tax_registrations: taxRegistrations,
     tax_registrations_sha256: taxRegistrationsSha256,
     adult_acknowledgement_key: "adultpurchaserack",
-    name_collection_required: true,
-    submit_type: "auto",
+    customer_creation: "always",
+    submit_type: "pay",
     checkout_redirect_url: "https://arcweb.onl/payment-success/?session_id={CHECKOUT_SESSION_ID}",
     stripe_api_version: "2026-07-29.dahlia"
   });
   const evidencePrivate = canonicalJson({
-    version: "arc1-checkout-offer-template-evidence-v1",
-    scope: "authoritative-private-checkout-offer-template-preflight",
+    version: "arc1-checkout-offer-evidence-v2",
+    scope: "authoritative-private-checkout-session-offer-preflight",
     stripe_account_id_sha256: stripeAccountIdSha256,
     price_id: priceId,
     product_id: productId,
@@ -80,8 +76,8 @@ export function createTestPaymentLinkEvidence({
     tax_registrations: taxRegistrations,
     tax_registrations_sha256: taxRegistrationsSha256,
     adult_acknowledgement_key: "adultpurchaserack",
-    name_collection_required: true,
-    submit_type: "auto",
+    customer_creation: "always",
+    submit_type: "pay",
     checkout_redirect_url: "https://arcweb.onl/payment-success/?session_id={CHECKOUT_SESSION_ID}",
     stripe_api_version: "2026-07-29.dahlia",
     configuration_sha256: sha256(configuration),
@@ -98,10 +94,10 @@ export function createTestPaymentLinkEvidence({
       expected_product_tax_code: productTaxCode,
       expected_stripe_account_id_sha256: stripeAccountIdSha256,
       stripe_live_mode_enabled: "false",
-      payment_link_evidence_secret: secret,
-      payment_link_evidence_private: evidencePrivate,
-      payment_link_evidence_hmac_sha256: createHmac("sha256", secret)
-        .update(`arc1-checkout-offer-template-evidence-signature-v1\n${evidencePrivate}`)
+      checkout_offer_evidence_secret: secret,
+      checkout_offer_evidence_private: evidencePrivate,
+      checkout_offer_evidence_hmac_sha256: createHmac("sha256", secret)
+        .update(`arc1-checkout-offer-evidence-signature-v2\n${evidencePrivate}`)
         .digest("hex")
     }
   };

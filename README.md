@@ -82,12 +82,30 @@ at most two byte-identical attempts, HTTPS-only endpoints, redirect rejection, a
 bytes. Only `log_safe_json` may enter ordinary logs.
 
 The active V11 injector emits one `arc1-five-page-render-bundle-v1`, not a singular `html_content`
-or `file_path`. Publication creates or reuses a draft PR containing exactly the five preview files
-and any receipt-bound content-addressed assets. The merge gate verifies the customer folder bytes
+or `file_path`. Before publication, `zapier/arc1_validate_v11_bundle.js` independently re-derives
+all five page hashes, whole-site manifests, production bytes, asset bindings, and privacy/checkout
+isolation; it returns only log-safe digests. Publication creates or reuses a draft PR containing
+exactly the five preview files and any receipt-bound content-addressed assets. The merge gate
+verifies the customer folder bytes
 without incorrectly pinning unrelated repository content, so publishing another customer's site
 does not invalidate an earlier approved preview. The email gate then performs an authoritative
 GitHub Pages readback of all five routes before it can authorize the automated email containing
 the private review link.
+
+`scripts/arc1_preview_async_orchestrator.mjs` is the active V11 ordered-flow coordinator after
+validation. Its default-OFF, zero-network state machine authorizes immutable PR creation, then
+resumes through signed PR-check, merge,
+exact Pages-byte, delivered preview-email, authenticated `APPROVE_AND_PAY`, and private Checkout
+Session authorization receipts. Every mutation uses create/CAS-or-exact persistence, an
+issuer-scoped Ed25519 receipt, a short atomic authorization lease, a stable idempotency key, and an
+immutable private provider-request digest. The older pre-review Payment Link filenames are
+unconditional retirement shims that throw before parsing input or accessing a provider; they
+cannot enter the active V11 ordered steps under any flag.
+The PR publisher and merge gate each have a zero-network `PREPARE_REQUEST` phase and an `EXECUTE`
+phase that independently verifies a signed atomic lease-consumption receipt before GitHub access.
+Their Ed25519 trust root is pinned into a deployment bundle, never accepted from mapped Zap input;
+the checked-in templates deliberately fail closed until packaged. See
+`zapier/arc1-github-provider-step-deployment.md`.
 
 All ARC1 network, persistence, provider-work, PR-email, and private-checkout controls default to
 off. A Catch Hook HTTP 200 is not durability evidence. Activation requires encrypted secret
@@ -121,8 +139,9 @@ authenticated provider `DELIVERED` receipt; queued or accepted is not delivery.
 
 Checkout becomes eligible only after the customer selects `APPROVE_AND_PAY` in that private portal.
 `REQUEST_CHANGES` creates a new immutable five-page preview and a new invite, for at most two
-revision rounds. The older pre-review Payment Link state machine remains default-off for frozen
-legacy replay and is no longer part of ARC1's ordered flow. The retained checkout contracts are:
+revision rounds. The older pre-review Payment Link writer, verifier, and lifecycle are permanently
+retired fail-closed. Only static clean-cutover compatibility evidence remains. The V11 checkout
+contracts are:
 
 - Offer snapshot and recipient reservation: V2
 - Readiness core and observation: V2
@@ -131,30 +150,33 @@ legacy replay and is no longer part of ARC1's ordered flow. The retained checkou
 - ARC2 payment evidence: `arc2-payment-evidence-v4`
 - ARC2 handoff artifact evidence: `arc2-handoff-artifact-evidence-v4`
 
-The read-only Payment Link preflight and ARC2 authenticated Checkout Session retrieval both require
+The active read-only Checkout Session offer preflight and ARC2 authenticated Checkout Session retrieval both require
 mode-matched restricted `rk_` credentials and pin Stripe API `2026-07-29.dahlia` and terms version
-`2026-08-25`. The signed private policy binds one
-approved five-page preview to one private, one-use Payment Link; the preview folder; all five route
-paths and whole-site digest; ARC account hash; Product and Price; $5,000 one-time subtotal;
+`2026-08-25`. `zapier/arc1_verify_checkout_offer.js` reads only the authenticated Account,
+Price/Product, Tax settings, Tax code, and expected Tax registrations; it cannot read or create a
+checkout capability. Its signed V2 evidence binds the live offer configuration. The later V2 offer
+snapshot binds one approved five-page preview; the preview folder; all five route paths and
+whole-site digest; ARC account hash; Product and Price; $5,000 one-time subtotal;
 exclusive tax behavior; advisor-confirmed Product tax code; expected active tax registrations;
-automatic destination tax; required billing address; business and individual name collection;
-adult purchaser acknowledgement; and the exact payment-success redirect.
+automatic destination tax; `customer_creation=always`; `submit_type=pay`; adult purchaser
+acknowledgement; and the exact payment-success redirect. The provider request intentionally omits
+both `billing_address_collection` and `name_collection`, allowing Stripe Checkout and automatic tax
+to collect only the required address inputs without adding a second name-collection surface.
 
-Checkout uses Stripe's dynamic payment-method selection and never exposes a Payment Link URL,
-Link ID, checkout reference, policy, or readiness evidence on a public page. Durable create-before-
-mutation state, reverse lookup, renewal, expiry, and deactivation are contract-tested but their
-provider adapters remain disabled.
+Checkout uses Stripe's dynamic payment-method selection and never exposes a Checkout Session URL,
+Session ID, checkout reference, policy, or readiness evidence on a public page. The older Payment
+Link create/lifecycle code has been replaced by unconditional throw-only retirement shims.
 
 `ARC_STRIPE_LIVE_MODE_ENABLED` is fail-closed: missing or `false` selects test-mode contracts, and
 only exact `true` selects live credentials and resources. This repository leaves live events,
-Payment Link mutation, and real charges off.
+Checkout Session creation, legacy Payment Link mutation, and real charges off.
 
 ## ARC2 paid handoff
 
 `checkout.session.completed` and `checkout.session.async_payment_succeeded` are notifications, not
 payment proof. ARC2 retrieves the authenticated configured-mode Session with expanded line-item
 taxes and verifies paid status, the exact private V4 reverse reservation, line item, destination
-tax, Product tax-code readback, address, names, adult
+tax, Product tax-code readback, address, adult
 acknowledgement, retained terms digest, tax-registration snapshot, and immutable five-page source
 before fulfillment may advance. The expanded tax amounts must reconcile to the Session total, and a
 zero-tax result must carry a recognized Stripe `taxability_reason`. The ambiguous `not_collecting`
@@ -224,7 +246,7 @@ or existing provider objects; those remain separate blockers recorded by the rea
 Activation remains blocked until an adult operator and legal entity are established and the
 following are verified with real provider evidence:
 
-- ARC-owned Stripe account binding, Product/Price/Payment Link configuration, tax-code advice,
+- ARC-owned Stripe account binding, Product/Price/Checkout Session configuration, tax-code advice,
   registrations, destination-tax testing, refunds, disputes, and atomic fulfillment state
 - Durable private-state/CAS storage, secret brokerage, Zapier wiring, retry recovery, and redacted
   histories

@@ -8,7 +8,7 @@ import { mediaCoverageFixtures } from "../fixtures/v11_media_coverage.mjs";
 import { finalizeV11ProductionSite } from "../scripts/v11_production_finalizer.mjs";
 import { canonicalJson } from "../scripts/v11_site_contract.mjs";
 import { createTestIntakeEvidence } from "./fixtures/intake_evidence.mjs";
-import { createTestPaymentLinkEvidence } from "./fixtures/payment_link_evidence.mjs";
+import { createTestCheckoutOfferEvidence } from "./fixtures/checkout_offer_evidence.mjs";
 
 const root = new URL("../", import.meta.url);
 const [injectorSource, template, legacyTemplate] = await Promise.all([
@@ -53,7 +53,7 @@ function injectorInput(fixture, {
   });
   const receiptUrls = Object.fromEntries(JSON.parse(intake.privateInputs.asset_publication_receipt_private).entries
     .map(entry => [entry.role, entry.public_url]));
-  const payment = createTestPaymentLinkEvidence();
+  const payment = createTestCheckoutOfferEvidence();
   return {
     input: {
       template_content: selectedTemplate,
@@ -245,6 +245,11 @@ for (const fixture of allFixtures) {
   assert.equal(snapshot.offer_contract_id, offerContractId);
   assert.equal(snapshot.deliverable, deliverable);
   assert.equal(snapshot.page_count, 5);
+  assert.equal(snapshot.customer_creation, "always");
+  assert.equal(snapshot.submit_type, "pay");
+  assert.equal(Object.hasOwn(snapshot, "name_collection"), false);
+  assert.equal(Object.hasOwn(snapshot, "name_collection_required"), false);
+  assert.equal(Object.hasOwn(snapshot, "billing_address_collection"), false);
   assert.deepEqual(snapshot.preview_paths, exactArtifactPreviewPaths(output.preview_folder));
   assert.equal(snapshot.approval_content_sha256, output.approval_content_sha256);
   assert.equal(snapshot.published_preview_bundle_sha256, output.published_preview_bundle_sha256);

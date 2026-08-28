@@ -951,14 +951,14 @@ for (const key of requiredKeys) {
   }
 }
 assertPremiumGeneratedContent(renderValues);
-const paymentLinkEvidenceSecret=clean(inputData.payment_link_evidence_secret);
-if(evidenceEncoder.encode(paymentLinkEvidenceSecret).length<32||evidenceEncoder.encode(paymentLinkEvidenceSecret).length>256){
-  throw new Error("ARC_PAYMENT_LINK_INVALID: payment-link evidence secret must be 32–256 UTF-8 bytes");
+const checkoutOfferEvidenceSecret=clean(inputData.checkout_offer_evidence_secret);
+if(evidenceEncoder.encode(checkoutOfferEvidenceSecret).length<32||evidenceEncoder.encode(checkoutOfferEvidenceSecret).length>256){
+  throw new Error("ARC_CHECKOUT_OFFER_INVALID: checkout-offer evidence secret must be 32–256 UTF-8 bytes");
 }
-const paymentLinkEvidenceRaw=clean(inputData.payment_link_evidence_private);
-let paymentLinkEvidence;
-try{paymentLinkEvidence=JSON.parse(paymentLinkEvidenceRaw);}catch(error){throw new Error("ARC_PAYMENT_LINK_INVALID: payment-link evidence JSON");}
-const paymentLinkEvidenceFields=[
+const checkoutOfferEvidenceRaw=clean(inputData.checkout_offer_evidence_private);
+let checkoutOfferEvidence;
+try{checkoutOfferEvidence=JSON.parse(checkoutOfferEvidenceRaw);}catch(error){throw new Error("ARC_CHECKOUT_OFFER_INVALID: checkout-offer evidence JSON");}
+const checkoutOfferEvidenceFields=[
   "version","scope","price_id","product_id","amount_subtotal_minor_units",
   "stripe_account_id_sha256","livemode",
   "currency","quantity","terms_version","automatic_tax_enabled","customer_address_source",
@@ -967,10 +967,10 @@ const paymentLinkEvidenceFields=[
   "tax_registrations","adult_acknowledgement_key","name_collection_required","submit_type","checkout_redirect_url",
   "stripe_api_version","configuration_sha256","issued_at"
 ];
-if(!paymentLinkEvidence||typeof paymentLinkEvidence!=="object"||Array.isArray(paymentLinkEvidence)||
-  canonicalJson(paymentLinkEvidence)!==paymentLinkEvidenceRaw||
-  JSON.stringify(Object.keys(paymentLinkEvidence).sort())!==JSON.stringify(paymentLinkEvidenceFields.slice().sort())){
-  throw new Error("ARC_PAYMENT_LINK_INVALID: canonical payment-link evidence contract");
+if(!checkoutOfferEvidence||typeof checkoutOfferEvidence!=="object"||Array.isArray(checkoutOfferEvidence)||
+  canonicalJson(checkoutOfferEvidence)!==checkoutOfferEvidenceRaw||
+  JSON.stringify(Object.keys(checkoutOfferEvidence).sort())!==JSON.stringify(checkoutOfferEvidenceFields.slice().sort())){
+  throw new Error("ARC_CHECKOUT_OFFER_INVALID: canonical checkout-offer evidence contract");
 }
 const expectedPriceId=clean(inputData.expected_price_id);
 const expectedTermsVersion=clean(inputData.expected_terms_version);
@@ -980,93 +980,93 @@ const expectedStripeAccountIdSha256=clean(inputData.expected_stripe_account_id_s
 const stripeLiveModeFlag=clean(inputData.stripe_live_mode_enabled).toLowerCase();
 if(!["","false","true"].includes(stripeLiveModeFlag))throw new Error("ARC_STRIPE_MODE_INVALID: stripe_live_mode_enabled must be true or false");
 const stripeLiveModeEnabled=stripeLiveModeFlag==="true";
-const paymentLinkEvidenceIssuedAt=clean(paymentLinkEvidence.issued_at);
-const paymentLinkEvidenceIssuedMs=Date.parse(paymentLinkEvidenceIssuedAt);
-if(paymentLinkEvidence.version!=="arc1-checkout-offer-template-evidence-v1"||
-  paymentLinkEvidence.scope!=="authoritative-private-checkout-offer-template-preflight"||
+const checkoutOfferEvidenceIssuedAt=clean(checkoutOfferEvidence.issued_at);
+const checkoutOfferEvidenceIssuedMs=Date.parse(checkoutOfferEvidenceIssuedAt);
+if(checkoutOfferEvidence.version!=="arc1-checkout-offer-evidence-v2"||
+  checkoutOfferEvidence.scope!=="authoritative-private-checkout-session-offer-preflight"||
   !/^price_[A-Za-z0-9]+$/.test(expectedPriceId)||
-  !/^prod_[A-Za-z0-9]+$/.test(clean(paymentLinkEvidence.product_id))||
+  !/^prod_[A-Za-z0-9]+$/.test(clean(checkoutOfferEvidence.product_id))||
   !/^txcd_[0-9]{8}$/.test(expectedProductTaxCode)||
   !/^[a-f0-9]{64}$/.test(expectedStripeAccountIdSha256)||
   !/^20[0-9]{2}-[0-9]{2}-[0-9]{2}$/.test(expectedTermsVersion)||
-  !/^[a-f0-9]{64}$/.test(expectedTermsDocumentSha256)||paymentLinkEvidence.terms_document_sha256!==expectedTermsDocumentSha256||
-  paymentLinkEvidence.price_id!==expectedPriceId||
-  paymentLinkEvidence.stripe_account_id_sha256!==expectedStripeAccountIdSha256||
-  paymentLinkEvidence.livemode!==stripeLiveModeEnabled||
-  paymentLinkEvidence.amount_subtotal_minor_units!==500000||paymentLinkEvidence.currency!=="usd"||
-  paymentLinkEvidence.quantity!==1||paymentLinkEvidence.terms_version!==expectedTermsVersion||
-  paymentLinkEvidence.automatic_tax_enabled!==true||
-  paymentLinkEvidence.customer_address_source!=="stripe_checkout_customer_details.address"||
-  paymentLinkEvidence.price_tax_behavior!=="exclusive"||
-  paymentLinkEvidence.product_tax_code!==expectedProductTaxCode||
-  paymentLinkEvidence.tax_contract_version!=="arc-tax-v1"||
-  paymentLinkEvidence.tax_settings_status!=="active"||
-  !Array.isArray(paymentLinkEvidence.tax_registrations)||paymentLinkEvidence.tax_registrations.length<1||paymentLinkEvidence.tax_registrations.length>100||
-  !/^[a-f0-9]{64}$/.test(clean(paymentLinkEvidence.tax_registrations_sha256))||
-  paymentLinkEvidence.adult_acknowledgement_key!=="adultpurchaserack"||paymentLinkEvidence.name_collection_required!==true||
-  paymentLinkEvidence.submit_type!=="auto"||paymentLinkEvidence.checkout_redirect_url!=="https://arcweb.onl/payment-success/?session_id={CHECKOUT_SESSION_ID}"||
-  paymentLinkEvidence.stripe_api_version!=="2026-07-29.dahlia"||
-  !/^[a-f0-9]{64}$/.test(clean(paymentLinkEvidence.configuration_sha256))||
-  !Number.isFinite(paymentLinkEvidenceIssuedMs)||new Date(paymentLinkEvidenceIssuedMs).toISOString()!==paymentLinkEvidenceIssuedAt||
-  paymentLinkEvidenceIssuedMs<Date.now()-5*60*1000||paymentLinkEvidenceIssuedMs>Date.now()+5*60*1000){
-  throw new Error("ARC_PAYMENT_LINK_INVALID: payment-link evidence identity, configuration, or freshness");
+  !/^[a-f0-9]{64}$/.test(expectedTermsDocumentSha256)||checkoutOfferEvidence.terms_document_sha256!==expectedTermsDocumentSha256||
+  checkoutOfferEvidence.price_id!==expectedPriceId||
+  checkoutOfferEvidence.stripe_account_id_sha256!==expectedStripeAccountIdSha256||
+  checkoutOfferEvidence.livemode!==stripeLiveModeEnabled||
+  checkoutOfferEvidence.amount_subtotal_minor_units!==500000||checkoutOfferEvidence.currency!=="usd"||
+  checkoutOfferEvidence.quantity!==1||checkoutOfferEvidence.terms_version!==expectedTermsVersion||
+  checkoutOfferEvidence.automatic_tax_enabled!==true||
+  checkoutOfferEvidence.customer_address_source!=="stripe_checkout_customer_details.address"||
+  checkoutOfferEvidence.price_tax_behavior!=="exclusive"||
+  checkoutOfferEvidence.product_tax_code!==expectedProductTaxCode||
+  checkoutOfferEvidence.tax_contract_version!=="arc-tax-v1"||
+  checkoutOfferEvidence.tax_settings_status!=="active"||
+  !Array.isArray(checkoutOfferEvidence.tax_registrations)||checkoutOfferEvidence.tax_registrations.length<1||checkoutOfferEvidence.tax_registrations.length>100||
+  !/^[a-f0-9]{64}$/.test(clean(checkoutOfferEvidence.tax_registrations_sha256))||
+  checkoutOfferEvidence.adult_acknowledgement_key!=="adultpurchaserack"||checkoutOfferEvidence.name_collection_required!==true||
+  checkoutOfferEvidence.submit_type!=="auto"||checkoutOfferEvidence.checkout_redirect_url!=="https://arcweb.onl/payment-success/?session_id={CHECKOUT_SESSION_ID}"||
+  checkoutOfferEvidence.stripe_api_version!=="2026-07-29.dahlia"||
+  !/^[a-f0-9]{64}$/.test(clean(checkoutOfferEvidence.configuration_sha256))||
+  !Number.isFinite(checkoutOfferEvidenceIssuedMs)||new Date(checkoutOfferEvidenceIssuedMs).toISOString()!==checkoutOfferEvidenceIssuedAt||
+  checkoutOfferEvidenceIssuedMs<Date.now()-5*60*1000||checkoutOfferEvidenceIssuedMs>Date.now()+5*60*1000){
+  throw new Error("ARC_CHECKOUT_OFFER_INVALID: checkout-offer evidence identity, configuration, or freshness");
 }
-const paymentLinkEvidenceHmac=clean(inputData.payment_link_evidence_hmac_sha256).toLowerCase();
-if(!/^[a-f0-9]{64}$/.test(paymentLinkEvidenceHmac))throw new Error("ARC_PAYMENT_LINK_INVALID: payment-link evidence HMAC");
-const paymentLinkEvidenceKey=await globalThis.crypto.subtle.importKey(
-  "raw",evidenceEncoder.encode(paymentLinkEvidenceSecret),{name:"HMAC",hash:"SHA-256"},false,["verify"]
+const checkoutOfferEvidenceHmac=clean(inputData.checkout_offer_evidence_hmac_sha256).toLowerCase();
+if(!/^[a-f0-9]{64}$/.test(checkoutOfferEvidenceHmac))throw new Error("ARC_CHECKOUT_OFFER_INVALID: checkout-offer evidence HMAC");
+const checkoutOfferEvidenceKey=await globalThis.crypto.subtle.importKey(
+  "raw",evidenceEncoder.encode(checkoutOfferEvidenceSecret),{name:"HMAC",hash:"SHA-256"},false,["verify"]
 );
 if(!(await globalThis.crypto.subtle.verify(
-  "HMAC",paymentLinkEvidenceKey,
-  Uint8Array.from(paymentLinkEvidenceHmac.match(/../g),byte=>Number.parseInt(byte,16)),
-  evidenceEncoder.encode(`arc1-checkout-offer-template-evidence-signature-v1\n${paymentLinkEvidenceRaw}`)
+  "HMAC",checkoutOfferEvidenceKey,
+  Uint8Array.from(checkoutOfferEvidenceHmac.match(/../g),byte=>Number.parseInt(byte,16)),
+  evidenceEncoder.encode(`arc1-checkout-offer-evidence-signature-v2\n${checkoutOfferEvidenceRaw}`)
 ))){
-  throw new Error("ARC_PAYMENT_LINK_INVALID: payment-link evidence HMAC mismatch");
+  throw new Error("ARC_CHECKOUT_OFFER_INVALID: checkout-offer evidence HMAC mismatch");
 }
-const paymentLinkEvidenceSha256=await sha256Text(paymentLinkEvidenceRaw);
+const checkoutOfferEvidenceSha256=await sha256Text(checkoutOfferEvidenceRaw);
 const taxRegistrationFields=["country","id","state","type"];
-for(const registration of paymentLinkEvidence.tax_registrations){
+for(const registration of checkoutOfferEvidence.tax_registrations){
   if(!registration||typeof registration!=="object"||Array.isArray(registration)||
     JSON.stringify(Object.keys(registration).sort())!==JSON.stringify(taxRegistrationFields)||
     !/^taxreg_[A-Za-z0-9]+$/.test(clean(registration.id))||!/^[A-Z]{2}$/.test(clean(registration.country))||
     !/^[A-Z0-9-]{1,10}$/.test(clean(registration.state))||!/^[a-z][a-z0-9_]{2,63}$/.test(clean(registration.type))){
-    throw new Error("ARC_PAYMENT_LINK_INVALID: stable tax registration snapshot");
+    throw new Error("ARC_CHECKOUT_OFFER_INVALID: stable tax registration snapshot");
   }
 }
-if(new Set(paymentLinkEvidence.tax_registrations.map(item=>item.id)).size!==paymentLinkEvidence.tax_registrations.length||
-  canonicalJson([...paymentLinkEvidence.tax_registrations].sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0))!==canonicalJson(paymentLinkEvidence.tax_registrations)||
-  await sha256Text(canonicalJson(paymentLinkEvidence.tax_registrations))!==paymentLinkEvidence.tax_registrations_sha256){
-  throw new Error("ARC_PAYMENT_LINK_INVALID: tax registration snapshot digest");
+if(new Set(checkoutOfferEvidence.tax_registrations.map(item=>item.id)).size!==checkoutOfferEvidence.tax_registrations.length||
+  canonicalJson([...checkoutOfferEvidence.tax_registrations].sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0))!==canonicalJson(checkoutOfferEvidence.tax_registrations)||
+  await sha256Text(canonicalJson(checkoutOfferEvidence.tax_registrations))!==checkoutOfferEvidence.tax_registrations_sha256){
+  throw new Error("ARC_CHECKOUT_OFFER_INVALID: tax registration snapshot digest");
 }
 const stableCheckoutConfiguration={
-  stripe_account_id_sha256:paymentLinkEvidence.stripe_account_id_sha256,
-  livemode:paymentLinkEvidence.livemode,price_id:paymentLinkEvidence.price_id,
-  product_id:paymentLinkEvidence.product_id,
-  amount_subtotal_minor_units:paymentLinkEvidence.amount_subtotal_minor_units,currency:paymentLinkEvidence.currency,quantity:paymentLinkEvidence.quantity,
-  terms_version:paymentLinkEvidence.terms_version,terms_document_sha256:paymentLinkEvidence.terms_document_sha256,
-  automatic_tax_enabled:paymentLinkEvidence.automatic_tax_enabled,
-  customer_address_source:paymentLinkEvidence.customer_address_source,price_tax_behavior:paymentLinkEvidence.price_tax_behavior,
-  product_tax_code:paymentLinkEvidence.product_tax_code,tax_contract_version:paymentLinkEvidence.tax_contract_version,
-  tax_settings_status:paymentLinkEvidence.tax_settings_status,tax_registrations:paymentLinkEvidence.tax_registrations,
-  tax_registrations_sha256:paymentLinkEvidence.tax_registrations_sha256,adult_acknowledgement_key:paymentLinkEvidence.adult_acknowledgement_key,
-  name_collection_required:paymentLinkEvidence.name_collection_required,submit_type:paymentLinkEvidence.submit_type,
-  checkout_redirect_url:paymentLinkEvidence.checkout_redirect_url,stripe_api_version:paymentLinkEvidence.stripe_api_version
+  stripe_account_id_sha256:checkoutOfferEvidence.stripe_account_id_sha256,
+  livemode:checkoutOfferEvidence.livemode,price_id:checkoutOfferEvidence.price_id,
+  product_id:checkoutOfferEvidence.product_id,
+  amount_subtotal_minor_units:checkoutOfferEvidence.amount_subtotal_minor_units,currency:checkoutOfferEvidence.currency,quantity:checkoutOfferEvidence.quantity,
+  terms_version:checkoutOfferEvidence.terms_version,terms_document_sha256:checkoutOfferEvidence.terms_document_sha256,
+  automatic_tax_enabled:checkoutOfferEvidence.automatic_tax_enabled,
+  customer_address_source:checkoutOfferEvidence.customer_address_source,price_tax_behavior:checkoutOfferEvidence.price_tax_behavior,
+  product_tax_code:checkoutOfferEvidence.product_tax_code,tax_contract_version:checkoutOfferEvidence.tax_contract_version,
+  tax_settings_status:checkoutOfferEvidence.tax_settings_status,tax_registrations:checkoutOfferEvidence.tax_registrations,
+  tax_registrations_sha256:checkoutOfferEvidence.tax_registrations_sha256,adult_acknowledgement_key:checkoutOfferEvidence.adult_acknowledgement_key,
+  name_collection_required:checkoutOfferEvidence.name_collection_required,submit_type:checkoutOfferEvidence.submit_type,
+  checkout_redirect_url:checkoutOfferEvidence.checkout_redirect_url,stripe_api_version:checkoutOfferEvidence.stripe_api_version
 };
-if(await sha256Text(canonicalJson(stableCheckoutConfiguration))!==paymentLinkEvidence.configuration_sha256){
-  throw new Error("ARC_PAYMENT_LINK_INVALID: immutable checkout configuration digest mismatch");
+if(await sha256Text(canonicalJson(stableCheckoutConfiguration))!==checkoutOfferEvidence.configuration_sha256){
+  throw new Error("ARC_CHECKOUT_OFFER_INVALID: immutable checkout configuration digest mismatch");
 }
 const checkoutBindingSecret = clean(inputData.checkout_binding_secret);
 const checkoutBindingKeyId = clean(inputData.checkout_binding_key_id).toLowerCase();
 const checkoutSignatureMode=stripeLiveModeEnabled?"live":"test";
 if (checkoutBindingSecret.length < 32 || checkoutBindingSecret.length > 256) {
-  throw new Error("ARC_PAYMENT_LINK_INVALID: checkout binding secret must be 32–256 characters");
+  throw new Error("ARC_CHECKOUT_OFFER_INVALID: checkout binding secret must be 32–256 characters");
 }
-if(!/^[a-f0-9]{2}$/.test(checkoutBindingKeyId))throw new Error("ARC_PAYMENT_LINK_INVALID: checkout binding key id must be one byte of lowercase hex");
-if(new Set([checkoutBindingSecret,paymentLinkEvidenceSecret,intakeEvidenceSecret]).size!==3){
-  throw new Error("ARC_PAYMENT_LINK_INVALID: intake, payment-link, and checkout secrets must be separate");
+if(!/^[a-f0-9]{2}$/.test(checkoutBindingKeyId))throw new Error("ARC_CHECKOUT_OFFER_INVALID: checkout binding key id must be one byte of lowercase hex");
+if(new Set([checkoutBindingSecret,checkoutOfferEvidenceSecret,intakeEvidenceSecret]).size!==3){
+  throw new Error("ARC_CHECKOUT_OFFER_INVALID: intake, checkout-offer, and checkout-binding secrets must be separate");
 }
 if (!globalThis.crypto?.subtle || typeof TextEncoder !== "function") {
-  throw new Error("ARC_PAYMENT_LINK_INVALID: HMAC-SHA-256 runtime unavailable");
+  throw new Error("ARC_CHECKOUT_OFFER_INVALID: HMAC-SHA-256 runtime unavailable");
 }
 const checkoutBindingKey = await globalThis.crypto.subtle.importKey(
   "raw",
@@ -1253,7 +1253,7 @@ const checkoutOfferSnapshot=canonicalJson({
   checkout_binding_key_id:checkoutBindingKeyId,environment:"arc-production",
   lead_route_recipient_hmac_sha256:checkoutLeadRecipientHmacSha256,
   asset_publication_receipt_sha256:checkoutAssetPublicationReceiptSha256,
-  ...stableCheckoutConfiguration,configuration_sha256:paymentLinkEvidence.configuration_sha256
+  ...stableCheckoutConfiguration,configuration_sha256:checkoutOfferEvidence.configuration_sha256
 });
 const checkoutOfferSnapshotSha256=await sha256Text(checkoutOfferSnapshot);
 const checkoutOfferSnapshotHmacSha256=bytesToHex(await globalThis.crypto.subtle.sign("HMAC",checkoutBindingKey,
@@ -1299,7 +1299,7 @@ return {
   checkout_recipient_reservation_private:checkoutRecipientReservationPrivate,
   checkout_recipient_reservation_sha256:checkoutRecipientReservationSha256,
   checkout_recipient_reservation_hmac_sha256:checkoutRecipientReservationHmacSha256,
-  payment_link_evidence_sha256:paymentLinkEvidenceSha256,trusted_event_prefix:submissionPrefix,
+  checkout_offer_evidence_sha256:checkoutOfferEvidenceSha256,trusted_event_prefix:submissionPrefix,
   trusted_netlify_submission_id:clean(intakeEvidence.submission_id).toLowerCase(),trusted_received_at:receivedAt,
   intake_state_key:clean(intakeEvidence.state_key),intake_state_digest_sha256:clean(intakeEvidence.state_digest_sha256),
   intake_evidence_sha256:intakeEvidenceSha256,submission_data_sha256:clean(intakeEvidence.submission_data_sha256),

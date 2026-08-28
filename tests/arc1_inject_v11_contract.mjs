@@ -8,7 +8,7 @@ import { mediaCoverageFixtures } from "../fixtures/v11_media_coverage.mjs";
 import { finalizeV11ProductionSite } from "../scripts/v11_production_finalizer.mjs";
 import { canonicalJson } from "../scripts/v11_site_contract.mjs";
 import { createTestIntakeEvidence } from "./fixtures/intake_evidence.mjs";
-import { createTestPaymentLinkEvidence } from "./fixtures/payment_link_evidence.mjs";
+import { createTestCheckoutOfferEvidence } from "./fixtures/checkout_offer_evidence.mjs";
 
 const root = new URL("../", import.meta.url);
 const [injectorSource, template, legacyTemplate] = await Promise.all([
@@ -53,7 +53,7 @@ function injectorInput(fixture, {
   });
   const receiptUrls = Object.fromEntries(JSON.parse(intake.privateInputs.asset_publication_receipt_private).entries
     .map(entry => [entry.role, entry.public_url]));
-  const payment = createTestPaymentLinkEvidence();
+  const payment = createTestCheckoutOfferEvidence();
   return {
     input: {
       template_content: selectedTemplate,

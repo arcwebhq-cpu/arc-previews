@@ -1,20 +1,43 @@
 import assert from "node:assert/strict";
-import {createHash,createHmac} from "node:crypto";
+import {createHash,createHmac,generateKeyPairSync,sign} from "node:crypto";
 import {readFile} from "node:fs/promises";
+import {ARC1_PROVIDER_STEP_CONFIG_SCHEMA,packageArc1GithubProviderStepSource} from "../scripts/package_arc1_github_provider_steps.mjs";
 
 const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
-const publisherSource=await readFile(new URL("../zapier/arc1_publish_preview_pr.js",import.meta.url),"utf8");
-const mergeSource=await readFile(new URL("../zapier/arc1_merge_preview_pr.js",import.meta.url),"utf8");
+const sha=value=>createHash("sha256").update(value,"utf8").digest("hex");
+const gitSha=value=>{const bytes=Buffer.from(value,"utf8");return createHash("sha1").update(`blob ${bytes.length}\0`).update(bytes).digest("hex");};
+const canonical=value=>{if(value===null||typeof value==="string"||typeof value==="boolean")return JSON.stringify(value);if(typeof value==="number")return JSON.stringify(Object.is(value,-0)?0:value);if(Array.isArray(value))return `[${value.map(canonical).join(",")}]`;return `{${Object.keys(value).sort().map(key=>`${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}`;};
+const asyncReadbackKeys=generateKeyPairSync("ed25519"),asyncReadbackPublicKey=asyncReadbackKeys.publicKey.export({type:"spki",format:"pem"});
+const asyncReadbackKeyring={rb01:{issuer:"private-state-authorization-adapter",public_key_pem:asyncReadbackPublicKey}};
+const deploymentConfig={schema:ARC1_PROVIDER_STEP_CONFIG_SCHEMA,trust_root_id:"arc1-trust-pr-gate-test-v1",authorization_public_keyring:asyncReadbackKeyring};
+const publisherTemplate=await readFile(new URL("../zapier/arc1_publish_preview_pr.js",import.meta.url),"utf8");
+const mergeTemplate=await readFile(new URL("../zapier/arc1_merge_preview_pr.js",import.meta.url),"utf8");
+const publisherSource=packageArc1GithubProviderStepSource(publisherTemplate,deploymentConfig).source;
+const mergeSource=packageArc1GithubProviderStepSource(mergeTemplate,deploymentConfig).source;
 const gateSource=await readFile(new URL("../zapier/arc1_preview_email_gate.js",import.meta.url),"utf8");
 const template=await readFile(new URL("../ARC_MASTER_TEMPLATE_V11.html",import.meta.url),"utf8");
 const script=(template.match(/<script\b[^>]*>[\s\S]*?<\/script>/gi)||[])[0];
 const runPublisher=new AsyncFunction("inputData","fetch","Buffer",publisherSource);
 const runMerge=new AsyncFunction("inputData","fetch","Buffer",mergeSource);
 const runGate=new AsyncFunction("inputData","fetch","Buffer",gateSource);
-const sha=value=>createHash("sha256").update(value,"utf8").digest("hex");
-const gitSha=value=>{const bytes=Buffer.from(value,"utf8");return createHash("sha1").update(`blob ${bytes.length}\0`).update(bytes).digest("hex");};
-const canonical=value=>{if(value===null||typeof value==="string"||typeof value==="boolean")return JSON.stringify(value);if(typeof value==="number")return JSON.stringify(Object.is(value,-0)?0:value);if(Array.isArray(value))return `[${value.map(canonical).join(",")}]`;return `{${Object.keys(value).sort().map(key=>`${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}`;};
 const mac=(secret,message)=>createHmac("sha256",secret).update(message).digest("hex");
+const asyncAuthorize=(base,prepared)=>{const now=Date.now(),workflowId=`arc1preview_${sha(`workflow:${prepared.artifact_sha256}`).slice(0,40)}`,
+  preparedAt=new Date(now-2_000).toISOString(),expiresAt=new Date(now+10*60_000).toISOString(),
+  intent=canonical({schema:"arc1-preview-async-operation-intent-v1",scope:"one-durable-idempotent-provider-operation",
+    workflow_id:workflowId,artifact_sha256:prepared.artifact_sha256,action:prepared.action,source_state_sha256:sha(`source:${prepared.provider_request_sha256}`),
+    idempotency_key:`arc1op_${sha(`operation:${prepared.provider_request_sha256}`).slice(0,40)}`,
+    provider_request_sha256:prepared.provider_request_sha256,prepared_at:preparedAt,expires_at:expiresAt}),intentSha=sha(intent),
+  stateKey=`arc1-preview-async-v1:${workflowId}`,leaseId=sha(`lease:${intentSha}`),consumptionVersion=2,
+  consumptionId=sha(`arc1-preview-provider-authorization-consumption-id-v1\n${stateKey}\n${leaseId}\n${intentSha}\n${consumptionVersion}`),
+  consumption=canonical({schema:"arc1-preview-provider-authorization-consumption-v1",scope:"atomic-one-use-provider-authorization-consumption",
+    issuer:"private-state-authorization-adapter",issuer_key_id:"rb01",purpose:"CONSUME_OPERATION_AUTHORIZATION",workflow_id:workflowId,
+    state_key:stateKey,state_sha256:sha(`state:${intentSha}`),action:prepared.action,artifact_sha256:prepared.artifact_sha256,
+    provider_request_sha256:prepared.provider_request_sha256,idempotency_key:`arc1op_${sha(`operation:${prepared.provider_request_sha256}`).slice(0,40)}`,
+    operation_intent_sha256:intentSha,authorization_readback_sha256:sha(`readback:${intentSha}`),authorization_lease_id_sha256:leaseId,
+    authorization_lease_expires_at:new Date(now+30_000).toISOString(),authorization_provider_record_version:1,
+    consumption_provider_record_version:consumptionVersion,consumption_id_sha256:consumptionId,consumed_at:new Date(now-1_000).toISOString()});
+  return{...base,async_operation_phase:"EXECUTE",async_operation_intent_private:intent,
+    async_authorization_consumption_private:consumption,async_authorization_consumption_signature_base64url:sign(null,Buffer.from(consumption),asyncReadbackKeys.privateKey).toString("base64url")};};
 
 const prefix="a1b2c3d4",folder=`summit-roofing-${prefix}`,branch=`arc-preview/${prefix}`;
 const logical=["index.html","services/index.html","about/index.html","process/index.html","contact/index.html"];
@@ -73,9 +96,32 @@ const oversized=buildInput({oversize:true});await assert.rejects(runPublisher(ov
 const privacy=buildInput({secret:customer});await assert.rejects(runPublisher(privacy,noNetwork,Buffer),/ARC_PRIVACY_FAILED/);
 const tamper=buildInput();{const bundle=JSON.parse(tamper.render_bundle_private),page=bundle.pages.find(item=>item.path==="services/index.html");page.published_html=page.published_html.replace("services/index.html</h1>","tampered</h1>");tamper.render_bundle_private=canonical(bundle);tamper.render_bundle_sha256=sha(tamper.render_bundle_private);await assert.rejects(runPublisher(tamper,noNetwork,Buffer),/digest\/path\/size binding/);}
 
-const input=buildInput(),mock=new GitHubPagesMock(),publish=await runPublisher(input,mock.fetch.bind(mock),Buffer);assert.equal(publish.status,"PR_CREATED");assert.equal(publish.page_count,5);assert.deepEqual(publish.preview_paths,previewPaths);assert.equal(publish.content_sha256,publish.published_preview_bundle_sha256);assert.equal(publish.send_preview_email,false);assert.equal(publish.private_checkout_link_allowed,false);assert.equal(Object.hasOwn(publish,"file_path"),false);
+const input=buildInput();
+await assert.rejects(runPublisher(input,noNetwork,Buffer),/PROVIDER_FENCE_REQUIRED/,
+  "PR provider mutation must require an explicit fenced phase");
+const publishPrepared=await runPublisher({...input,async_operation_phase:"PREPARE_REQUEST"},noNetwork,Buffer);
+assert.equal(publishPrepared.provider_action_allowed,false);assert.equal(publishPrepared.action,"CREATE_IMMUTABLE_PREVIEW_PR");
+const forgedPublishAuthorization={...asyncAuthorize(input,publishPrepared),async_authorization_consumption_signature_base64url:"A".repeat(86)};
+await assert.rejects(runPublisher(forgedPublishAuthorization,noNetwork,Buffer),/consumption signature/,
+  "a forged atomic-consumption receipt must fail before GitHub access");
+await assert.rejects(runPublisher({...asyncAuthorize(input,publishPrepared),async_readback_public_keyring_json:canonical(asyncReadbackKeyring)},noNetwork,Buffer),/caller-controlled trust input/,
+  "a caller-supplied keyring must be rejected even when a valid deployment trust root is pinned");
+const expiredPublishAuthorization=asyncAuthorize(input,publishPrepared),expiredConsumption=JSON.parse(expiredPublishAuthorization.async_authorization_consumption_private),expiredNow=Date.now();
+expiredConsumption.consumed_at=new Date(expiredNow-120_000).toISOString();expiredConsumption.authorization_lease_expires_at=new Date(expiredNow-60_000).toISOString();
+expiredPublishAuthorization.async_authorization_consumption_private=canonical(expiredConsumption);
+expiredPublishAuthorization.async_authorization_consumption_signature_base64url=sign(null,Buffer.from(expiredPublishAuthorization.async_authorization_consumption_private),asyncReadbackKeys.privateKey).toString("base64url");
+await assert.rejects(runPublisher(expiredPublishAuthorization,noNetwork,Buffer),/atomic authorization consumption binding/,
+  "an authentically signed but expired consumption receipt must fail before GitHub access");
+const mock=new GitHubPagesMock(),publish=await runPublisher(asyncAuthorize(input,publishPrepared),mock.fetch.bind(mock),Buffer);assert.equal(publish.status,"PR_CREATED");assert.equal(publish.page_count,5);assert.deepEqual(publish.preview_paths,previewPaths);assert.equal(publish.content_sha256,publish.published_preview_bundle_sha256);assert.equal(publish.send_preview_email,false);assert.equal(publish.private_checkout_link_allowed,false);assert.equal(Object.hasOwn(publish,"file_path"),false);
 mock.checkRuns=[{id:7,name:"ARC preview quality/preview-quality",head_sha:publish.head_sha,status:"completed",conclusion:"success",app:{slug:"github-actions",id:15368}}];
-const mergeInput={...input,head_sha:publish.head_sha,head_tree_sha:publish.head_tree_sha,pr_number:publish.pr_number};const merged=await runMerge(mergeInput,mock.fetch.bind(mock),Buffer);assert.equal(merged.status,"MERGED");const proof=JSON.parse(merged.merge_proof);assert.equal(proof.version,"arc-preview-merge-proof-v2");assert.deepEqual(proof.preview_paths,previewPaths);assert.equal(proof.source_tree_sha,proof.head_tree_sha);
+const mergeInput={...input,head_sha:publish.head_sha,head_tree_sha:publish.head_tree_sha,pr_number:publish.pr_number};
+await assert.rejects(runMerge(mergeInput,noNetwork,Buffer),/PROVIDER_FENCE_REQUIRED/,
+  "merge provider mutation must require an explicit fenced phase");
+const mergePrepared=await runMerge({...mergeInput,async_operation_phase:"PREPARE_REQUEST"},noNetwork,Buffer);
+assert.equal(mergePrepared.provider_action_allowed,false);assert.equal(mergePrepared.action,"MERGE_IMMUTABLE_PREVIEW_PR");
+await assert.rejects(runMerge(asyncAuthorize(mergeInput,publishPrepared),noNetwork,Buffer),/operation intent binding/,
+  "a PR-create authorization must not authorize merge");
+const merged=await runMerge(asyncAuthorize(mergeInput,mergePrepared),mock.fetch.bind(mock),Buffer);assert.equal(merged.status,"MERGED");const proof=JSON.parse(merged.merge_proof);assert.equal(proof.version,"arc-preview-merge-proof-v2");assert.deepEqual(proof.preview_paths,previewPaths);assert.equal(proof.source_tree_sha,proof.head_tree_sha);
 // Unrelated main movement is allowed when this preview folder remains exact.
 const oldMain=mock.commits.get(mock.mainHead),unrelatedFiles=new Map(oldMain.files);unrelatedFiles.set("README.md",{blobSha:gitSha("unrelated"),content:"unrelated"});mock.blobs.set(gitSha("unrelated"),"unrelated");const unrelatedTree=mock.buildTree(unrelatedFiles),unrelatedSha=mock.next();mock.commits.set(unrelatedSha,{tree:unrelatedTree,files:unrelatedFiles});mock.refs.set("main",unrelatedSha);mock.mainHead=unrelatedSha;
 const gateInput={...mergeInput,merge_proof:merged.merge_proof};const ready=await runGate(gateInput,mock.fetch.bind(mock),Buffer);assert.equal(ready.status,"PRIVATE_CHECKOUT_CONTENT_READY");assert.equal(ready.send_preview_email,false);assert.equal(ready.outbox_write_allowed,false);assert.equal(ready.email_authorization_allowed,false);assert.equal(ready.checkout_url_exposure_allowed,false);const core=JSON.parse(ready.checkout_readiness_core_private),observation=JSON.parse(ready.checkout_readiness_observation_private);
@@ -83,9 +129,9 @@ assert.deepEqual(Object.keys(core).sort(),["approval_content_sha256","asset_publ
 assert.equal(core.version,"arc1-preview-readiness-core-v2");assert.equal(core.offer_contract_id,"arc-fixed-five-page-offer-v1");assert.equal(core.deliverable,"fixed-five-page-marketing-website-v1");assert.equal(core.page_count,5);assert.equal(core.content_sha256,core.published_preview_bundle_sha256);assert.equal(core.published_site_sha256,"9".repeat(64));assert.equal(core.lead_route_recipient_hmac_sha256,"5".repeat(64));
 assert.deepEqual(Object.keys(observation).sort(),["current_main_published_preview_bundle_sha256","current_main_sha","current_main_tree_sha","expires_at","issued_at","pages_published_preview_bundle_sha256","preview_folder","preview_paths","published_site_sha256","readiness_core_sha256","repository","scope","version"].sort());assert.equal(observation.version,"arc1-preview-readiness-observation-v2");assert.notEqual(observation.current_main_tree_sha,core.source_tree_sha);assert.equal(observation.current_main_published_preview_bundle_sha256,core.published_preview_bundle_sha256);assert.equal(observation.pages_published_preview_bundle_sha256,core.published_preview_bundle_sha256);
 
-const pagesMismatch=new GitHubPagesMock();const pub2=await runPublisher(input,pagesMismatch.fetch.bind(pagesMismatch),Buffer);pagesMismatch.checkRuns=[{id:8,name:"ARC preview quality/preview-quality",head_sha:pub2.head_sha,status:"completed",conclusion:"success",app:{slug:"github-actions",id:15368}}];const merge2=await runMerge({...input,head_sha:pub2.head_sha,head_tree_sha:pub2.head_tree_sha,pr_number:pub2.pr_number},pagesMismatch.fetch.bind(pagesMismatch),Buffer);pagesMismatch.pagesMismatchPath="process/index.html";const waiting=await runGate({...input,head_sha:pub2.head_sha,head_tree_sha:pub2.head_tree_sha,pr_number:pub2.pr_number,merge_proof:merge2.merge_proof},pagesMismatch.fetch.bind(pagesMismatch),Buffer);assert.equal(waiting.status,"WAITING_FOR_PAGES");assert.equal(waiting.send_preview_email,false);
+const pagesMismatch=new GitHubPagesMock();const pub2Prepared=await runPublisher({...input,async_operation_phase:"PREPARE_REQUEST"},noNetwork,Buffer),pub2=await runPublisher(asyncAuthorize(input,pub2Prepared),pagesMismatch.fetch.bind(pagesMismatch),Buffer);pagesMismatch.checkRuns=[{id:8,name:"ARC preview quality/preview-quality",head_sha:pub2.head_sha,status:"completed",conclusion:"success",app:{slug:"github-actions",id:15368}}];const merge2Input={...input,head_sha:pub2.head_sha,head_tree_sha:pub2.head_tree_sha,pr_number:pub2.pr_number},merge2Prepared=await runMerge({...merge2Input,async_operation_phase:"PREPARE_REQUEST"},noNetwork,Buffer),merge2=await runMerge(asyncAuthorize(merge2Input,merge2Prepared),pagesMismatch.fetch.bind(pagesMismatch),Buffer);pagesMismatch.pagesMismatchPath="process/index.html";const waiting=await runGate({...input,head_sha:pub2.head_sha,head_tree_sha:pub2.head_tree_sha,pr_number:pub2.pr_number,merge_proof:merge2.merge_proof},pagesMismatch.fetch.bind(pagesMismatch),Buffer);assert.equal(waiting.status,"WAITING_FOR_PAGES");assert.equal(waiting.send_preview_email,false);
 
-const extraMock=new GitHubPagesMock(),pub3=await runPublisher(input,extraMock.fetch.bind(extraMock),Buffer);extraMock.checkRuns=[{id:9,name:"ARC preview quality/preview-quality",head_sha:pub3.head_sha,status:"completed",conclusion:"success",app:{slug:"github-actions",id:15368}}];extraMock.extraPrFile=`${folder}/extra.html`;await assert.rejects(runMerge({...input,head_sha:pub3.head_sha,head_tree_sha:pub3.head_tree_sha,pr_number:pub3.pr_number},extraMock.fetch.bind(extraMock),Buffer),/exact PR file vector/);
+const extraMock=new GitHubPagesMock(),pub3Prepared=await runPublisher({...input,async_operation_phase:"PREPARE_REQUEST"},noNetwork,Buffer),pub3=await runPublisher(asyncAuthorize(input,pub3Prepared),extraMock.fetch.bind(extraMock),Buffer);extraMock.checkRuns=[{id:9,name:"ARC preview quality/preview-quality",head_sha:pub3.head_sha,status:"completed",conclusion:"success",app:{slug:"github-actions",id:15368}}];extraMock.extraPrFile=`${folder}/extra.html`;const extraMergeInput={...input,head_sha:pub3.head_sha,head_tree_sha:pub3.head_tree_sha,pr_number:pub3.pr_number},extraMergePrepared=await runMerge({...extraMergeInput,async_operation_phase:"PREPARE_REQUEST"},noNetwork,Buffer);await assert.rejects(runMerge(asyncAuthorize(extraMergeInput,extraMergePrepared),extraMock.fetch.bind(extraMock),Buffer),/exact PR file vector/);
 
-assert.doesNotMatch(publisherSource,/ARC_PREVIEW_PROOF_START|arc-template-version[^\n]*10\\\.0/);assert.match(publisherSource,/arc1-five-page-render-bundle-v1/);assert.match(mergeSource,/arc-preview-merge-proof-v2/);assert.match(gateSource,/arc1-preview-readiness-core-v2/);assert.match(gateSource,/arc1-preview-readiness-observation-v2/);
+assert.doesNotMatch(publisherSource,/ARC_PREVIEW_PROOF_START|arc-template-version[^\n]*10\\\.0/);assert.match(publisherSource,/arc1-five-page-render-bundle-v1/);assert.match(mergeSource,/arc-preview-merge-proof-v2/);assert.match(gateSource,/arc1-preview-readiness-core-v2/);assert.match(gateSource,/arc1-preview-readiness-observation-v2/);assert.doesNotMatch(publisherSource,/inputData\.async_(?:readback|authorization)[a-z0-9_]*public_keyring/i);assert.doesNotMatch(mergeSource,/inputData\.async_(?:readback|authorization)[a-z0-9_]*public_keyring/i);
 console.log("ARC1 exact five-page PR/merge/Pages readiness contract tests passed.");

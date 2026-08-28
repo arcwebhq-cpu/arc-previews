@@ -1,16 +1,17 @@
 import assert from 'node:assert/strict';
-import { createHash, createHmac } from 'node:crypto';
+import { createHash, createHmac, generateKeyPairSync, sign } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { fixtures } from '../fixtures/v11_industries.mjs';
-import { createTestPaymentLinkEvidence } from './fixtures/payment_link_evidence.mjs';
+import { createTestCheckoutOfferEvidence } from './fixtures/checkout_offer_evidence.mjs';
+import { ARC1_PROVIDER_STEP_CONFIG_SCHEMA, packageArc1GithubProviderStepSource } from '../scripts/package_arc1_github_provider_steps.mjs';
 
 const verifierSource = await readFile(new URL('../zapier/arc1_verify_function_intake.js', import.meta.url), 'utf8');
 const ackSource = await readFile(new URL('../zapier/arc1_ack_function_intake.js', import.meta.url), 'utf8');
 const assetConsumerSource = await readFile(new URL('../zapier/arc1_retrieve_function_assets.js', import.meta.url), 'utf8');
 const assetPublisherSource = await readFile(new URL('../zapier/arc1_publish_function_assets.js', import.meta.url), 'utf8');
 const injectorSource = await readFile(new URL('../zapier/arc1_inject.js', import.meta.url), 'utf8');
-const publisherSource = await readFile(new URL('../zapier/arc1_publish_preview_pr.js', import.meta.url), 'utf8');
-const mergeSource = await readFile(new URL('../zapier/arc1_merge_preview_pr.js', import.meta.url), 'utf8');
+const publisherTemplate = await readFile(new URL('../zapier/arc1_publish_preview_pr.js', import.meta.url), 'utf8');
+const mergeTemplate = await readFile(new URL('../zapier/arc1_merge_preview_pr.js', import.meta.url), 'utf8');
 const emailGateSource = await readFile(new URL('../zapier/arc1_preview_email_gate.js', import.meta.url), 'utf8');
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 const runVerifier = new AsyncFunction('inputData', 'fetch', 'Buffer', verifierSource);
@@ -18,8 +19,6 @@ const runAck = new AsyncFunction('inputData', 'fetch', 'Buffer', ackSource);
 const runAssetConsumer = new AsyncFunction('inputData', 'fetch', 'Buffer', assetConsumerSource);
 const runAssetPublisher = new AsyncFunction('inputData', 'fetch', 'Buffer', assetPublisherSource);
 const runInjector = new AsyncFunction('inputData', injectorSource);
-const runPublisher = new AsyncFunction('inputData', 'fetch', 'Buffer', publisherSource);
-const runMerge = new AsyncFunction('inputData', 'fetch', 'Buffer', mergeSource);
 const runEmailGate = new AsyncFunction('inputData', 'fetch', 'Buffer', emailGateSource);
 const sha256 = value => createHash('sha256').update(value).digest('hex');
 const hmac = (secret, value) => createHmac('sha256', secret).update(value).digest('hex');
@@ -28,6 +27,83 @@ const canonicalJson = value => {
   if (typeof value === 'number') return JSON.stringify(Object.is(value, -0) ? 0 : value);
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
   return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
+};
+const asyncReadbackKeys = generateKeyPairSync('ed25519');
+const asyncReadbackPublicKey = asyncReadbackKeys.publicKey.export({ type: 'spki', format: 'pem' });
+const asyncReadbackKeyring = {
+  rb01: { issuer: 'private-state-authorization-adapter', public_key_pem: asyncReadbackPublicKey },
+};
+const providerStepConfig = {
+  schema: ARC1_PROVIDER_STEP_CONFIG_SCHEMA,
+  trust_root_id: 'arc1-trust-function-bridge-test-v1',
+  authorization_public_keyring: asyncReadbackKeyring,
+};
+const publisherSource = packageArc1GithubProviderStepSource(publisherTemplate, providerStepConfig).source;
+const mergeSource = packageArc1GithubProviderStepSource(mergeTemplate, providerStepConfig).source;
+const runPublisher = new AsyncFunction('inputData', 'fetch', 'Buffer', publisherSource);
+const runMerge = new AsyncFunction('inputData', 'fetch', 'Buffer', mergeSource);
+const asyncAuthorize = (base, prepared) => {
+  const current = Date.now();
+  const workflowId = `arc1preview_${sha256(`workflow:${prepared.artifact_sha256}`).slice(0, 40)}`;
+  const preparedAt = new Date(current - 2_000).toISOString();
+  const expiresAt = new Date(current + 10 * 60_000).toISOString();
+  const intent = canonicalJson({
+    schema: 'arc1-preview-async-operation-intent-v1',
+    scope: 'one-durable-idempotent-provider-operation',
+    workflow_id: workflowId,
+    artifact_sha256: prepared.artifact_sha256,
+    action: prepared.action,
+    source_state_sha256: sha256(`source:${prepared.provider_request_sha256}`),
+    idempotency_key: `arc1op_${sha256(`operation:${prepared.provider_request_sha256}`).slice(0, 40)}`,
+    provider_request_sha256: prepared.provider_request_sha256,
+    prepared_at: preparedAt,
+    expires_at: expiresAt,
+  });
+  const intentSha256 = sha256(intent);
+  const stateKey = `arc1-preview-async-v1:${workflowId}`;
+  const leaseIdSha256 = sha256(`lease:${intentSha256}`);
+  const consumptionProviderRecordVersion = 2;
+  const consumptionIdSha256 = sha256(`arc1-preview-provider-authorization-consumption-id-v1\n${stateKey}\n${leaseIdSha256}\n${intentSha256}\n${consumptionProviderRecordVersion}`);
+  const consumption = canonicalJson({
+    schema: 'arc1-preview-provider-authorization-consumption-v1',
+    scope: 'atomic-one-use-provider-authorization-consumption',
+    issuer: 'private-state-authorization-adapter',
+    issuer_key_id: 'rb01',
+    purpose: 'CONSUME_OPERATION_AUTHORIZATION',
+    workflow_id: workflowId,
+    state_key: stateKey,
+    state_sha256: sha256(`state:${intentSha256}`),
+    action: prepared.action,
+    artifact_sha256: prepared.artifact_sha256,
+    provider_request_sha256: prepared.provider_request_sha256,
+    idempotency_key: `arc1op_${sha256(`operation:${prepared.provider_request_sha256}`).slice(0, 40)}`,
+    operation_intent_sha256: intentSha256,
+    authorization_readback_sha256: sha256(`readback:${intentSha256}`),
+    authorization_lease_id_sha256: leaseIdSha256,
+    authorization_lease_expires_at: new Date(current + 30_000).toISOString(),
+    authorization_provider_record_version: 1,
+    consumption_provider_record_version: consumptionProviderRecordVersion,
+    consumption_id_sha256: consumptionIdSha256,
+    consumed_at: new Date(current - 1_000).toISOString(),
+  });
+  return {
+    ...base,
+    async_operation_phase: 'EXECUTE',
+    async_operation_intent_private: intent,
+    async_authorization_consumption_private: consumption,
+    async_authorization_consumption_signature_base64url: sign(
+      null, Buffer.from(consumption), asyncReadbackKeys.privateKey,
+    ).toString('base64url'),
+  };
+};
+const noNetwork = async () => { throw new Error('PREPARE_REQUEST must not use the network.'); };
+const executePublisher = async (inputData, providerFetch) => {
+  const prepared = await runPublisher({ ...inputData, async_operation_phase: 'PREPARE_REQUEST' }, noNetwork, Buffer);
+  return runPublisher(asyncAuthorize(inputData, prepared), providerFetch, Buffer);
+};
+const executeMerge = async (inputData, providerFetch) => {
+  const prepared = await runMerge({ ...inputData, async_operation_phase: 'PREPARE_REQUEST' }, noNetwork, Buffer);
+  return runMerge(asyncAuthorize(inputData, prepared), providerFetch, Buffer);
 };
 const logicalPagePaths = ['index.html', 'services/index.html', 'about/index.html', 'process/index.html', 'contact/index.html'];
 const artifactPagePaths = ['about/index.html', 'contact/index.html', 'process/index.html', 'services/index.html', 'index.html'];
@@ -157,7 +233,7 @@ assert.equal(
 // The existing injector and publisher must accept the exact v2 evidence only
 // after the normal create-only ARC1 claim, without pretending it was a Form.
 const template = await readFile(new URL('../ARC_MASTER_TEMPLATE_V11.html', import.meta.url), 'utf8');
-const payment = createTestPaymentLinkEvidence();
+const payment = createTestCheckoutOfferEvidence();
 const fixture = fixtures[0];
 assert.equal(Object.keys(fixture.content).length, 58, 'The V11 migration must preserve the exact 58-key generator contract.');
 const claimCreatedAtForBuild = new Date().toISOString();
@@ -291,7 +367,8 @@ await assert.rejects(runPublisher({ ...emptyPreviewInput, customer_email: fixtur
 assert.equal(privacyPublisherNetworkCalls, 0);
 
 let publisherReachedGitHub = false;
-await assert.rejects(runPublisher(emptyPreviewInput, async url => {
+const preparedPublisherFailure = await runPublisher({ ...emptyPreviewInput, async_operation_phase: 'PREPARE_REQUEST' }, noNetwork, Buffer);
+await assert.rejects(runPublisher(asyncAuthorize(emptyPreviewInput, preparedPublisherFailure), async url => {
   publisherReachedGitHub = true;
   const response = new Response(JSON.stringify({ message: 'expected test stop' }), {
     status: 500, headers: { 'content-type': 'application/json' },
@@ -732,7 +809,7 @@ assert.equal(emptyPublicationReceipt.asset_visual_review_key_id, '');
 assert.equal(emptyPublicationReceipt.asset_visual_review_reviewer_id_sha256, '');
 assert.equal(emptyPublicationReceipt.asset_visual_review_sha256, '');
 const emptyGitHub = makeGitHubMock();
-const emptyPreview = await runPublisher(emptyPreviewInput, emptyGitHub.fetch, Buffer);
+const emptyPreview = await executePublisher(emptyPreviewInput, emptyGitHub.fetch);
 assert.equal(emptyPreview.asset_publication_receipt_sha256, publishedEmptyAssets.asset_publication_receipt_sha256);
 assert.deepEqual(emptyPreview.preview_paths, rendered.preview_paths);
 assert.equal(Object.hasOwn(emptyPreview, 'file_path'), false);
@@ -747,7 +824,7 @@ const emptyMergeInput = {
   ...emptyPreviewInput, preview_branch: emptyPreview.preview_branch, head_sha: emptyPreview.head_sha,
   head_tree_sha: emptyPreview.head_tree_sha, pr_number: emptyPreview.pr_number,
 };
-const mergedEmpty = await runMerge(emptyMergeInput, emptyGitHub.fetch, Buffer);
+const mergedEmpty = await executeMerge(emptyMergeInput, emptyGitHub.fetch);
 assert.equal(mergedEmpty.status, 'MERGED');
 assert.equal(JSON.parse(mergedEmpty.merge_proof).asset_publication_receipt_sha256,
   publishedEmptyAssets.asset_publication_receipt_sha256);
@@ -1135,7 +1212,7 @@ const previewPublishInput = previewInputFor({
   assetUrls: { logo_file_url: publishedUpload.logo_file_url, hero_image_url: '', supporting_image_url: '' },
 });
 const pageBlobWritesBefore = gitHub.state.calls.filter(call => call.method === 'POST' && new URL(call.url).pathname.endsWith('/git/blobs')).length;
-const publishedPreview = await runPublisher(previewPublishInput, gitHub.fetch, Buffer);
+const publishedPreview = await executePublisher(previewPublishInput, gitHub.fetch);
 assert.equal(publishedPreview.status, 'PR_CREATED');
 assert.equal(publishedPreview.preview_branch, `arc-preview/${verifiedAssetEnvelope.public_folder_prefix}`);
 assert.equal(publishedPreview.asset_publication_receipt_sha256, publishedUpload.asset_publication_receipt_sha256);
@@ -1155,16 +1232,16 @@ gitHub.state.checkRuns = [{ id: 93, name: 'ARC preview quality/preview-quality',
 
 const secondaryPage = publishedHeadTree.pages.get('services/index.html');
 publishedHeadTree.pages.set('services/index.html', { ...secondaryPage, bytes: Buffer.concat([secondaryPage.bytes, Buffer.from('tamper')]) });
-await assert.rejects(runPublisher(previewPublishInput, gitHub.fetch, Buffer), /services\/index\.html bytes differ/,
+await assert.rejects(executePublisher(previewPublishInput, gitHub.fetch), /services\/index\.html bytes differ/,
   'A byte change on a secondary page must reject exact replay.');
 publishedHeadTree.pages.set('services/index.html', secondaryPage);
 const aboutPage = publishedHeadTree.pages.get('about/index.html');
 publishedHeadTree.pages.delete('about/index.html');
-await assert.rejects(runPublisher(previewPublishInput, gitHub.fetch, Buffer), /partial five-page branch|extra or missing entries/,
+await assert.rejects(executePublisher(previewPublishInput, gitHub.fetch), /partial five-page branch|extra or missing entries/,
   'A partial five-page branch must fail closed.');
 publishedHeadTree.pages.set('about/index.html', aboutPage);
 gitHub.state.extraFolderSibling = true;
-await assert.rejects(runPublisher(previewPublishInput, gitHub.fetch, Buffer), /extra or missing entries/,
+await assert.rejects(executePublisher(previewPublishInput, gitHub.fetch), /extra or missing entries/,
   'An extra preview-folder sibling must fail closed.');
 gitHub.state.extraFolderSibling = false;
 
@@ -1173,13 +1250,13 @@ const uploadMergeInput = {
   head_tree_sha: publishedPreview.head_tree_sha, pr_number: publishedPreview.pr_number,
 };
 gitHub.state.prFiles = exactUploadPrFiles.slice(0, -1);
-await assert.rejects(runMerge(uploadMergeInput, gitHub.fetch, Buffer), /exact PR file vector/,
+await assert.rejects(executeMerge(uploadMergeInput, gitHub.fetch), /exact PR file vector/,
   'A missing asset or page in the PR file vector must fail closed.');
 gitHub.state.prFiles = [...exactUploadPrFiles, { filename: `${renderedUpload.preview_folder}/unexpected.html`, status: 'added' }];
-await assert.rejects(runMerge(uploadMergeInput, gitHub.fetch, Buffer), /exact PR file vector/,
+await assert.rejects(executeMerge(uploadMergeInput, gitHub.fetch), /exact PR file vector/,
   'An extra PR file must fail closed.');
 gitHub.state.prFiles = exactUploadPrFiles;
-const mergedUpload = await runMerge(uploadMergeInput, gitHub.fetch, Buffer);
+const mergedUpload = await executeMerge(uploadMergeInput, gitHub.fetch);
 assert.equal(mergedUpload.status, 'MERGED');
 const uploadMergeProof = JSON.parse(mergedUpload.merge_proof);
 assert.equal(uploadMergeProof.asset_publication_receipt_sha256, publishedUpload.asset_publication_receipt_sha256);
@@ -1227,7 +1304,7 @@ await assert.rejects(runAssetPublisher({ ...publicationInput(verifiedAssetEnvelo
   gitHub.fetch, Buffer), /asset-stage preview folder has extra or missing entries/,
   'Completed-site asset recovery must reject a missing secondary route.');
 publishedHeadTree.pages.set('process/index.html', processPage);
-const completedPreviewReplay = await runPublisher(previewPublishInput, gitHub.fetch, Buffer);
+const completedPreviewReplay = await executePublisher(previewPublishInput, gitHub.fetch);
 assert.equal(completedPreviewReplay.status, 'PR_REUSED');
 assert.equal(gitHub.state.calls.filter(call => call.method !== 'GET').length, completedMutationCount,
   'Completed preview recovery must perform no mutation.');

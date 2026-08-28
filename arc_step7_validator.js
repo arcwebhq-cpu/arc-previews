@@ -1,3 +1,5 @@
+// Frozen V10 fixture/replay validator only. The live V11 flow uses
+// zapier/arc1_validate_v11_bundle.js and must never map singular-page fields.
 // ARC fail-closed contract, CTA, logo, form, copy, media, contrast, and template validation.
 const clean = value => String(value == null ? "" : value).trim();
 const html = clean(inputData.html_content);

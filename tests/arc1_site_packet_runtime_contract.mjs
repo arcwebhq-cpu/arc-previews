@@ -26,11 +26,12 @@ if (!activationDeploymentSha) {
   siteRoot = temporarySiteRoot;
 }
 const siteModule = relative => import(pathToFileURL(path.join(siteRoot, relative)).href);
-const [activationCore, adapterCore, bridgeCore, submissionCore] = await Promise.all([
+const [activationCore, adapterCore, bridgeCore, submissionCore, verificationCore] = await Promise.all([
   siteModule("netlify/lib/activation-manifest-core.mjs"),
   siteModule("netlify/lib/intake-arc1-adapter-core.mjs"),
   siteModule("netlify/lib/intake-arc1-bridge-core.mjs"),
   siteModule("netlify/lib/intake-submission-core.mjs"),
+  siteModule("netlify/lib/intake-email-verification-core.mjs"),
 ]);
 const {
   acceptArc1AdapterEnvelope,
@@ -46,6 +47,7 @@ const {
   deliverIntakeToArc1,
 } = bridgeCore;
 const { BUDGET_CONFIRMATION, OFFER_CONTRACT_ID, TERMS_CONFIRMATION, normalizeIntakeForm } = submissionCore;
+const { consumeIntakeEmailVerificationToken, reserveIntakeEmailVerification } = verificationCore;
 const { ACTIVATION_EVIDENCE_BY_STAGE, ACTIVATION_MANIFEST_SCHEMA, ACTIVATION_MANIFEST_VERSION, signActivationManifest } = activationCore;
 
 class FakeStore {
@@ -126,6 +128,11 @@ const env = {
   ARC_INTAKE_ARC1_CONSUMER_RUNTIME_ENABLED: "true",
   ARC_INTAKE_ARC1_CONSUMER_PRIVATE_STATE_ENABLED: "true",
   ARC_INTAKE_ARC1_PROVIDER_WORK_ENABLED: "true",
+  ARC_INTAKE_EMAIL_VERIFICATION_ENABLED: "true",
+  ARC_INTAKE_EMAIL_VERIFICATION_STATE_SECRET: "cross-verification-state-secret-unique-0123456789",
+  ARC_INTAKE_EMAIL_VERIFICATION_TOKEN_SECRET: "cross-verification-token-secret-unique-0123456789",
+  ARC_INTAKE_EMAIL_VERIFICATION_RECIPIENT_SECRET: "cross-verification-recipient-secret-unique-012345",
+  ARC_INTAKE_EMAIL_VERIFICATION_ARC1_RELEASE_SECRET: "cross-verification-release-secret-unique-01234567",
   ARC_INTAKE_ARC1_HISTORY_REDACTION_ATTESTED: "true",
   ARC_INTAKE_ARC1_INPUTDATA_SECRET_COMPATIBILITY_ENABLED: "false",
   SITE_ID: "8f9d462c-952f-42fc-a3a0-50a2529e8f5d",
@@ -174,16 +181,22 @@ env.ARC_INTAKE_ARC1_ADAPTER_ATTESTATION = createAdapterAttestation({
 const sourceStore = new FakeStore();
 const adapterStore = new FakeStore();
 await sourceStore.setJSON(normalized.key, normalized.record, { onlyIfNew: true });
+const verification = await reserveIntakeEmailVerification(normalized.record, env, sourceStore, {
+  clock: () => new Date(baseTime),
+});
+await consumeIntakeEmailVerificationToken(new URL(verification.verification_url).hash.slice(1), env, sourceStore, {
+  clock: () => new Date(baseTime.getTime() + 1_000),
+});
 let accepted;
 const delivered = await deliverIntakeToArc1(submissionId, env, {
   store: sourceStore,
-  clock: () => new Date(baseTime),
+  clock: () => new Date(baseTime.getTime() + 2_000),
   uuid: () => "44444444-4444-4444-8444-444444444444",
   fetch: async (url, options) => {
     accepted = await acceptArc1AdapterEnvelope(options.body, new Request(url, options), env, {
       source: sourceStore,
       adapter: adapterStore,
-    }, { clock: () => new Date(baseTime) });
+    }, { clock: () => new Date(baseTime.getTime() + 2_000) });
     const response = new Response(accepted.acknowledgementJson, {
       status: 200,
       headers: { "Content-Type": "application/json", "Content-Length": String(Buffer.byteLength(accepted.acknowledgementJson)) },

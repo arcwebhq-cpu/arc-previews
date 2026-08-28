@@ -8,7 +8,7 @@ const workflow = await readFile(path.join(projectRoot, ".github/workflows/previe
 const dependabot = await readFile(path.join(projectRoot, ".github/dependabot.yml"), "utf8");
 const packageJson = JSON.parse(await readFile(path.join(projectRoot, "package.json"), "utf8"));
 
-assert.match(workflow, /repository:\s*arcwebhq-cpu\/arc-site\s*\n\s*ref:\s*f84c303e0d34045a3929383e538e209790763f5e\s*\n\s*path:\s*\.arc-site-contract/,
+assert.match(workflow, /repository:\s*arcwebhq-cpu\/arc-site\s*\n\s*ref:\s*c9fe3d2304bc6b37169c53055ab67edeb44a16ff\s*\n\s*path:\s*\.arc-site-contract/,
   "CI must execute against the reviewed ARC1 v2 site producer authority.");
 assert.match(workflow, /preview-quality:[\s\S]*permissions:\s*\n\s*contents:\s*read\s*\n\s*pages:\s*read/,
   "The quality job must retain least-privilege Pages settings readback access.");

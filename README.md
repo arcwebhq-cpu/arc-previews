@@ -30,8 +30,29 @@ npm ci
 ARC_SITE_DIR=/absolute/path/to/arc-site npm test
 ```
 
-`ARC_SITE_DIR` must identify the exact partner contract under test. CI checks out that repository
-at an immutable commit SHA, and the ARC site workflow pins this preview repository the same way.
+`ARC_SITE_DIR` must identify the exact partner contract under test. The binding is deliberately
+asymmetric: ARC site CI pins this preview repository at a reviewed immutable commit, while preview
+CI reads ARC site `main` only after its own trusted verifier recomputes the approved SHA-256 over
+every site file it installs or imports. The complete `netlify/lib` and local npm-override trees,
+the handoff-start Function, its imported review-activation JSON, and both npm manifests are covered; symlinks, hidden extra files in
+those trees, project npm control files, or any changed byte fail before installation. Partner npm
+lifecycle scripts are disabled.
+
+Release order avoids impossible mutual future-SHA pins:
+
+1. Merge an ARC site partner-contract change with its regenerated manifest, then review and update
+   `config/arc-site-partner-binding.json` here.
+2. Merge an ARC previews contract change, then update the immutable preview commit in ARC site.
+3. Binding-only commits do not require a reverse pin because the reverse authority is the stable
+   content digest, not the site commit identity.
+
+After the site change is reviewed, run `npm run update:partner-contract` in ARC site, then run
+`ARC_SITE_DIR=/path/to/arc-site npm run update:site-binding` here. Inspect both generated JSON diffs;
+never hand-edit a digest. The verifiers also prove local import closure, reject dynamic imports and
+unreviewed Node builtins, and require every external package artifact to remain HTTPS/SHA-512
+integrity-bound by npm lockfile v3 before any partner code executes.
+Covered trees permit only `.mjs` plus the exact reviewed local-override `package.json`; alternate
+executable suffixes fail closed, and portable ASCII path ordering prevents host-locale drift.
 
 The V11 renderer is exercised across 19 media profiles, producing 95 deterministic QA documents
 (19 complete sites times five pages). The gate verifies the exact route vector, navigation and

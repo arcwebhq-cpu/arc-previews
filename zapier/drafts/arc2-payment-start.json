@@ -1,0 +1,201 @@
+{
+  "schema": "arc-zapier-v11-paused-workflow-draft-v1",
+  "release": "ARC V11",
+  "workflow_id": "arc2-payment-start",
+  "title": "ARC V11 - Payment to ARC2 Start Worker - PAUSED",
+  "provider_state": "DRAFT_UNPUBLISHED_OFF",
+  "published": false,
+  "enabled": false,
+  "activation_allowed": false,
+  "installation_mode": "paused-private-integration-recipe",
+  "maximum_concurrency": 1,
+  "auto_replay": false,
+  "history_policy": {
+    "mode": "private-integration-redacted",
+    "ordinary_input_data_allowed": false,
+    "ordinary_output_data_allowed": false,
+    "secret_field_mapping_allowed": false,
+    "private_recipient_mapping_allowed": false,
+    "log_safe_output_allowlist": [
+      "checkout_session_id_sha256",
+      "first_party_start_receipt_sha256",
+      "handoff_id",
+      "handoff_state",
+      "idempotent_replay",
+      "outbox_key_sha256",
+      "retry_required",
+      "reversal_control_ready",
+      "status"
+    ]
+  },
+  "trigger": {
+    "kind": "private-queue-poll",
+    "provider": "ARC private Zapier integration",
+    "poll_concurrency": 1,
+    "catch_hook_allowed": false
+  },
+  "controls": {
+    "draft_gate": "ARC2_PAYMENT_START_ZAP_ENABLED",
+    "draft_gate_default": false,
+    "arc2_checkout_session_adapter_enabled": false,
+    "payment_arc2_start_enabled": false,
+    "stripe_live_mode_enabled": false,
+    "provider_actions_default": false
+  },
+  "secret_environment_names": [
+    "ARC_PAYMENT_ARC2_WORKER_SECRET",
+    "ARC_CHECKOUT_BINDING_SECRET",
+    "ARC_HANDOFF_ARTIFACT_EVIDENCE_SECRET",
+    "ARC1_ASSET_PUBLICATION_RECEIPT_SECRET",
+    "GITHUB_PREVIEW_SOURCE_READ_TOKEN"
+  ],
+  "secret_custody": "private integration credential store only",
+  "steps": [
+    {
+      "order": 1,
+      "id": "off_guard",
+      "component": "filter",
+      "action": "continue_only_if_exact_true",
+      "input": "ARC2_PAYMENT_START_ZAP_ENABLED",
+      "configured_value": false,
+      "provider_action": false
+    },
+    {
+      "order": 2,
+      "id": "claim_next",
+      "component": "arc_private.payment_arc2_claim_next_v1",
+      "action": "generate_token_and_bearer_post",
+      "claim_token": {
+        "generation": "cryptographically-random-base64url",
+        "minimum_bytes": 32,
+        "visibility": "private"
+      },
+      "request": {
+        "method": "POST",
+        "path": "/internal/payment-arc2/claim",
+        "exact_body_fields": [
+          "claim_token"
+        ],
+        "authentication": "Bearer ARC_PAYMENT_ARC2_WORKER_SECRET",
+        "origin_header_allowed": false
+      },
+      "response_visibility": "private",
+      "provider_action": false
+    },
+    {
+      "order": 3,
+      "id": "empty_gate",
+      "component": "private_path",
+      "action": "stop_if_state_empty_else_continue",
+      "empty_state": "EMPTY",
+      "provider_action": false
+    },
+    {
+      "order": 4,
+      "id": "artifact_adapter",
+      "component": "zapier/arc2_checkout_session_artifact_adapter.js",
+      "action": "resolve_exact_v11_artifacts_and_start_first_party_worker",
+      "private_input_fields": [
+        "payment_arc2_claim_private",
+        "payment_arc2_claim_token",
+        "checkout_session_id",
+        "render_bundle_private",
+        "checkout_offer_snapshot_private",
+        "checkout_recipient_reservation_private",
+        "asset_publication_receipt_private",
+        "checkout_binding_secret",
+        "asset_publication_receipt_secret",
+        "handoff_artifact_evidence_secret",
+        "payment_arc2_worker_secret",
+        "github_token"
+      ],
+      "start_request": {
+        "method": "POST",
+        "path": "/internal/payment-arc2/start",
+        "exact_body_fields": [
+          "artifact_evidence",
+          "artifact_evidence_hmac_sha256",
+          "checkout_session_id",
+          "claim_token",
+          "deploy_artifacts",
+          "lead_notification_email",
+          "lead_route_recipient_hmac_sha256",
+          "outbox_key"
+        ]
+      },
+      "provider_action": false
+    },
+    {
+      "order": 5,
+      "id": "reversal_control",
+      "component": "arc_private.stripe_reversal_binding_and_recheck_v1",
+      "action": "bind_recheck_and_replay_identical_start_after_http_202",
+      "binding_path": "/internal/stripe/reversal-binding",
+      "recheck_path": "/internal/stripe/reversal-recheck",
+      "first_start_expected_status": 202,
+      "identical_start_replay_required": true,
+      "provider_action": false
+    },
+    {
+      "order": 6,
+      "id": "complete",
+      "component": "arc_private.payment_arc2_complete_v1",
+      "action": "bearer_post_after_durable_start_receipt",
+      "request": {
+        "method": "POST",
+        "path": "/internal/payment-arc2/complete",
+        "exact_body_fields": [
+          "claim_token",
+          "completion",
+          "outbox_key"
+        ],
+        "exact_completion_fields": [
+          "accepted",
+          "arc2_start_receipt",
+          "arc2_start_receipt_hmac_sha256",
+          "immutable_binding_sha256",
+          "schema"
+        ],
+        "authentication": "Bearer ARC_PAYMENT_ARC2_WORKER_SECRET",
+        "origin_header_allowed": false
+      },
+      "provider_action": false
+    }
+  ],
+  "retry_contract": {
+    "http_202_means_complete": false,
+    "http_202_requires_retry": true,
+    "same_claim_token_required": true,
+    "same_outbox_key_required": true,
+    "same_start_bytes_required": true,
+    "timeout_marks_complete": false,
+    "automatic_provider_replay_allowed": false
+  },
+  "forbidden_components": [
+    "Stripe Payment Link",
+    "caller-created payment evidence",
+    "raw Checkout Session ID in ordinary task history",
+    "raw recipient address in ordinary task history",
+    "HTTP 202 treated as fulfillment",
+    "legacy arc2_resolve_and_finalize.js"
+  ],
+  "source_contracts": [
+    "zapier/arc2_checkout_session_artifact_adapter.js",
+    "zapier/arc2-checkout-session-artifact-adapter.md",
+    "zapier/wiring-contract.json"
+  ],
+  "activation_evidence_required": [
+    "payment_arc2_workflow_id_sha256",
+    "payment_arc2_workflow_version_readback_sha256",
+    "payment_arc2_start_contract_receipt_sha256",
+    "claim_next_contract_receipt_sha256",
+    "history-redaction readback",
+    "sandbox 202-bind-recheck-identical-replay-200 receipt"
+  ],
+  "blocking_reasons": [
+    "the standard Code by Zapier history surface cannot safely carry the private claim and signed artifact bundle",
+    "the reversal binding and authoritative Stripe recheck producer is not installed",
+    "atomic lease and exact replay semantics are not proven in Zapier",
+    "live mode remains forbidden until complete sandbox evidence exists"
+  ]
+}

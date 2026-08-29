@@ -1,0 +1,131 @@
+{
+  "schema": "arc-zapier-v11-paused-workflow-draft-v1",
+  "release": "ARC V11",
+  "workflow_id": "arc1-review-email",
+  "title": "ARC V11 - Review Email Worker - PAUSED",
+  "provider_state": "DRAFT_UNPUBLISHED_OFF",
+  "published": false,
+  "enabled": false,
+  "activation_allowed": false,
+  "installation_mode": "paused-private-integration-recipe",
+  "maximum_concurrency": 1,
+  "auto_replay": false,
+  "history_policy": {
+    "mode": "private-integration-redacted",
+    "ordinary_input_data_allowed": false,
+    "ordinary_output_data_allowed": false,
+    "secret_field_mapping_allowed": false,
+    "private_recipient_mapping_allowed": false,
+    "log_safe_output_allowlist": [
+      "claimed",
+      "empty",
+      "idempotent_replay",
+      "renewal_required",
+      "state"
+    ]
+  },
+  "trigger": {
+    "kind": "private-queue-poll",
+    "provider": "ARC private Zapier integration",
+    "poll_concurrency": 1,
+    "catch_hook_allowed": false
+  },
+  "controls": {
+    "draft_gate": "ARC1_REVIEW_EMAIL_ZAP_ENABLED",
+    "draft_gate_default": false,
+    "send_gate": "ARC_TRANSACTIONAL_EMAIL_WORKER_ENABLED",
+    "send_gate_default": false,
+    "provider_actions_default": false
+  },
+  "secret_environment_names": [
+    "ARC_REVIEW_EMAIL_INTERNAL_API_SECRET"
+  ],
+  "secret_custody": "private integration credential store only",
+  "steps": [
+    {
+      "order": 1,
+      "id": "off_guard",
+      "component": "filter",
+      "action": "continue_only_if_exact_true",
+      "input": "ARC1_REVIEW_EMAIL_ZAP_ENABLED",
+      "configured_value": false,
+      "provider_action": false
+    },
+    {
+      "order": 2,
+      "id": "claim_next",
+      "component": "arc_private.review_email_claim_next_v1",
+      "action": "signed_post",
+      "request": {
+        "method": "POST",
+        "path": "/api/internal/review-email/reserve",
+        "body": {
+          "claim_next": true
+        },
+        "authentication": "arc-preview-review-email-internal-request-signature-v1",
+        "origin_header_allowed": false
+      },
+      "response_visibility": "private",
+      "provider_action": false
+    },
+    {
+      "order": 3,
+      "id": "empty_or_renewal_gate",
+      "component": "private_path",
+      "action": "stop_empty_or_route_renewal",
+      "empty_state": "NO_TASK",
+      "renewal_state": "RENEWAL_REQUIRED",
+      "provider_action": false
+    },
+    {
+      "order": 4,
+      "id": "send_boundary",
+      "component": "arc-site/netlify/functions/transactional-email-worker.mjs",
+      "action": "first_party_resend_native_send",
+      "invoked_by_zapier": false,
+      "provider_action": false,
+      "reason": "the first-party scheduled worker owns durable attempt latching, recipient vault access, and Resend send authority"
+    },
+    {
+      "order": 5,
+      "id": "delivery_ack",
+      "component": "arc_private.review_email_ack_v1",
+      "action": "signed_post_after_verified_native_event",
+      "request": {
+        "method": "POST",
+        "path": "/api/internal/review-email/ack",
+        "exact_body_fields": [
+          "delivery_receipt_evidence",
+          "delivery_receipt_evidence_hmac_sha256"
+        ],
+        "authentication": "arc-preview-review-email-internal-request-signature-v1",
+        "origin_header_allowed": false
+      },
+      "accepted_send_response_is_delivery_proof": false,
+      "provider_action": false
+    }
+  ],
+  "forbidden_components": [
+    "Email by Zapier",
+    "Gmail send",
+    "Zapier Catch Hook as durable acknowledgement",
+    "acknowledge from HTTP 2xx send response",
+    "recipient address in ordinary task history"
+  ],
+  "source_contracts": [
+    "zapier/arc1_preview_review_outbox.js",
+    "zapier/wiring-contract.json"
+  ],
+  "activation_evidence_required": [
+    "email_workflow_id_sha256",
+    "email_workflow_version_readback_sha256",
+    "claim_next_contract_receipt_sha256",
+    "provider-authenticated delivered, bounced, complained, failed, or suppressed receipt",
+    "history-redaction readback"
+  ],
+  "blocking_reasons": [
+    "one standard Zap cannot safely combine the scheduled claim source with the native provider webhook source",
+    "the Resend-native first-party worker has no authenticated on-demand HTTP dispatch route",
+    "private integration history redaction and secret custody are not verified"
+  ]
+}

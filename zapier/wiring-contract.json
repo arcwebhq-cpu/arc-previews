@@ -179,6 +179,30 @@
       "controlled_end_to_end_delivery": false
     }
   },
+  "paused_draft_blueprints": {
+    "index": "zapier/drafts/index.json",
+    "validator": "scripts/validate_zapier_v11_drafts.mjs",
+    "test": "tests/zapier_v11_draft_blueprints_contract.mjs",
+    "runbook": "zapier/v11-paused-draft-runbook.md",
+    "offline_recipe_complete": true,
+    "provider_installation_performed": false,
+    "provider_version_readback_verified": false,
+    "provider_contract_receipts_verified": false,
+    "published": false,
+    "enabled": false,
+    "activation_allowed": false,
+    "maximum_concurrency": 1,
+    "history_redaction_required": true,
+    "history_redaction_verified": false,
+    "first_party_synchronous_ack_adapter_required": true,
+    "zapier_catch_hook_is_synchronous_ack_authority": false,
+    "workflows": [
+      "ARC V11 - Review Email Worker - PAUSED",
+      "ARC V11 - Review Revision Worker - PAUSED",
+      "ARC V11 - Payment to ARC2 Start Worker - PAUSED",
+      "ARC V11 - Review Checkout Revocation Worker - PAUSED"
+    ]
+  },
   "observed_external_state": {
     "zapier_arc1_enabled": false,
     "zapier_arc2_enabled": false,
@@ -594,7 +618,11 @@
         "deployment_contract": "zapier/arc1-consumer-runtime-deployment.md",
         "test": "tests/arc1_consumer_runtime_bundle_contract.mjs",
         "cross_repository_test": "tests/arc1_site_packet_runtime_contract.mjs",
-        "pinned_arc_site_commit": "c9fe3d2304bc6b37169c53055ab67edeb44a16ff",
+        "arc_site_partner_binding": {
+          "mode": "mutable-main-fail-closed-before-execution-content-digest",
+          "bundle_schema": "arc-site-partner-contract-bundle-v1",
+          "binding_file": "config/arc-site-partner-binding.json"
+        },
         "phases": ["CLAIM", "AUTHORIZE", "COMPLETE"],
         "generated_bundle_reproducible": true,
         "actual_bundle_executed_in_tests": true,

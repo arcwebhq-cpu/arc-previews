@@ -1,0 +1,119 @@
+{
+  "schema": "arc-zapier-v11-paused-workflow-draft-v1",
+  "release": "ARC V11",
+  "workflow_id": "review-checkout-revocation",
+  "title": "ARC V11 - Review Checkout Revocation Worker - PAUSED",
+  "provider_state": "DRAFT_UNPUBLISHED_OFF",
+  "published": false,
+  "enabled": false,
+  "activation_allowed": false,
+  "installation_mode": "paused-contract-placeholder",
+  "maximum_concurrency": 1,
+  "auto_replay": false,
+  "history_policy": {
+    "mode": "private-integration-redacted",
+    "ordinary_input_data_allowed": false,
+    "ordinary_output_data_allowed": false,
+    "secret_field_mapping_allowed": false,
+    "private_recipient_mapping_allowed": false,
+    "log_safe_output_allowlist": [
+      "complete",
+      "pending",
+      "revoked",
+      "suppression_status"
+    ]
+  },
+  "trigger": {
+    "kind": "verified-native-resend-negative-event",
+    "provider": "ARC private Zapier integration",
+    "accepted_events": [
+      "email.bounced",
+      "email.complained",
+      "email.failed",
+      "email.suppressed"
+    ],
+    "catch_hook_allowed": false
+  },
+  "controls": {
+    "draft_gate": "ARC_REVIEW_CHECKOUT_REVOCATION_ZAP_ENABLED",
+    "draft_gate_default": false,
+    "ARC_STRIPE_REVIEW_REVOCATION_ENABLED": false,
+    "provider_actions_default": false,
+    "automatic_refund_enabled": false,
+    "automatic_dispute_action_enabled": false
+  },
+  "secret_environment_names": [
+    "ARC_STRIPE_REVIEW_REVOCATION_HMAC_SECRET",
+    "ARC_STRIPE_REVIEW_SECRET_KEY"
+  ],
+  "secret_custody": "first-party Netlify runtime only; never ordinary Zap fields",
+  "steps": [
+    {
+      "order": 1,
+      "id": "off_guard",
+      "component": "filter",
+      "action": "continue_only_if_exact_true",
+      "input": "ARC_REVIEW_CHECKOUT_REVOCATION_ZAP_ENABLED",
+      "configured_value": false,
+      "provider_action": false
+    },
+    {
+      "order": 2,
+      "id": "verify_native_event",
+      "component": "arc_private.resend_verified_negative_event_v1",
+      "action": "verify_signature_and_normalize",
+      "accepted_send_response_is_negative_event_proof": false,
+      "provider_action": false
+    },
+    {
+      "order": 3,
+      "id": "revoke_bound_open_sessions",
+      "component": "arc-site/netlify/lib/stripe-review-checkout-adapter.mjs#expireSuppressedRecipientReviewCheckouts",
+      "action": "first_party_only",
+      "claim_next_path": null,
+      "external_worker_endpoint": null,
+      "provider_action": false,
+      "reason": "the operation requires private recipient indexes, durable CAS state, Stripe retrieve-expire-retrieve, and paid-session incident handling"
+    },
+    {
+      "order": 4,
+      "id": "ack_negative_event",
+      "component": "arc-site/netlify/functions/resend-webhook.mjs",
+      "action": "first_party_atomic_ack_after_revocation_converges",
+      "invoked_by_zapier": false,
+      "provider_action": false
+    }
+  ],
+  "revocation_contract": {
+    "open_unpaid_session_action": "expire_then_retrieve",
+    "paid_session_action": "halt_fulfillment_and_create_manual_refund_review_alert",
+    "automatic_refund_allowed": false,
+    "suppression_ack_before_revocation_complete_allowed": false,
+    "exact_event_replay_must_converge": true,
+    "changed_event_replay_allowed": false
+  },
+  "forbidden_components": [
+    "standard Catch Hook as signature authority",
+    "Stripe session expiration from ordinary Zap fields",
+    "automatic refund",
+    "automatic dispute submission",
+    "suppression acknowledgement before provider reconciliation"
+  ],
+  "source_contracts": [
+    "zapier/wiring-contract.json"
+  ],
+  "activation_evidence_required": [
+    "checkout_revocation_workflow_id_sha256",
+    "checkout_revocation_workflow_version_readback_sha256",
+    "checkout_revocation_worker_contract_receipt_sha256",
+    "Stripe checkout.sessions.expire capability readback",
+    "verified suppression-to-expiry exact replay receipt",
+    "paid-session manual-review halt receipt"
+  ],
+  "blocking_reasons": [
+    "ARC exposes no separate checkout-revocation claim-next or completion endpoint",
+    "the only implemented revocation path is the first-party Resend webhook runtime",
+    "a standard Zap cannot atomically bind private recipient suppression to all indexed Checkout Sessions",
+    "no private Zapier revocation integration or capability receipt exists"
+  ]
+}

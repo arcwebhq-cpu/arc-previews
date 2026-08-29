@@ -39,16 +39,19 @@
     "test:arc2-lead-route": "node tests/arc2_lead_route_staging_contract.mjs",
     "test:synthetic-e2e": "node tests/five_stripe_test_e2e_contract.mjs",
     "test:wiring": "node tests/zapier_wiring_contract.mjs",
+    "test:zapier-v11-drafts": "node scripts/validate_zapier_v11_drafts.mjs && node tests/zapier_v11_draft_blueprints_contract.mjs",
     "test:pages": "node tests/pages_publish_contract.mjs",
     "test:pages-source": "node tests/pages_source_contract.mjs",
     "test:repository-privacy": "node tests/repository_privacy_contract.mjs",
-    "test:workflow-supply-chain": "node tests/workflow_supply_chain_contract.mjs",
+    "test:site-binding": "node scripts/verify_arc_site_partner_contract.mjs",
+    "update:site-binding": "node scripts/verify_arc_site_partner_contract.mjs --write-binding",
+    "test:workflow-supply-chain": "node tests/workflow_supply_chain_contract.mjs && node tests/arc_site_partner_binding_contract.mjs",
     "test:customer-upload-browser": "node tests/customer_upload_browser_contract.mjs",
     "test:browser": "npm run build:v11-fixtures && ARC_QA_DESKTOP_MOBILE_ONLY=1 node tests/preview_quality.mjs",
     "test:browser:all-viewports": "npm run build:v11-fixtures && node tests/preview_quality.mjs",
     "test:browser:legacy": "npm run build:v11-fixtures && npm run build:fixtures && ARC_QA_V10_ONLY=1 ARC_QA_DESKTOP_MOBILE_ONLY=1 node tests/preview_quality.mjs",
     "test:images": "npm run build:v11-fixtures && ARC_QA_REAL_IMAGES=1 ARC_QA_SAVE_SCREENSHOTS=1 ARC_QA_DESKTOP_MOBILE_ONLY=1 node tests/preview_quality.mjs",
-    "test": "npm run build && npm run audit && npm run test:v11-suite && npm run test:arc1-generation && npm run test:arc1-consumer && npm run test:sanitizer && npm run test:premium && npm run test:no-egress && npm run test:arc1-intake-assets && npm run test:arc1-checkout-offer && npm run test:legacy-payment-link-retirement && npm run test:receipt-v1-cutover && npm run test:pipeline && npm run test:arc1-provider-authorization && npm run test:arc1-pr-gate && npm run test:arc1-async-orchestrator && npm run test:arc1-review-email && npm run test:arc1-network-response && npm run test:arc2-claim && npm run test:arc2-legacy-delivery-gate-retirement && npm run test:arc2-legacy && npm run test:arc2-lead-route && npm run test:synthetic-e2e && npm run test:wiring && npm run test:pages && npm run test:pages-source && npm run test:repository-privacy && npm run test:workflow-supply-chain && npm run test:customer-upload-browser && npm run test:browser"
+    "test": "npm run test:site-binding && npm run build && npm run audit && npm run test:v11-suite && npm run test:arc1-generation && npm run test:arc1-consumer && npm run test:sanitizer && npm run test:premium && npm run test:no-egress && npm run test:arc1-intake-assets && npm run test:arc1-checkout-offer && npm run test:legacy-payment-link-retirement && npm run test:receipt-v1-cutover && npm run test:pipeline && npm run test:arc1-provider-authorization && npm run test:arc1-pr-gate && npm run test:arc1-async-orchestrator && npm run test:arc1-review-email && npm run test:arc1-network-response && npm run test:arc2-claim && npm run test:arc2-legacy-delivery-gate-retirement && npm run test:arc2-legacy && npm run test:arc2-lead-route && npm run test:synthetic-e2e && npm run test:wiring && npm run test:zapier-v11-drafts && npm run test:pages && npm run test:pages-source && npm run test:repository-privacy && npm run test:workflow-supply-chain && npm run test:customer-upload-browser && npm run test:browser"
   },
   "devDependencies": {
     "@sparticuz/chromium": "149.0.0",

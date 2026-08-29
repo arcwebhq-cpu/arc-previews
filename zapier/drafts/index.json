@@ -1,0 +1,51 @@
+{
+  "schema": "arc-zapier-v11-paused-draft-index-v1",
+  "release": "ARC V11",
+  "configuration_state": "blocked-paused",
+  "provider": "zapier",
+  "published": false,
+  "enabled": false,
+  "provider_mutation_allowed": false,
+  "legacy_hook_replay_allowed": false,
+  "secret_values_present": false,
+  "workflows": [
+    {
+      "id": "arc1-review-email",
+      "path": "zapier/drafts/arc1-review-email.json",
+      "role": "claim and acknowledge private review email work"
+    },
+    {
+      "id": "arc1-review-revision",
+      "path": "zapier/drafts/arc1-review-revision.json",
+      "role": "claim, build, validate, publish, and complete one immutable revision"
+    },
+    {
+      "id": "arc2-payment-start",
+      "path": "zapier/drafts/arc2-payment-start.json",
+      "role": "claim one paid Checkout Session outbox and start ARC2"
+    },
+    {
+      "id": "review-checkout-revocation",
+      "path": "zapier/drafts/review-checkout-revocation.json",
+      "role": "expire open review Checkout Sessions after verified recipient suppression"
+    }
+  ],
+  "global_requirements": {
+    "maximum_concurrency_per_workflow": 1,
+    "task_history_policy": "private-integration-redacted",
+    "ordinary_field_secret_mapping_allowed": false,
+    "ordinary_task_history_private_payload_allowed": false,
+    "automatic_replay_allowed": false,
+    "customer_email_action_provider": "resend-native-first-party-worker",
+    "gmail_customer_delivery_allowed": false,
+    "stripe_payment_link_allowed": false
+  },
+  "activation_blockers": [
+    "no verified Zapier private integration or secret broker with history-redacted inputs and outputs",
+    "no provider proof of atomic create-or-exact, CAS-or-exact, or atomic lease consumption",
+    "standard Catch Hook cannot return ARC's exact synchronous durable acknowledgement",
+    "review email send and provider webhook acknowledgement require different asynchronous sources",
+    "checkout-revocation has no separate claim-next HTTP surface",
+    "provider workflow IDs, paused version readbacks, and executed contract receipts are absent"
+  ]
+}

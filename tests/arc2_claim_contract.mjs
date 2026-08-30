@@ -161,7 +161,7 @@ function buildScenario(options = {}) {
     customer_creation: "always",
     submit_type: "pay",
     checkout_redirect_url: "https://arcweb.onl/payment-success/?session_id={CHECKOUT_SESSION_ID}",
-    stripe_api_version: "2026-07-29.dahlia"
+    stripe_api_version: "2026-08-26.dahlia"
   };
   const publicationEntry = asset ? {
     asset_id: "d".repeat(64),

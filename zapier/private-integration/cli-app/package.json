@@ -1,0 +1,24 @@
+{
+  "name": "arc-v11-zapier-private-integration",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Fail-closed ARC V11 Zapier private integration scaffold",
+  "main": "index.js",
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "audit:production": "npm audit --omit=dev",
+    "test": "node --test test/contract.test.js && node scripts/validate-offline.js",
+    "validate:offline": "node scripts/validate-offline.js"
+  },
+  "dependencies": {
+    "zapier-platform-core": "19.1.0"
+  },
+  "devDependencies": {
+    "zapier-platform-cli": "19.1.0"
+  },
+  "overrides": {
+    "form-data": "4.0.6"
+  }
+}

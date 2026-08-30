@@ -1,0 +1,33 @@
+{
+  "schema": "arc-zapier-v11-private-app-provider-readback-v1",
+  "release": "ARC V11",
+  "provider_state": "BLOCKED_UNVERIFIED",
+  "artifact_state": "BLOCKED_UNVERIFIED",
+  "archive_state": "BLOCKED_UNVERIFIED",
+  "validation_state": "BLOCKED_UNVERIFIED",
+  "readback_state": "BLOCKED_UNVERIFIED",
+  "provider_app_id": null,
+  "provider_version": null,
+  "provider_build_sha256": null,
+  "source_archive_sha256": null,
+  "provider_validation_receipt_sha256": null,
+  "provider_version_readback_sha256": null,
+  "provider_history_redaction_readback_sha256": null,
+  "provider_concurrency_readback_sha256": null,
+  "provider_off_state_readback_sha256": null,
+  "provider_mutation_allowed": false,
+  "activation_allowed": false,
+  "publish_allowed": false,
+  "promotion_allowed": false,
+  "published": false,
+  "enabled": false,
+  "required_fresh_evidence": [
+    "Zapier CLI provider-aware validation with zero errors and zero warnings",
+    "fresh provider build archive digest",
+    "provider app ID and exact private version readback",
+    "two-action inventory readback with zero input fields",
+    "OFF-state, concurrency-one, and task-history redaction readbacks",
+    "authoritative Stripe Session-to-PaymentIntent validation before binding signing",
+    "durable byte-identical canonical binding body and signature retry receipt"
+  ]
+}

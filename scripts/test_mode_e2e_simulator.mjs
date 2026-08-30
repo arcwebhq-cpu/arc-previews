@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-export const SYNTHETIC_STRIPE_API_VERSION = "2026-07-29.dahlia";
+export const SYNTHETIC_STRIPE_API_VERSION = "2026-08-26.dahlia";
 export const SYNTHETIC_SUBTOTAL_MINOR_UNITS = 500000;
 export const SYNTHETIC_HTML_PATHS = Object.freeze([
   "about/index.html",

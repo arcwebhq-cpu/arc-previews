@@ -1,9 +1,12 @@
 # ARC V11 Zapier paused-draft runbook
 
-Status: **four install recipes are validated, unpublished and OFF**. They are
-configuration artifacts only. They do not authorize a Zap publish, provider
-call, email, Checkout Session, Netlify handoff, refund, dispute action, or
-legacy task replay.
+Status: **four workflow source contracts are locally checked; each workflow's
+provider and configuration state remains BLOCKED_UNVERIFIED**. Their source controls remain
+unpublished and OFF, but that is not provider readback. Exactly two contracts
+are paused private-app action recipes: review revision and payment start. Review email and Checkout
+revocation are first-party-only contracts, never Zapier install recipes. None
+of these artifacts authorizes a Zap publish, provider call, email, Checkout
+Session, Netlify handoff, refund, dispute action, or legacy task replay.
 
 The machine-readable source is `zapier/drafts/index.json`. Validate it with:
 
@@ -17,8 +20,10 @@ provider receipt.
 
 ## Non-negotiable Zapier boundary
 
-- Create each recipe only as a new paused draft. Do not edit, publish, turn on,
-  or replay a legacy ARC task.
+- Only `arc1-review-revision` and `arc2-payment-start` may become new paused
+  private-app actions after separate provider mutation authorization. Never
+  create `arc1-review-email` or `review-checkout-revocation` as a Zapier action
+  or Zap. Do not edit, publish, turn on, or replay a legacy ARC task.
 - Set maximum concurrency to one. Disable Zapier automatic replay and provider
   retries until exact replay behavior has been separately proven.
 - Secrets and private payloads may exist only inside a verified private Zapier
@@ -37,12 +42,14 @@ provider receipt.
 - Payment Links are forbidden. ARC V11 accepts only approval-bound private
   Stripe Checkout Sessions.
 
-## Draft 1: review email
+## Contract 1: review email (first-party only)
 
-Recipe: `zapier/drafts/arc1-review-email.json`.
+Contract: `zapier/drafts/arc1-review-email.json`. This is not a Zapier install
+recipe. Its recorded claim, send, and acknowledgement steps describe
+first-party boundaries only.
 
 1. Keep `ARC1_REVIEW_EMAIL_ZAP_ENABLED` false.
-2. The private claim action signs the exact bytes of
+2. The first-party claim boundary signs the exact bytes of
    `{"claim_next":true}` and posts them to
    `/api/internal/review-email/reserve`. It adds no `Origin` header and keeps
    the response private.
@@ -54,11 +61,12 @@ Recipe: `zapier/drafts/arc1-review-email.json`.
 5. `/api/internal/review-email/ack` accepts only signed native provider receipt
    evidence. A Resend API acceptance or a successful Zap task is not delivery.
 
-This is not activation-ready: a normal Zap has one trigger and cannot safely
-combine the scheduled claim source with the later native provider webhook
-source. The first-party scheduled Resend-native worker also has no authenticated
-on-demand dispatch route. Do not let the draft claim work until that boundary
-is resolved and exactly one consumer owns the queue.
+This is not a Zapier action and is not activation-ready. A normal Zap has one
+trigger and cannot safely combine the scheduled claim source with the later
+native provider webhook source. The first-party scheduled Resend-native worker
+also has no authenticated on-demand dispatch route. Do not let the contract
+claim work until that boundary is resolved and exactly one consumer owns the
+queue.
 
 ## Draft 2: review revision
 
@@ -106,6 +114,10 @@ Recipe: `zapier/drafts/arc2-payment-start.json`.
    the signed Checkout Session-to-PaymentIntent binding, issue a fresh
    authoritative no-reversal recheck, and replay the exact same start bytes
    with the same claim token and outbox key.
+   Before signing, validate the Checkout Session-to-PaymentIntent relationship
+   against authoritative Stripe data. Persist the exact canonical binding body
+   and signature before the first write. Every retry must replay those
+   byte-identical values; never regenerate `issued_at` or re-sign.
 6. Post `/internal/payment-arc2/complete` only after the first-party worker
    returns a durable signed completion receipt. A timeout or 202 stays
    retryable; never replay automatically through Zapier.
@@ -114,9 +126,12 @@ This draft stays blocked until the private claim/adapter action, restricted
 Stripe recheck producer, reversal binding, atomic lease/exact replay behavior,
 and history redaction have executed sandbox receipts.
 
-## Draft 4: review Checkout revocation
+## Contract 4: review Checkout revocation (first-party only)
 
-Recipe: `zapier/drafts/review-checkout-revocation.json`.
+Contract: `zapier/drafts/review-checkout-revocation.json`.
+
+This is a first-party-only behavior contract, not a Zapier install recipe. Do
+not create it as an action or Zap.
 
 ARC currently exposes no separate checkout-revocation claim or completion HTTP
 surface. The implemented authority runs inside the first-party signed Resend
@@ -133,9 +148,12 @@ false.
 
 ## Evidence required before any publish
 
-For each workflow, independently read back the provider workflow ID, exact
-paused version digest, concurrency-one setting, OFF state, and history-redaction
-policy. Then execute sandbox-only receipts for:
+For the two private-app action workflows only, independently read back the
+provider app/action identity, exact paused private-version digest,
+concurrency-one setting, OFF state, and history-redaction policy. For the two
+first-party-only contracts, read back the exact Netlify runtime deployment and
+source digests, OFF gates, single-consumer ownership, and log-redaction policy.
+Then execute sandbox-only receipts for:
 
 - empty claim and one exact claim replay;
 - changed replay rejection and timeout recovery;
@@ -145,5 +163,6 @@ policy. Then execute sandbox-only receipts for:
 - one open Checkout expiration, exact negative-event replay, and already-paid
   manual-review halt.
 
-Provider controls must still read back OFF after those tests. Passing local
-tests is not provider evidence and is not permission to publish a Zap.
+The two Zapier action controls and both first-party runtime gates must still
+read back OFF after those tests. Passing local tests is not provider evidence
+and is not permission to publish a Zap.

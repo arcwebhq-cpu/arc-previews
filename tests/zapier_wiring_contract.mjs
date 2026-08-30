@@ -918,10 +918,10 @@ assert.equal(contract.arc1.checkout_offer_preflight.tax_settings_resource, "/v1/
 assert.equal(contract.arc1.checkout_offer_preflight.active_tax_settings_required, true);
 assert.equal(contract.arc1.checkout_offer_preflight.automatic_tax_enabled_required, true);
 assert.equal(contract.arc1.checkout_offer_preflight.active_expected_tax_registration_readback_required, true);
-assert.equal(contract.arc1.checkout_offer_preflight.stripe_api_version, "2026-07-29.dahlia");
+assert.equal(contract.arc1.checkout_offer_preflight.stripe_api_version, "2026-08-26.dahlia");
 assert.equal(contract.arc1.checkout_offer_preflight.required_terms_version, "2026-08-25");
 assert.match(arc1IntakeSource, /https:\/\/api\.netlify\.com\/api\/v1/);
-assert.match(arc1CheckoutOfferSource, /const stripeApiVersion = "2026-07-29\.dahlia"/);
+assert.match(arc1CheckoutOfferSource, /const stripeApiVersion = "2026-08-26\.dahlia"/);
 assert.match(arc1CheckoutOfferSource, /"Stripe-Version": stripeApiVersion/);
 assert.match(arc1CheckoutOfferSource, /arc1-checkout-offer-evidence-signature-v2/);
 assert.match(arc1CheckoutOfferSource, /https:\/\/api\.stripe\.com\/v1\/account/);
@@ -963,7 +963,7 @@ assert.equal(contract.arc2.trigger.allow_test_mode_events, false);
 assert.equal(contract.arc2.trigger.allow_live_mode_events, false);
 assert.equal(contract.arc2.trigger.durable_fulfillment_claim_before_authenticated_paid_validation_allowed, false);
 assert.equal(contract.arc2.authoritative_session_retrieval.resource, "/v1/checkout/sessions/{CHECKOUT_SESSION_ID}?expand[]=line_items.data.price.product&expand[]=line_items.data.taxes&expand[]=payment_intent.latest_charge");
-assert.equal(contract.arc2.authoritative_session_retrieval.stripe_api_version, "2026-07-29.dahlia");
+assert.equal(contract.arc2.authoritative_session_retrieval.stripe_api_version, "2026-08-26.dahlia");
 assert.equal(Object.hasOwn(contract.arc2, "expected_payment_link_id"), false);
 assert.equal(Object.hasOwn(contract.arc2, "expected_price_id"), false);
 assert.equal(contract.arc2.required_session_contract.amount_subtotal, 500000);
@@ -1401,7 +1401,7 @@ assert.deepEqual(contract.synthetic_validation, {
   external_provider_proof: false,
   satisfies_required_test_scenarios: false,
   stripe_mode: "test",
-  stripe_api_version: "2026-07-29.dahlia",
+  stripe_api_version: "2026-08-26.dahlia",
   niches: ["roofing", "hvac", "remodeling", "landscaping", "auto-detailing"],
   scenarios: ["paid-happy-path", "duplicate-replay", "unpaid-then-async-success", "expiry-deactivation-renewal", "refund-and-dispute-halt"]
 });

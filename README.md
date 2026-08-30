@@ -172,7 +172,7 @@ contracts are:
 - ARC2 handoff artifact evidence: `arc2-handoff-artifact-evidence-v4`
 
 The active read-only Checkout Session offer preflight and ARC2 authenticated Checkout Session retrieval both require
-mode-matched restricted `rk_` credentials and pin Stripe API `2026-07-29.dahlia` and terms version
+mode-matched restricted `rk_` credentials and pin Stripe API `2026-08-26.dahlia` and terms version
 `2026-08-25`. `zapier/arc1_verify_checkout_offer.js` reads only the authenticated Account,
 Price/Product, Tax settings, Tax code, and expected Tax registrations; it cannot read or create a
 checkout capability. Its signed V2 evidence binds the live offer configuration. The later V2 offer

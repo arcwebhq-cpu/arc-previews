@@ -53,7 +53,7 @@ export function createTestCheckoutOfferEvidence({
     customer_creation: "always",
     submit_type: "pay",
     checkout_redirect_url: "https://arcweb.onl/payment-success/?session_id={CHECKOUT_SESSION_ID}",
-    stripe_api_version: "2026-07-29.dahlia"
+    stripe_api_version: "2026-08-26.dahlia"
   });
   const evidencePrivate = canonicalJson({
     version: "arc1-checkout-offer-evidence-v2",
@@ -79,7 +79,7 @@ export function createTestCheckoutOfferEvidence({
     customer_creation: "always",
     submit_type: "pay",
     checkout_redirect_url: "https://arcweb.onl/payment-success/?session_id={CHECKOUT_SESSION_ID}",
-    stripe_api_version: "2026-07-29.dahlia",
+    stripe_api_version: "2026-08-26.dahlia",
     configuration_sha256: sha256(configuration),
     issued_at: issuedAt
   });

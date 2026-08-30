@@ -281,7 +281,7 @@ assert.match(arc1PrMerge, /pinnedAuthorizationKeyringJson/,
   "ARC1 merge gate lacks a deployment-pinned authorization trust root");
 assert.doesNotMatch(arc1PrMerge, /inputData\.async_(?:readback|authorization)[a-z0-9_]*public_keyring/i,
   "ARC1 merge gate accepts a caller-controlled authorization keyring");
-assert.match(arc1CheckoutOffer, /stripeApiVersion = "2026-07-29\.dahlia"/, "ARC1 Checkout Session offer preflight does not pin the Stripe API version");
+assert.match(arc1CheckoutOffer, /stripeApiVersion = "2026-08-26\.dahlia"/, "ARC1 Checkout Session offer preflight does not pin the Stripe API version");
 assert.match(arc1CheckoutOffer, /\/v1\/prices\/\$\{encodeURIComponent\(expectedPriceId\)\}/, "ARC1 Checkout Session offer preflight does not read the exact Price and Product");
 assert.match(arc1CheckoutOffer, /https:\/\/api\.stripe\.com\/v1\/account/, "ARC1 Checkout Session offer preflight does not verify the authenticated ARC Stripe account");
 assert.match(arc1CheckoutOffer, /expectedStripeAccountIdSha256/, "ARC1 Checkout Session offer preflight does not bind the private ARC Stripe account hash");

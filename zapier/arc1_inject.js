@@ -1005,7 +1005,7 @@ if(checkoutOfferEvidence.version!=="arc1-checkout-offer-evidence-v2"||
   !/^[a-f0-9]{64}$/.test(clean(checkoutOfferEvidence.tax_registrations_sha256))||
   checkoutOfferEvidence.adult_acknowledgement_key!=="adultpurchaserack"||checkoutOfferEvidence.customer_creation!=="always"||
   checkoutOfferEvidence.submit_type!=="pay"||checkoutOfferEvidence.checkout_redirect_url!=="https://arcweb.onl/payment-success/?session_id={CHECKOUT_SESSION_ID}"||
-  checkoutOfferEvidence.stripe_api_version!=="2026-07-29.dahlia"||
+  checkoutOfferEvidence.stripe_api_version!=="2026-08-26.dahlia"||
   !/^[a-f0-9]{64}$/.test(clean(checkoutOfferEvidence.configuration_sha256))||
   !Number.isFinite(checkoutOfferEvidenceIssuedMs)||new Date(checkoutOfferEvidenceIssuedMs).toISOString()!==checkoutOfferEvidenceIssuedAt||
   checkoutOfferEvidenceIssuedMs<Date.now()-5*60*1000||checkoutOfferEvidenceIssuedMs>Date.now()+5*60*1000){

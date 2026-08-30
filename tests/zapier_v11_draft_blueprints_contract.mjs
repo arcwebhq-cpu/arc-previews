@@ -23,7 +23,7 @@ async function json(relativePath) {
 const result = await validateZapierV11Drafts();
 assert.equal(result.schema, 'arc-zapier-v11-paused-draft-validation-v1');
 assert.equal(result.status, 'ARC_ZAPIER_V11_DRAFTS_VALIDATED');
-assert.equal(result.configuration_state, 'blocked-paused');
+assert.equal(result.configuration_state, 'BLOCKED_UNVERIFIED');
 assert.equal(result.provider_mutation_allowed, false);
 assert.match(result.index_sha256, /^[a-f0-9]{64}$/);
 assert.equal(result.workflow_receipts.length, 4);
@@ -61,14 +61,64 @@ assert.equal(wiring.paused_draft_blueprints.history_redaction_required, true);
 assert.equal(wiring.paused_draft_blueprints.history_redaction_verified, false);
 assert.equal(wiring.paused_draft_blueprints.first_party_synchronous_ack_adapter_required, true);
 assert.equal(wiring.paused_draft_blueprints.zapier_catch_hook_is_synchronous_ack_authority, false);
+assert.equal(wiring.paused_draft_blueprints.private_app_path,
+  'zapier/private-integration/cli-app');
+for (const key of [
+  'provider_state', 'artifact_state', 'archive_state', 'validation_state', 'readback_state',
+]) assert.equal(wiring.paused_draft_blueprints[key], 'BLOCKED_UNVERIFIED');
+assert.deepEqual(wiring.paused_draft_blueprints.private_app_action_workflows,
+  ['arc1-review-revision', 'arc2-payment-start']);
+assert.deepEqual(wiring.paused_draft_blueprints.private_app_first_party_only_workflows,
+  ['arc1-review-email', 'review-checkout-revocation']);
+for (const key of [
+  'private_app_provider_mutation_allowed', 'private_app_provider_actions_allowed',
+  'private_app_publish_allowed', 'private_app_promotion_allowed',
+]) assert.equal(wiring.paused_draft_blueprints[key], false);
 
 const index = await json('../zapier/drafts/index.json');
+assert.equal(index.configuration_state, 'BLOCKED_UNVERIFIED');
+assert.deepEqual(index.private_integration_scaffold.action_workflows,
+  ['arc1-review-revision', 'arc2-payment-start']);
+assert.deepEqual(index.private_integration_scaffold.first_party_only_workflows,
+  ['arc1-review-email', 'review-checkout-revocation']);
 const workflowDocuments = await Promise.all([
   ['arc1-review-email', '../zapier/drafts/arc1-review-email.json'],
   ['arc1-review-revision', '../zapier/drafts/arc1-review-revision.json'],
   ['arc2-payment-start', '../zapier/drafts/arc2-payment-start.json'],
   ['review-checkout-revocation', '../zapier/drafts/review-checkout-revocation.json'],
 ].map(async ([id, relativePath]) => [id, await json(relativePath)]));
+
+for (const [id, workflow] of workflowDocuments) {
+  for (const key of [
+    'provider_state', 'configuration_state', 'artifact_state', 'archive_state',
+    'validation_state', 'readback_state',
+  ]) assert.equal(workflow[key], 'BLOCKED_UNVERIFIED', `${id} ${key}`);
+  assert.equal(workflow.installation_mode,
+    id === 'arc1-review-revision' || id === 'arc2-payment-start'
+      ? 'paused-private-integration-recipe'
+      : 'first-party-only-contract',
+    `${id} installation mode`);
+}
+
+for (const [id, workflow] of workflowDocuments.filter(([candidate]) =>
+  candidate === 'arc1-review-email' || candidate === 'review-checkout-revocation')) {
+  assert.equal(workflow.history_policy.mode, 'first-party-runtime-redacted');
+  assert.doesNotMatch(workflow.trigger.provider, /zapier/i);
+  assert.doesNotMatch(workflow.secret_custody, /private integration/i);
+  assert.ok(workflow.activation_evidence_required.every((entry) =>
+    !/(?:^|_)workflow_(?:id|version)(?:_|$)/i.test(entry)));
+  for (const mutate of [
+    (value) => { value.trigger.provider = 'ARC private Zapier integration'; },
+    (value) => { value.history_policy.mode = 'private-integration-redacted'; },
+    (value) => { value.secret_custody = 'private integration credential store only'; },
+    (value) => { value.activation_evidence_required.push('workflow_id_sha256'); },
+  ]) {
+    const changed = structuredClone(workflow);
+    mutate(changed);
+    assert.throws(() => validatePausedWorkflowDraft(changed, id),
+      /ARC_ZAPIER_V11_DRAFT_INVALID/, `${id} must reject Zapier-only first-party metadata`);
+  }
+}
 
 const semanticDocuments = [
   ['index', index, validatePausedDraftIndex],

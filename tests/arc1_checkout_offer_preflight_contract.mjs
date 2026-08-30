@@ -52,7 +52,7 @@ const payloads = {
 const run = async (overrides = {}, mutate = {}) => runPreflight({ ...input, ...overrides }, async (url, options = {}) => {
   assert.equal(options.method, "GET");
   assert.equal(options.redirect, "error");
-  assert.equal(options.headers?.["Stripe-Version"], "2026-07-29.dahlia");
+  assert.equal(options.headers?.["Stripe-Version"], "2026-08-26.dahlia");
   assert.ok(Object.hasOwn(payloads, url), `unexpected Stripe resource ${url}`);
   const payload = Object.hasOwn(mutate, url) ? mutate[url] : payloads[url];
   return new Response(JSON.stringify(payload), { status: 200, headers: { "content-type": "application/json" } });
@@ -70,7 +70,7 @@ assert.equal(evidence.price_id, priceId);
 assert.equal(evidence.product_id, productId);
 assert.equal(evidence.terms_document_sha256, termsDocumentSha256);
 assert.equal(evidence.terms_version, "2026-08-25");
-assert.equal(evidence.stripe_api_version, "2026-07-29.dahlia");
+assert.equal(evidence.stripe_api_version, "2026-08-26.dahlia");
 assert.equal(evidence.customer_creation, "always");
 assert.equal(evidence.submit_type, "pay");
 assert.equal(Object.hasOwn(evidence, "name_collection"), false);

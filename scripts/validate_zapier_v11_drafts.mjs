@@ -93,6 +93,22 @@ function exactArray(value, expected, label) {
   invariant(JSON.stringify(value) === JSON.stringify(expected), `${label} changed`);
 }
 
+function validateBlockedPrivateAppState(value, label) {
+  invariant(plainObject(value), `${label} must be an object`);
+  for (const key of [
+    'provider_state', 'artifact_state', 'archive_state', 'validation_state', 'readback_state',
+  ]) invariant(value[key] === 'BLOCKED_UNVERIFIED', `${label} ${key}`);
+  for (const [key, child] of Object.entries(value)) {
+    if (key === 'provider_installation_performed' || key === 'provider_mutation_allowed' ||
+        key === 'provider_actions_allowed' || key === 'activation_allowed' ||
+        key === 'publish_allowed' || key === 'promotion_allowed' ||
+        key === 'authentication_configured' || key === 'network_allowed' ||
+        key === 'environment_reads_allowed') {
+      invariant(child === false, `${label} ${key}`);
+    }
+  }
+}
+
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex');
 }
@@ -118,13 +134,25 @@ function validateCommon(workflow, expectedId) {
   invariant(workflow.schema === WORKFLOW_SCHEMA, `${expectedId} schema`);
   invariant(workflow.release === 'ARC V11', `${expectedId} release`);
   invariant(workflow.workflow_id === expectedId, `${expectedId} identity`);
-  invariant(workflow.provider_state === 'DRAFT_UNPUBLISHED_OFF', `${expectedId} state`);
+  for (const key of [
+    'provider_state', 'configuration_state', 'artifact_state', 'archive_state',
+    'validation_state', 'readback_state',
+  ]) invariant(workflow[key] === 'BLOCKED_UNVERIFIED', `${expectedId} ${key}`);
+  const expectedInstallationMode = expectedId === 'arc1-review-revision' ||
+    expectedId === 'arc2-payment-start'
+    ? 'paused-private-integration-recipe'
+    : 'first-party-only-contract';
+  invariant(workflow.installation_mode === expectedInstallationMode,
+    `${expectedId} installation mode`);
   invariant(workflow.published === false, `${expectedId} published`);
   invariant(workflow.enabled === false, `${expectedId} enabled`);
   invariant(workflow.activation_allowed === false, `${expectedId} activation`);
   invariant(workflow.maximum_concurrency === 1, `${expectedId} concurrency`);
   invariant(workflow.auto_replay === false, `${expectedId} replay`);
-  invariant(workflow.history_policy?.mode === 'private-integration-redacted', `${expectedId} history mode`);
+  const firstPartyOnly = expectedInstallationMode === 'first-party-only-contract';
+  invariant(workflow.history_policy?.mode === (firstPartyOnly
+    ? 'first-party-runtime-redacted'
+    : 'private-integration-redacted'), `${expectedId} history mode`);
   invariant(workflow.history_policy?.ordinary_input_data_allowed === false, `${expectedId} ordinary inputs`);
   invariant(workflow.history_policy?.ordinary_output_data_allowed === false, `${expectedId} ordinary outputs`);
   invariant(workflow.history_policy?.secret_field_mapping_allowed === false, `${expectedId} secret mapping`);
@@ -144,6 +172,14 @@ function validateCommon(workflow, expectedId) {
     `${expectedId} source contracts`);
   invariant(Array.isArray(workflow.activation_evidence_required) && workflow.activation_evidence_required.length > 0,
     `${expectedId} activation evidence`);
+  if (firstPartyOnly) {
+    invariant(!/zapier/i.test(workflow.trigger.provider), `${expectedId} first-party trigger provider`);
+    invariant(!/private integration/i.test(workflow.secret_custody),
+      `${expectedId} first-party secret custody`);
+    invariant(workflow.activation_evidence_required.every((entry) =>
+      !/(?:^|_)workflow_(?:id|version)(?:_|$)/i.test(entry)),
+    `${expectedId} first-party evidence must not require Zapier workflow identity`);
+  }
   invariant(Array.isArray(workflow.blocking_reasons) && workflow.blocking_reasons.length > 0,
     `${expectedId} blockers`);
   assertNoCredentialValues(JSON.stringify(workflow), expectedId);
@@ -151,6 +187,11 @@ function validateCommon(workflow, expectedId) {
 }
 
 function validateEmail(workflow) {
+  const exclusion = workflow.private_integration_exclusion;
+  validateBlockedPrivateAppState(exclusion, 'email private app exclusion');
+  invariant(exclusion.canonical_workflow_id === 'arc1-review-email', 'email private app identity');
+  invariant(exclusion.first_party_only === true, 'email first-party-only boundary');
+  invariant(exclusion.zapier_action_created === false, 'email Zapier action exclusion');
   const claim = step(workflow, 'claim_next');
   invariant(claim.request.path === '/api/internal/review-email/reserve', 'email claim path');
   invariant(JSON.stringify(claim.request.body) === JSON.stringify({ claim_next: true }), 'email claim body');
@@ -169,6 +210,12 @@ function validateEmail(workflow) {
 }
 
 function validateRevision(workflow) {
+  const binding = workflow.private_integration_action;
+  validateBlockedPrivateAppState(binding, 'revision private app binding');
+  invariant(binding.canonical_action_id === 'arc1-review-revision', 'revision private app identity');
+  invariant(binding.zapier_action_key === 'arc1_review_revision', 'revision private app key');
+  invariant(binding.zero_input_fields === true, 'revision zero-input action');
+  invariant(binding.clean_input_data === false, 'revision cleanInputData');
   const claim = step(workflow, 'claim_next');
   invariant(claim.request.path === '/api/internal/review-revision/claim', 'revision claim path');
   invariant(JSON.stringify(claim.request.body) === JSON.stringify({ cursor: null }), 'revision claim body');
@@ -185,6 +232,12 @@ function validateRevision(workflow) {
 }
 
 function validatePayment(workflow) {
+  const binding = workflow.private_integration_action;
+  validateBlockedPrivateAppState(binding, 'ARC2 private app binding');
+  invariant(binding.canonical_action_id === 'arc2-payment-start', 'ARC2 private app identity');
+  invariant(binding.zapier_action_key === 'arc2_payment_start', 'ARC2 private app key');
+  invariant(binding.zero_input_fields === true, 'ARC2 zero-input action');
+  invariant(binding.clean_input_data === false, 'ARC2 cleanInputData');
   invariant(workflow.controls.arc2_checkout_session_adapter_enabled === false, 'ARC2 adapter gate');
   invariant(workflow.controls.payment_arc2_start_enabled === false, 'ARC2 start gate');
   invariant(workflow.controls.stripe_live_mode_enabled === false, 'ARC2 live gate');
@@ -205,6 +258,16 @@ function validatePayment(workflow) {
   invariant(reversal.identical_start_replay_required === true, 'ARC2 identical start replay');
   invariant(workflow.retry_contract.http_202_means_complete === false, 'ARC2 202 completion');
   invariant(workflow.retry_contract.automatic_provider_replay_allowed === false, 'ARC2 provider replay');
+  invariant(workflow.retry_contract.binding_evidence_exact_canonical_bytes_replay_required === true,
+    'ARC2 exact binding evidence replay');
+  invariant(workflow.retry_contract.binding_signature_exact_replay_required === true,
+    'ARC2 exact binding signature replay');
+  invariant(workflow.retry_contract.binding_retry_may_regenerate_issued_at === false,
+    'ARC2 binding issued_at regeneration');
+  invariant(workflow.retry_contract.binding_retry_may_resign === false, 'ARC2 binding resign');
+  invariant(workflow.retry_contract
+    .authoritative_stripe_session_to_payment_intent_validation_required_before_signing === true,
+  'ARC2 authoritative Stripe binding validation');
   const complete = step(workflow, 'complete');
   invariant(complete.request.path === '/internal/payment-arc2/complete', 'ARC2 complete path');
   exactArray(complete.request.exact_body_fields, ['claim_token', 'completion', 'outbox_key'],
@@ -216,6 +279,12 @@ function validatePayment(workflow) {
 }
 
 function validateRevocation(workflow) {
+  const exclusion = workflow.private_integration_exclusion;
+  validateBlockedPrivateAppState(exclusion, 'revocation private app exclusion');
+  invariant(exclusion.canonical_workflow_id === 'review-checkout-revocation',
+    'revocation private app identity');
+  invariant(exclusion.first_party_only === true, 'revocation first-party-only boundary');
+  invariant(exclusion.zapier_action_created === false, 'revocation Zapier action exclusion');
   invariant(workflow.controls.ARC_STRIPE_REVIEW_REVOCATION_ENABLED === false, 'revocation runtime gate');
   invariant(workflow.controls.automatic_refund_enabled === false, 'automatic refund');
   invariant(workflow.controls.automatic_dispute_action_enabled === false, 'automatic dispute action');
@@ -240,13 +309,13 @@ export function validatePausedWorkflowDraft(workflow, expectedId) {
 
 export function validatePausedDraftIndex(value) {
   invariant(value.schema === 'arc-zapier-v11-paused-draft-index-v1', 'index schema');
-  invariant(value.configuration_state === 'blocked-paused', 'index state');
+  invariant(value.configuration_state === 'BLOCKED_UNVERIFIED', 'index state');
   invariant(value.published === false && value.enabled === false, 'index OFF state');
   invariant(value.provider_mutation_allowed === false, 'index provider mutation');
   invariant(value.legacy_hook_replay_allowed === false, 'index legacy replay');
   invariant(value.secret_values_present === false, 'index secret values');
   invariant(value.global_requirements?.maximum_concurrency_per_workflow === 1, 'index concurrency');
-  invariant(value.global_requirements?.task_history_policy === 'private-integration-redacted',
+  invariant(value.global_requirements?.task_history_policy === 'workflow-boundary-redacted',
     'index history policy');
   invariant(value.global_requirements?.ordinary_field_secret_mapping_allowed === false,
     'index ordinary secret mapping');
@@ -255,6 +324,15 @@ export function validatePausedDraftIndex(value) {
   invariant(value.global_requirements?.automatic_replay_allowed === false, 'index replay');
   invariant(value.global_requirements?.gmail_customer_delivery_allowed === false, 'index Gmail');
   invariant(value.global_requirements?.stripe_payment_link_allowed === false, 'index Payment Link');
+  const scaffold = value.private_integration_scaffold;
+  validateBlockedPrivateAppState(scaffold, 'index private app scaffold');
+  invariant(scaffold.provider_app_id === null && scaffold.provider_version === null,
+    'index private app provider identity');
+  invariant(scaffold.published === false && scaffold.enabled === false, 'index private app OFF state');
+  exactArray(scaffold.action_workflows,
+    ['arc1-review-revision', 'arc2-payment-start'], 'index private app actions');
+  exactArray(scaffold.first_party_only_workflows,
+    ['arc1-review-email', 'review-checkout-revocation'], 'index first-party-only workflows');
   invariant(Array.isArray(value.activation_blockers) && value.activation_blockers.length >= 6,
     'index blockers');
   assertNoCredentialValues(JSON.stringify(value), 'index');
@@ -268,6 +346,20 @@ export function validatePausedDraftWiringSection(value) {
   invariant(value.validator === 'scripts/validate_zapier_v11_drafts.mjs', 'wiring validator');
   invariant(value.test === 'tests/zapier_v11_draft_blueprints_contract.mjs', 'wiring test');
   invariant(value.runbook === 'zapier/v11-paused-draft-runbook.md', 'wiring runbook');
+  invariant(value.private_app_path === 'zapier/private-integration/cli-app', 'wiring private app path');
+  invariant(value.private_app_packager === 'scripts/package_zapier_v11_cli_private_app.mjs',
+    'wiring private app packager');
+  invariant(value.private_app_test === 'tests/zapier_v11_cli_private_app_contract.mjs',
+    'wiring private app test');
+  invariant(value.private_app_runbook === 'zapier/v11-private-integration-cli-runbook.md',
+    'wiring private app runbook');
+  validateBlockedPrivateAppState(value, 'wiring private app');
+  invariant(value.provider_app_id === null && value.provider_version === null,
+    'wiring private app provider identity');
+  exactArray(value.private_app_action_workflows,
+    ['arc1-review-revision', 'arc2-payment-start'], 'wiring private app actions');
+  exactArray(value.private_app_first_party_only_workflows,
+    ['arc1-review-email', 'review-checkout-revocation'], 'wiring first-party-only workflows');
   invariant(value.offline_recipe_complete === true, 'wiring offline recipe');
   invariant(value.maximum_concurrency === 1, 'wiring concurrency');
   invariant(value.history_redaction_required === true, 'wiring history redaction requirement');
@@ -321,7 +413,7 @@ export async function validateZapierV11Drafts() {
   return Object.freeze({
     schema: 'arc-zapier-v11-paused-draft-validation-v1',
     status: 'ARC_ZAPIER_V11_DRAFTS_VALIDATED',
-    configuration_state: 'blocked-paused',
+    configuration_state: 'BLOCKED_UNVERIFIED',
     provider_mutation_allowed: false,
     index_sha256: indexSha256,
     workflow_receipts: Object.freeze(receipts),

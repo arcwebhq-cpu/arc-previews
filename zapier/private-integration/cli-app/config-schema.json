@@ -1,0 +1,17 @@
+{
+  "schema": "arc-zapier-v11-private-app-config-v1",
+  "release": "ARC V11",
+  "provider_state": "BLOCKED_UNVERIFIED",
+  "artifact_state": "BLOCKED_UNVERIFIED",
+  "archive_state": "BLOCKED_UNVERIFIED",
+  "validation_state": "BLOCKED_UNVERIFIED",
+  "readback_state": "BLOCKED_UNVERIFIED",
+  "authentication_fields": [],
+  "environment_fields": [],
+  "input_fields": [],
+  "secret_values_present": false,
+  "provider_mutation_allowed": false,
+  "activation_allowed": false,
+  "publish_allowed": false,
+  "promotion_allowed": false
+}

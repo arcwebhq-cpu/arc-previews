@@ -252,7 +252,7 @@ if (offer.version !== "arc-checkout-offer-snapshot-v2" || offer.scope !== "immut
     offer.price_tax_behavior !== "exclusive" || offer.tax_contract_version !== "arc-tax-v1" || offer.tax_settings_status !== "active" ||
     !Array.isArray(offer.tax_registrations) || offer.tax_registrations.length < 1 || offer.tax_registrations.length > 100 ||
     offer.adult_acknowledgement_key !== "adultpurchaserack" || offer.customer_creation !== "always" || offer.submit_type !== "pay" ||
-    offer.checkout_redirect_url !== "https://arcweb.onl/payment-success/?session_id={CHECKOUT_SESSION_ID}" || offer.stripe_api_version !== "2026-07-29.dahlia" ||
+    offer.checkout_redirect_url !== "https://arcweb.onl/payment-success/?session_id={CHECKOUT_SESSION_ID}" || offer.stripe_api_version !== "2026-08-26.dahlia" ||
     !/^price_[A-Za-z0-9]+$/.test(offer.price_id) || !/^prod_[A-Za-z0-9]+$/.test(offer.product_id) || !/^txcd_[0-9]{8}$/.test(offer.product_tax_code) ||
     ![offer.stripe_account_id_sha256, offer.terms_document_sha256, offer.tax_registrations_sha256, offer.configuration_sha256,
       offer.asset_publication_receipt_sha256].every(value => HEX_64.test(value)) ||

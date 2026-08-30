@@ -1,0 +1,70 @@
+{
+  "schema": "arc-zapier-v11-private-app-manifest-v1",
+  "release": "ARC V11",
+  "integration_id": "arc-v11-private-integration",
+  "version": "0.0.1",
+  "base_previews_commit": "293befc752bc0b3e650207a00a86b33fd3393982",
+  "runtime": {
+    "node": "22.x",
+    "zapier_platform_core": "19.1.0",
+    "zapier_platform_cli": "19.1.0",
+    "form_data_override": "4.0.6"
+  },
+  "provider_state": "BLOCKED_UNVERIFIED",
+  "artifact_state": "BLOCKED_UNVERIFIED",
+  "archive_state": "BLOCKED_UNVERIFIED",
+  "validation_state": "BLOCKED_UNVERIFIED",
+  "readback_state": "BLOCKED_UNVERIFIED",
+  "provider_app_id": null,
+  "provider_version": null,
+  "provider_build_sha256": null,
+  "provider_version_readback_sha256": null,
+  "authentication_configured": false,
+  "network_allowed": false,
+  "environment_reads_allowed": false,
+  "provider_mutation_allowed": false,
+  "provider_actions_allowed": false,
+  "activation_allowed": false,
+  "publish_allowed": false,
+  "promotion_allowed": false,
+  "published": false,
+  "enabled": false,
+  "actions": [
+    {
+      "canonical_workflow_id": "arc1-review-revision",
+      "zapier_action_key": "arc1_review_revision",
+      "input_fields": [],
+      "clean_input_data": false,
+      "adapter_state": "BLOCKED_UNVERIFIED"
+    },
+    {
+      "canonical_workflow_id": "arc2-payment-start",
+      "zapier_action_key": "arc2_payment_start",
+      "input_fields": [],
+      "clean_input_data": false,
+      "adapter_state": "BLOCKED_UNVERIFIED"
+    }
+  ],
+  "first_party_only_workflows": [
+    "arc1-review-email",
+    "review-checkout-revocation"
+  ],
+  "preserved_contracts": [
+    {
+      "path": "zapier/drafts/arc1-review-email.json",
+      "sha256": "9d843a06c3c0870cab289b18223773596ec38f42337ec03699c91df21c692a17"
+    },
+    {
+      "path": "zapier/drafts/arc1-review-revision.json",
+      "sha256": "e1c76d686a75b78020051c0ac8f9a3c56061ea874d529d99b2847d1902233b0e"
+    },
+    {
+      "path": "zapier/drafts/arc2-payment-start.json",
+      "sha256": "dbdd2ea4c9ef621ba75cadc9d3c5dbe0eebc7bcff7e06c9229c4ee5c315db771"
+    },
+    {
+      "path": "zapier/drafts/review-checkout-revocation.json",
+      "sha256": "0bc36f143bcec212e4f64af39855fb67c4096b094b586dc15a4be7b10943e1f7"
+    }
+  ]
+}

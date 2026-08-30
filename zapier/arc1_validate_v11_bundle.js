@@ -552,7 +552,7 @@ if (offerSha !== clean(inputData.checkout_offer_snapshot_sha256).toLowerCase() |
     !Array.isArray(offer.tax_registrations) || !offer.tax_registrations.length || offer.tax_registrations.length > 100 ||
     offer.adult_acknowledgement_key !== "adultpurchaserack" || offer.customer_creation !== "always" || offer.submit_type !== "pay" ||
     offer.checkout_redirect_url !== "https://arcweb.onl/payment-success/?session_id={CHECKOUT_SESSION_ID}" ||
-    offer.stripe_api_version !== "2026-07-29.dahlia" || !/^price_[A-Za-z0-9]+$/.test(offer.price_id) ||
+    offer.stripe_api_version !== "2026-08-26.dahlia" || !/^price_[A-Za-z0-9]+$/.test(offer.price_id) ||
     !/^prod_[A-Za-z0-9]+$/.test(offer.product_id) || !/^txcd_[0-9]{8}$/.test(offer.product_tax_code) ||
     !hex64(offer.stripe_account_id_sha256) || !hex64(offer.terms_document_sha256) || !hex64(offer.tax_registrations_sha256) ||
     !hex64(offer.configuration_sha256) || !hex64(offer.asset_publication_receipt_sha256)) {

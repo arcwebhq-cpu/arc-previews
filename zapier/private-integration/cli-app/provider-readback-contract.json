@@ -12,6 +12,8 @@
   "source_archive_sha256": null,
   "provider_validation_receipt_sha256": null,
   "provider_version_readback_sha256": null,
+  "target_environment": "sandbox",
+  "target_origin": "https://arc2-sandbox.netlify.app",
   "provider_history_redaction_readback_sha256": null,
   "provider_concurrency_readback_sha256": null,
   "provider_off_state_readback_sha256": null,
@@ -26,6 +28,9 @@
     "fresh provider build archive digest",
     "provider app ID and exact private version readback",
     "two-action inventory readback with zero input fields",
+    "exact sandbox origin and two run-one path allowlist readback",
+    "exact two per-version secret-name inventory with values redacted",
+    "exact-false then exact-true readback for both independent action gates",
     "OFF-state, concurrency-one, and task-history redaction readbacks",
     "authoritative Stripe Session-to-PaymentIntent validation before binding signing",
     "durable byte-identical canonical binding body and signature retry receipt"

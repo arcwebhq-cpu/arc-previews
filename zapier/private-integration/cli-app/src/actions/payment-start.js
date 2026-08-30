@@ -1,12 +1,12 @@
 'use strict';
 
-const { createBlockedAction } = require('./action-factory');
+const { createDispatchAction } = require('./action-factory');
 const { runPaymentStartAdapter } = require('../provider-adapters');
 
-module.exports = createBlockedAction({
+module.exports = createDispatchAction({
   key: 'arc2_payment_start',
   noun: 'ARC Payment Start',
-  label: 'ARC V11 Payment Start — BLOCKED',
-  description: 'Fail-closed placeholder for the unpublished ARC payment-start worker.',
+  label: 'ARC V11 Payment Start — OFF',
+  description: 'Default-OFF dispatch to the pinned first-party payment run-one worker.',
   perform: runPaymentStartAdapter
 });

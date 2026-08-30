@@ -2,13 +2,13 @@
 
 const reviewRevision = require('./actions/review-revision');
 const paymentStart = require('./actions/payment-start');
-const { denyAllNetworkRequests } = require('./network-barrier');
+const { enforceFirstPartyDispatchRequest } = require('./network-barrier');
 const { APP_VERSION, PLATFORM_VERSION } = require('./policy');
 
 module.exports = Object.freeze({
   version: APP_VERSION,
   platformVersion: PLATFORM_VERSION,
-  beforeRequest: Object.freeze([denyAllNetworkRequests]),
+  beforeRequest: Object.freeze([enforceFirstPartyDispatchRequest]),
   afterResponse: Object.freeze([]),
   triggers: Object.freeze({}),
   searches: Object.freeze({}),

@@ -39,7 +39,16 @@ const [config, appManifest] = await Promise.all([
   '../zapier/private-integration/cli-app/paused-app-manifest.json'
 ].map(readJson));
 assert.deepEqual(config.authentication_fields, []);
-assert.deepEqual(config.environment_fields, []);
+assert.deepEqual(config.activation_fields.map(({ name }) => name), [
+  'ARC_ZAPIER_REVIEW_REVISION_RUN_ONE_ENABLED',
+  'ARC_ZAPIER_PAYMENT_ARC2_RUN_ONE_ENABLED',
+]);
+assert.ok(config.activation_fields.every(({ required_value, default_value, configured_value }) =>
+  required_value === 'true' && default_value === 'false' && configured_value === 'false'));
+assert.deepEqual(config.environment_fields.map(({ name }) => name), [
+  'ARC_ZAPIER_REVIEW_REVISION_RUN_ONE_SECRET',
+  'ARC_ZAPIER_PAYMENT_ARC2_RUN_ONE_SECRET',
+]);
 assert.deepEqual(config.input_fields, []);
 assert.deepEqual(appManifest.actions.map(({ canonical_workflow_id }) => canonical_workflow_id),
   ['arc1-review-revision', 'arc2-payment-start']);
@@ -49,15 +58,23 @@ for (const [actionKey, action] of Object.entries(app.creates)) {
   assert.equal(action.key, actionKey);
   assert.deepEqual(action.operation.inputFields, []);
   assert.equal(action.operation.cleanInputData, false);
-  assert.equal(action.operation.perform.length, 0);
+  assert.equal(action.operation.perform.length, 1);
   await assert.rejects(action.operation.perform({}, { inputData: { secret: 'must-not-leak' } }),
-    (error) => error.message === 'ARC_PRIVATE_ACTION_BLOCKED_UNVERIFIED' &&
+    (error) => error.message === 'ARC_PRIVATE_ACTION_OFF' &&
       !error.message.includes('must-not-leak'));
 }
 assert.deepEqual(appManifest.actions.map(({ input_fields }) => input_fields),
   Object.values(app.creates).map(({ operation }) => operation.inputFields));
 assert.deepEqual(appManifest.actions.map(({ clean_input_data }) => clean_input_data),
   Object.values(app.creates).map(({ operation }) => operation.cleanInputData));
+const secretBinding = await readJson('../zapier/private-integration/cli-app/secret-binding-contract.json');
+assert.equal(secretBinding.secret_values_present, false);
+assert.deepEqual(secretBinding.bindings.map(({ zapier_secret_environment_name,
+  site_bearer_environment_name }) => [zapier_secret_environment_name, site_bearer_environment_name]), [
+  ['ARC_ZAPIER_REVIEW_REVISION_RUN_ONE_SECRET',
+    'ARC_REVIEW_REVISION_RUN_ONE_INTERNAL_AUTH_SECRET'],
+  ['ARC_ZAPIER_PAYMENT_ARC2_RUN_ONE_SECRET', 'ARC_PAYMENT_ARC2_RUN_ONE_SECRET'],
+]);
 
 const [index, revision, payment, email, revocation, wiring] = await Promise.all([
   '../zapier/drafts/index.json',
@@ -129,4 +146,4 @@ for (const key of [
   'private_app_publish_allowed', 'private_app_promotion_allowed'
 ]) assert.equal(wiringPrivateApp[key], false);
 
-console.log('ARC V11 Zapier private app source remains BLOCKED_UNVERIFIED with exactly two fail-closed actions.');
+console.log('ARC V11 Zapier private app source remains BLOCKED_UNVERIFIED with exactly two default-OFF first-party run-one actions.');

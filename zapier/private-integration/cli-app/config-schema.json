@@ -7,8 +7,38 @@
   "validation_state": "BLOCKED_UNVERIFIED",
   "readback_state": "BLOCKED_UNVERIFIED",
   "authentication_fields": [],
-  "environment_fields": [],
+  "activation_fields": [
+    {
+      "name": "ARC_ZAPIER_REVIEW_REVISION_RUN_ONE_ENABLED",
+      "required_value": "true",
+      "default_value": "false",
+      "configured_value": "false"
+    },
+    {
+      "name": "ARC_ZAPIER_PAYMENT_ARC2_RUN_ONE_ENABLED",
+      "required_value": "true",
+      "default_value": "false",
+      "configured_value": "false"
+    }
+  ],
+  "environment_fields": [
+    {
+      "name": "ARC_ZAPIER_REVIEW_REVISION_RUN_ONE_SECRET",
+      "kind": "secret",
+      "private_version_scoped": true,
+      "configured": false
+    },
+    {
+      "name": "ARC_ZAPIER_PAYMENT_ARC2_RUN_ONE_SECRET",
+      "kind": "secret",
+      "private_version_scoped": true,
+      "configured": false
+    }
+  ],
   "input_fields": [],
+  "target_environment": "sandbox",
+  "target_origin": "https://arc2-sandbox.netlify.app",
+  "production_origin_requires_new_reviewed_version": "https://arcweb.onl",
   "secret_values_present": false,
   "provider_mutation_allowed": false,
   "activation_allowed": false,

@@ -29,11 +29,21 @@ const CREDENTIAL_PATTERNS = Object.freeze([
   /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/
 ]);
 
-const NETWORK_OR_ENV_PATTERNS = Object.freeze([
+const FORBIDDEN_RUNTIME_PATTERNS = Object.freeze([
   /\bfetch\s*\(/,
-  /\bz\.request\s*\(/,
-  /\bprocess\.env\b/,
+  /\bbundle\s*\.\s*inputData\b/,
+  /\bbundle\s*\.\s*authData\b/,
   /require\(['"](?:node:)?(?:http|https|net|tls|dns)['"]\)/
+]);
+const EXPECTED_ENVIRONMENT_READ_NAMES = Object.freeze([
+  'ARC_ZAPIER_REVIEW_REVISION_RUN_ONE_ENABLED',
+  'ARC_ZAPIER_PAYMENT_ARC2_RUN_ONE_ENABLED',
+  'ARC_ZAPIER_REVIEW_REVISION_RUN_ONE_SECRET',
+  'ARC_ZAPIER_PAYMENT_ARC2_RUN_ONE_SECRET'
+]);
+const EXPECTED_SECRET_ENVIRONMENT_READ_NAMES = Object.freeze([
+  'ARC_ZAPIER_REVIEW_REVISION_RUN_ONE_SECRET',
+  'ARC_ZAPIER_PAYMENT_ARC2_RUN_ONE_SECRET'
 ]);
 
 function sha256(raw) {
@@ -145,6 +155,7 @@ async function inspectOfflineSource() {
   const config = await readJson('config-schema.json');
   const manifest = await readJson('paused-app-manifest.json');
   const readback = await readJson('provider-readback-contract.json');
+  const secretBindings = await readJson('secret-binding-contract.json');
   const app = require(path.join(APP_ROOT, 'index.js'));
 
   assert.equal(packageDocument.engines.node, '22.x');
@@ -167,7 +178,20 @@ async function inspectOfflineSource() {
   assertCompleteRuntimeLock(lockDocument);
 
   assert.deepEqual(config.authentication_fields, []);
-  assert.deepEqual(config.environment_fields, []);
+  assert.deepEqual(config.environment_fields.map(({ name }) => name), EXPECTED_SECRET_ENVIRONMENT_READ_NAMES);
+  assert.deepEqual(config.activation_fields.map(({ name }) => name), [
+    'ARC_ZAPIER_REVIEW_REVISION_RUN_ONE_ENABLED',
+    'ARC_ZAPIER_PAYMENT_ARC2_RUN_ONE_ENABLED'
+  ]);
+  assert.ok(config.activation_fields.every(({ required_value, default_value, configured_value }) =>
+    required_value === 'true' && default_value === 'false' && configured_value === 'false'));
+  assert.equal(secretBindings.secret_values_present, false);
+  assert.deepEqual(secretBindings.bindings.map(({ zapier_secret_environment_name,
+    site_bearer_environment_name }) => [zapier_secret_environment_name, site_bearer_environment_name]), [
+    ['ARC_ZAPIER_REVIEW_REVISION_RUN_ONE_SECRET',
+      'ARC_REVIEW_REVISION_RUN_ONE_INTERNAL_AUTH_SECRET'],
+    ['ARC_ZAPIER_PAYMENT_ARC2_RUN_ONE_SECRET', 'ARC_PAYMENT_ARC2_RUN_ONE_SECRET']
+  ]);
   assert.deepEqual(config.input_fields, []);
   assert.deepEqual(manifest.actions.map(({ canonical_workflow_id }) => canonical_workflow_id),
     ['arc1-review-revision', 'arc2-payment-start']);
@@ -198,33 +222,32 @@ async function inspectOfflineSource() {
     assert.equal(manifest.actions[index].clean_input_data, false);
     assertBlockedStates(action.operation.sample, 'action.sample');
     assertOffControls(action.operation.sample, 'action.sample');
-    await assert.rejects(
-      action.operation.perform({}, { inputData: { private_value: 'must-not-appear' } }),
-      (error) => error.name === 'ARCBlockedError' &&
-        error.message === 'ARC_PRIVATE_ACTION_BLOCKED_UNVERIFIED' &&
-        !error.message.includes('must-not-appear')
-    );
+    assert.equal(action.operation.perform.length, 1);
   }
 
   assert.throws(
     () => app.beforeRequest[0]({ url: 'https://invalid.example/private-value' }, {}, {}),
     (error) => error.name === 'ARCBlockedError' &&
-      error.message === 'ARC_PRIVATE_NETWORK_DISABLED' &&
+      error.message === 'ARC_PRIVATE_NETWORK_BLOCKED' &&
       !error.message.includes('private-value')
   );
 
   const sourceReceipts = [];
+  const environmentReadNames = new Set();
   for (const relativePath of RUNTIME_SOURCE_PATHS) {
     const raw = await read(relativePath);
     for (const pattern of CREDENTIAL_PATTERNS) {
       assert.equal(pattern.test(raw), false, `${relativePath} contains a credential-shaped value`);
     }
-    for (const pattern of NETWORK_OR_ENV_PATTERNS) {
-      assert.equal(pattern.test(raw), false, `${relativePath} contains network or environment access`);
+    for (const pattern of FORBIDDEN_RUNTIME_PATTERNS) {
+      assert.equal(pattern.test(raw), false, `${relativePath} contains forbidden runtime access`);
     }
+    for (const match of raw.matchAll(/process\.env\.([A-Z][A-Z0-9_]+)/g)) environmentReadNames.add(match[1]);
     sourceReceipts.push(Object.freeze({ path: relativePath, sha256: sha256(raw) }));
   }
 
+  assert.deepEqual([...environmentReadNames].sort(), [...EXPECTED_ENVIRONMENT_READ_NAMES].sort(),
+    'runtime must read exactly the two per-version Zapier secrets');
   return Object.freeze({
     schema: 'arc-zapier-v11-private-app-offline-source-receipt-v1',
     state: BLOCKED_STATE,
@@ -239,6 +262,8 @@ async function inspectOfflineSource() {
     host_node: process.versions.node,
     target_node_runtime_executed: process.versions.node.split('.')[0] === '22',
     action_count: 2,
+    environment_read_names: Object.freeze([...EXPECTED_ENVIRONMENT_READ_NAMES]),
+    secret_environment_read_names: Object.freeze([...EXPECTED_SECRET_ENVIRONMENT_READ_NAMES]),
     source_receipts: Object.freeze(sourceReceipts)
   });
 }

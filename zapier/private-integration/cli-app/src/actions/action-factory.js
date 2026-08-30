@@ -2,7 +2,7 @@
 
 const { BLOCKED_SAMPLE, OUTPUT_FIELDS } = require('../policy');
 
-function createBlockedAction({ description, key, label, noun, perform }) {
+function createDispatchAction({ description, key, label, noun, perform }) {
   return Object.freeze({
     key,
     noun,
@@ -20,4 +20,4 @@ function createBlockedAction({ description, key, label, noun, perform }) {
   });
 }
 
-module.exports = Object.freeze({ createBlockedAction });
+module.exports = Object.freeze({ createDispatchAction });

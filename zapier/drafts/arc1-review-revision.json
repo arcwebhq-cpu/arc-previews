@@ -2,7 +2,7 @@
   "schema": "arc-zapier-v11-paused-workflow-draft-v1",
   "release": "ARC V11",
   "workflow_id": "arc1-review-revision",
-  "title": "ARC V11 - Review Revision Worker - PAUSED",
+  "title": "ARC V11 - Review Revision Run One - PAUSED",
   "provider_state": "BLOCKED_UNVERIFIED",
   "configuration_state": "BLOCKED_UNVERIFIED",
   "artifact_state": "BLOCKED_UNVERIFIED",
@@ -15,6 +15,7 @@
   "installation_mode": "paused-private-integration-recipe",
   "private_integration_action": {
     "app_path": "zapier/private-integration/cli-app",
+    "app_version": "0.0.2",
     "canonical_action_id": "arc1-review-revision",
     "zapier_action_key": "arc1_review_revision",
     "provider_state": "BLOCKED_UNVERIFIED",
@@ -27,6 +28,7 @@
     "authentication_configured": false,
     "network_allowed": false,
     "environment_reads_allowed": false,
+    "source_dispatch_present": true,
     "provider_installation_performed": false,
     "provider_mutation_allowed": false,
     "provider_actions_allowed": false,
@@ -42,139 +44,95 @@
     "ordinary_output_data_allowed": false,
     "secret_field_mapping_allowed": false,
     "private_recipient_mapping_allowed": false,
-    "log_safe_output_allowlist": [
-      "empty",
-      "idempotent_replay",
-      "next_cursor",
-      "state",
-      "successor_commit_sha",
-      "successor_manifest_sha256",
-      "work_hmac_sha256"
-    ]
+    "log_safe_output_allowlist": ["id", "state", "dispatched", "retry_required"]
   },
   "trigger": {
-    "kind": "private-queue-poll",
+    "kind": "scheduled-private-action",
     "provider": "ARC private Zapier integration",
     "poll_concurrency": 1,
     "catch_hook_allowed": false
   },
   "controls": {
-    "draft_gate": "ARC1_REVIEW_REVISION_ZAP_ENABLED",
+    "draft_gate": "ARC_ZAPIER_REVIEW_REVISION_RUN_ONE_ENABLED",
     "draft_gate_default": false,
-    "provider_actions_default": false,
-    "maximum_revision_rounds": 2
+    "secret_presence_enables_action": false,
+    "site_gate": "ARC_REVIEW_REVISION_RUN_ONE_ENABLED",
+    "site_gate_default": false,
+    "provider_actions_default": false
   },
-  "secret_environment_names": [
-    "ARC_REVIEW_REVISION_INTERNAL_AUTH_SECRET"
-  ],
-  "secret_custody": "private integration credential store only",
+  "secret_environment_names": ["ARC_ZAPIER_REVIEW_REVISION_RUN_ONE_SECRET"],
+  "secret_custody": "Zapier private-version environment only",
   "steps": [
     {
       "order": 1,
       "id": "off_guard",
-      "component": "filter",
-      "action": "continue_only_if_exact_true",
-      "input": "ARC1_REVIEW_REVISION_ZAP_ENABLED",
+      "component": "private_version_secret_guard",
+      "action": "continue_only_when_gate_is_exact_true_then_require_secret",
+      "activation_environment_name": "ARC_ZAPIER_REVIEW_REVISION_RUN_ONE_ENABLED",
+      "secret_environment_name": "ARC_ZAPIER_REVIEW_REVISION_RUN_ONE_SECRET",
       "configured_value": false,
       "provider_action": false
     },
     {
       "order": 2,
-      "id": "claim_next",
-      "component": "arc_private.review_revision_claim_next_v1",
-      "action": "bearer_post",
+      "id": "run_one_dispatch",
+      "component": "arc_private.review_revision_run_one_v1",
+      "action": "bounded_bearer_post_empty_json",
       "request": {
         "method": "POST",
-        "path": "/api/internal/review-revision/claim",
-        "body": {
-          "cursor": null
-        },
-        "authentication": "Bearer ARC_REVIEW_REVISION_INTERNAL_AUTH_SECRET",
-        "origin_header_allowed": false
+        "target_environment": "sandbox",
+        "origin": "https://arc2-sandbox.netlify.app",
+        "production_origin_requires_new_reviewed_version": "https://arcweb.onl",
+        "path": "/api/internal/review-revision/run-one",
+        "body": {},
+        "authentication": "Bearer ARC_ZAPIER_REVIEW_REVISION_RUN_ONE_SECRET",
+        "origin_header_allowed": false,
+        "timeout_ms": 10000,
+        "maximum_response_bytes": 4096,
+        "redirects_allowed": false
       },
-      "response_visibility": "private",
       "provider_action": false
     },
     {
       "order": 3,
-      "id": "empty_gate",
-      "component": "private_path",
-      "action": "stop_if_empty_else_continue",
-      "empty_state": "NO_TASK",
-      "provider_action": false
-    },
-    {
-      "order": 4,
-      "id": "immutable_revision_pipeline",
-      "component": "arc_private.arc1_revision_pipeline_v11",
-      "action": "generate_validate_publish_successor",
-      "private_input_fields": [
-        "lease_token",
-        "revision_input"
-      ],
-      "required_contracts": [
-        "scripts/arc1_generation_contract.mjs",
-        "zapier/arc1_inject.js",
-        "zapier/arc1_validate_v11_bundle.js",
-        "scripts/arc1_preview_async_orchestrator.mjs"
-      ],
-      "direct_main_publish_allowed": false,
-      "provider_action": false
-    },
-    {
-      "order": 5,
-      "id": "complete",
-      "component": "arc_private.review_revision_complete_v1",
-      "action": "bearer_post_after_durable_successor_receipts",
-      "request": {
-        "method": "POST",
-        "path": "/api/internal/review-revision/complete",
-        "exact_body_fields": [
-          "artifact_evidence",
-          "invite_reservation",
-          "lease_token",
-          "successor_commit_sha",
-          "successor_manifest_sha256",
-          "successor_repository",
-          "work_hmac_sha256"
-        ],
-        "authentication": "Bearer ARC_REVIEW_REVISION_INTERNAL_AUTH_SECRET",
-        "origin_header_allowed": false
-      },
+      "id": "redacted_result",
+      "component": "arc_private.fixed_redacted_result_v1",
+      "action": "validate_exact_response_and_emit_allowlisted_fields",
+      "accepted_http_statuses": [200],
+      "accepted_states": ["EMPTY", "LEASE_ACTIVE", "COMPLETED"],
+      "raw_response_output_allowed": false,
       "provider_action": false
     }
   ],
   "retry_contract": {
-    "lease_seconds": 300,
     "timeout_marks_complete": false,
-    "exact_completion_replay_allowed": true,
-    "changed_replay_allowed": false,
-    "cursor_must_be_exhausted": true
+    "automatic_provider_replay_allowed": false,
+    "lease_active_returns_retry_required": true,
+    "first_party_worker_owns_atomic_claim_and_completion": true
   },
   "forbidden_components": [
+    "bundle.inputData",
+    "direct claim or complete calls from Zapier",
+    "raw revision notes in task history",
     "direct push to main",
-    "customer session token",
-    "raw revision notes in ordinary task history",
-    "completion before immutable artifact and invite receipts",
     "legacy Payment Link step"
   ],
   "source_contracts": [
-    "scripts/arc1_generation_contract.mjs",
-    "scripts/arc1_preview_async_orchestrator.mjs",
-    "zapier/arc1_inject.js",
-    "zapier/arc1_validate_v11_bundle.js",
+    "zapier/private-integration/cli-app/src/provider-adapters.js",
+    "zapier/private-integration/cli-app/src/network-barrier.js",
     "zapier/wiring-contract.json"
   ],
   "activation_evidence_required": [
     "revision_workflow_id_sha256",
     "revision_workflow_version_readback_sha256",
+    "exact origin and path readback",
     "concurrency-one provider readback",
     "history-redaction readback",
-    "fresh new-revision and exact-replay contract receipts"
+    "sandbox empty, lease-active, completed, and fixed-error receipts"
   ],
   "blocking_reasons": [
-    "the private ARC1 revision pipeline action is not installed in Zapier",
-    "private claim payload history redaction and bearer custody are not verified",
-    "provider-backed immutable successor publication and invite reservation receipts are absent"
+    "private app version 0.0.2 is not installed or published",
+    "per-version bearer is absent and the site run-one gate remains OFF",
+    "Zapier concurrency and history-redaction readbacks are absent"
   ]
 }

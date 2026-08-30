@@ -19,6 +19,7 @@ export const ZAPIER_PRIVATE_APP_SOURCE_ALLOWLIST = Object.freeze([
   'package.json',
   'paused-app-manifest.json',
   'provider-readback-contract.json',
+  'secret-binding-contract.json',
   'scripts/validate-offline.js',
   'src/actions/action-factory.js',
   'src/actions/payment-start.js',

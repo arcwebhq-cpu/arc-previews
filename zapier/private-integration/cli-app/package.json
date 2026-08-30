@@ -1,8 +1,8 @@
 {
   "name": "arc-v11-zapier-private-integration",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": true,
-  "description": "Fail-closed ARC V11 Zapier private integration scaffold",
+  "description": "Default-OFF ARC V11 first-party run-one dispatch integration",
   "main": "index.js",
   "engines": {
     "node": "22.x"

@@ -216,19 +216,33 @@ function validateRevision(workflow) {
   invariant(binding.zapier_action_key === 'arc1_review_revision', 'revision private app key');
   invariant(binding.zero_input_fields === true, 'revision zero-input action');
   invariant(binding.clean_input_data === false, 'revision cleanInputData');
-  const claim = step(workflow, 'claim_next');
-  invariant(claim.request.path === '/api/internal/review-revision/claim', 'revision claim path');
-  invariant(JSON.stringify(claim.request.body) === JSON.stringify({ cursor: null }), 'revision claim body');
-  const pipeline = step(workflow, 'immutable_revision_pipeline');
-  invariant(pipeline.direct_main_publish_allowed === false, 'revision direct main push');
-  const complete = step(workflow, 'complete');
-  invariant(complete.request.path === '/api/internal/review-revision/complete', 'revision complete path');
-  exactArray(complete.request.exact_body_fields, [
-    'artifact_evidence', 'invite_reservation', 'lease_token', 'successor_commit_sha',
-    'successor_manifest_sha256', 'successor_repository', 'work_hmac_sha256',
-  ], 'revision complete fields');
+  invariant(binding.app_version === '0.0.2' && binding.source_dispatch_present === true,
+    'revision thin dispatch source');
+  exactArray(workflow.secret_environment_names,
+    ['ARC_ZAPIER_REVIEW_REVISION_RUN_ONE_SECRET'], 'revision secret names');
+  invariant(workflow.controls.draft_gate === 'ARC_ZAPIER_REVIEW_REVISION_RUN_ONE_ENABLED' &&
+    workflow.controls.secret_presence_enables_action === false, 'revision independent activation gate');
+  const guard = step(workflow, 'off_guard');
+  invariant(guard.activation_environment_name === 'ARC_ZAPIER_REVIEW_REVISION_RUN_ONE_ENABLED' &&
+    guard.secret_environment_name === 'ARC_ZAPIER_REVIEW_REVISION_RUN_ONE_SECRET',
+  'revision guard binding');
+  const dispatch = step(workflow, 'run_one_dispatch');
+  invariant(dispatch.request.method === 'POST', 'revision method');
+  invariant(dispatch.request.origin === 'https://arc2-sandbox.netlify.app', 'revision sandbox origin');
+  invariant(dispatch.request.production_origin_requires_new_reviewed_version === 'https://arcweb.onl',
+    'revision production version boundary');
+  invariant(dispatch.request.path === '/api/internal/review-revision/run-one', 'revision run-one path');
+  invariant(JSON.stringify(dispatch.request.body) === '{}', 'revision empty body');
+  invariant(dispatch.request.origin_header_allowed === false && dispatch.request.redirects_allowed === false,
+    'revision request boundary');
+  invariant(dispatch.request.timeout_ms === 10000 && dispatch.request.maximum_response_bytes === 4096,
+    'revision request bounds');
+  const result = step(workflow, 'redacted_result');
+  exactArray(result.accepted_http_statuses, [200], 'revision statuses');
+  exactArray(result.accepted_states, ['EMPTY', 'LEASE_ACTIVE', 'COMPLETED'], 'revision states');
+  invariant(result.raw_response_output_allowed === false, 'revision raw response');
   invariant(workflow.retry_contract.timeout_marks_complete === false, 'revision timeout completion');
-  invariant(workflow.retry_contract.changed_replay_allowed === false, 'revision changed replay');
+  invariant(workflow.retry_contract.automatic_provider_replay_allowed === false, 'revision replay');
 }
 
 function validatePayment(workflow) {
@@ -238,24 +252,33 @@ function validatePayment(workflow) {
   invariant(binding.zapier_action_key === 'arc2_payment_start', 'ARC2 private app key');
   invariant(binding.zero_input_fields === true, 'ARC2 zero-input action');
   invariant(binding.clean_input_data === false, 'ARC2 cleanInputData');
-  invariant(workflow.controls.arc2_checkout_session_adapter_enabled === false, 'ARC2 adapter gate');
-  invariant(workflow.controls.payment_arc2_start_enabled === false, 'ARC2 start gate');
   invariant(workflow.controls.stripe_live_mode_enabled === false, 'ARC2 live gate');
-  const claim = step(workflow, 'claim_next');
-  invariant(claim.request.path === '/internal/payment-arc2/claim', 'ARC2 claim path');
-  exactArray(claim.request.exact_body_fields, ['claim_token'], 'ARC2 claim fields');
-  invariant(claim.claim_token.minimum_bytes >= 32 && claim.claim_token.visibility === 'private',
-    'ARC2 claim token');
-  const adapter = step(workflow, 'artifact_adapter');
-  invariant(adapter.component === 'zapier/arc2_checkout_session_artifact_adapter.js', 'ARC2 adapter source');
-  invariant(adapter.start_request.path === '/internal/payment-arc2/start', 'ARC2 start path');
-  exactArray(adapter.start_request.exact_body_fields, [
-    'artifact_evidence', 'artifact_evidence_hmac_sha256', 'checkout_session_id', 'claim_token',
-    'deploy_artifacts', 'lead_notification_email', 'lead_route_recipient_hmac_sha256', 'outbox_key',
-  ], 'ARC2 start fields');
-  const reversal = step(workflow, 'reversal_control');
-  invariant(reversal.first_start_expected_status === 202, 'ARC2 first start status');
-  invariant(reversal.identical_start_replay_required === true, 'ARC2 identical start replay');
+  invariant(binding.app_version === '0.0.2' && binding.source_dispatch_present === true,
+    'ARC2 thin dispatch source');
+  exactArray(workflow.secret_environment_names,
+    ['ARC_ZAPIER_PAYMENT_ARC2_RUN_ONE_SECRET'], 'ARC2 secret names');
+  invariant(workflow.controls.draft_gate === 'ARC_ZAPIER_PAYMENT_ARC2_RUN_ONE_ENABLED' &&
+    workflow.controls.secret_presence_enables_action === false, 'ARC2 independent activation gate');
+  const guard = step(workflow, 'off_guard');
+  invariant(guard.activation_environment_name === 'ARC_ZAPIER_PAYMENT_ARC2_RUN_ONE_ENABLED' &&
+    guard.secret_environment_name === 'ARC_ZAPIER_PAYMENT_ARC2_RUN_ONE_SECRET',
+  'ARC2 guard binding');
+  const dispatch = step(workflow, 'run_one_dispatch');
+  invariant(dispatch.request.method === 'POST', 'ARC2 method');
+  invariant(dispatch.request.origin === 'https://arc2-sandbox.netlify.app', 'ARC2 sandbox origin');
+  invariant(dispatch.request.production_origin_requires_new_reviewed_version === 'https://arcweb.onl',
+    'ARC2 production version boundary');
+  invariant(dispatch.request.path === '/internal/payment-arc2/run-one', 'ARC2 run-one path');
+  invariant(JSON.stringify(dispatch.request.body) === '{}', 'ARC2 empty body');
+  invariant(dispatch.request.origin_header_allowed === false && dispatch.request.redirects_allowed === false,
+    'ARC2 request boundary');
+  invariant(dispatch.request.timeout_ms === 10000 && dispatch.request.maximum_response_bytes === 4096,
+    'ARC2 request bounds');
+  const result = step(workflow, 'redacted_result');
+  exactArray(result.accepted_http_statuses, [200, 202, 409], 'ARC2 statuses');
+  exactArray(result.accepted_states,
+    ['IDLE', 'COMPLETED', 'RETRY_REQUIRED', 'REVIEW_REQUIRED'], 'ARC2 states');
+  invariant(result.raw_response_output_allowed === false, 'ARC2 raw response');
   invariant(workflow.retry_contract.http_202_means_complete === false, 'ARC2 202 completion');
   invariant(workflow.retry_contract.automatic_provider_replay_allowed === false, 'ARC2 provider replay');
   invariant(workflow.retry_contract.binding_evidence_exact_canonical_bytes_replay_required === true,
@@ -268,14 +291,8 @@ function validatePayment(workflow) {
   invariant(workflow.retry_contract
     .authoritative_stripe_session_to_payment_intent_validation_required_before_signing === true,
   'ARC2 authoritative Stripe binding validation');
-  const complete = step(workflow, 'complete');
-  invariant(complete.request.path === '/internal/payment-arc2/complete', 'ARC2 complete path');
-  exactArray(complete.request.exact_body_fields, ['claim_token', 'completion', 'outbox_key'],
-    'ARC2 complete fields');
-  exactArray(complete.request.exact_completion_fields, [
-    'accepted', 'arc2_start_receipt', 'arc2_start_receipt_hmac_sha256',
-    'immutable_binding_sha256', 'schema',
-  ], 'ARC2 completion receipt fields');
+  invariant(workflow.retry_contract.first_party_worker_owns_claim_binding_recheck_replay_and_completion === true,
+    'ARC2 first-party authority');
 }
 
 function validateRevocation(workflow) {

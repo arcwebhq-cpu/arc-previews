@@ -1,6 +1,6 @@
 # ARC V11 Zapier private integration CLI runbook
 
-Status: **source scaffold only; BLOCKED_UNVERIFIED**.
+Status: **default-OFF sandbox source only; BLOCKED_UNVERIFIED**.
 
 The private app source lives at `zapier/private-integration/cli-app`. It contains
 exactly two zero-input actions:
@@ -18,10 +18,16 @@ Netlify runtime.
 - Node is pinned to 22.x.
 - Zapier core and CLI are pinned to 19.1.0.
 - `form-data` is overridden to exactly 4.0.6.
-- There is no authentication config, trigger, search, input field, environment
-  read, or network call.
-- `beforeRequest` rejects every request with one fixed redacted error.
-- Both action adapters stop with one fixed redacted error.
+- There is no authentication config, trigger, search, or input field.
+- Version `0.0.2` targets only `https://arc2-sandbox.netlify.app`; production
+  requires a separately reviewed immutable version pinned to `https://arcweb.onl`.
+- Each action requires its own exact-`true` `...RUN_ONE_ENABLED` gate and its
+  own per-version bearer secret. Gates default false and secret presence alone
+  never enables dispatch. `secret-binding-contract.json` maps the two Zapier
+  names to distinct site bearer names without storing values.
+- `beforeRequest` permits only POST `{}` to the two exact first-party run-one
+  paths with bounded timeout/body/response and redirects disabled.
+- Outputs and errors are fixed and redacted; `bundle.inputData` is never read.
 - Provider mutation, activation, publish, promotion, and enable gates are false.
 - Provider, artifact, archive, validation, and readback states are all
   `BLOCKED_UNVERIFIED`.

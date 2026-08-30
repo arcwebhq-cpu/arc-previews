@@ -1,7 +1,9 @@
 'use strict';
 
-const ACTION_BLOCKED_MESSAGE = 'ARC_PRIVATE_ACTION_BLOCKED_UNVERIFIED';
-const NETWORK_BLOCKED_MESSAGE = 'ARC_PRIVATE_NETWORK_DISABLED';
+const ACTION_OFF_MESSAGE = 'ARC_PRIVATE_ACTION_OFF';
+const CONFIGURATION_INVALID_MESSAGE = 'ARC_PRIVATE_CONFIGURATION_INVALID';
+const DISPATCH_FAILED_MESSAGE = 'ARC_PRIVATE_DISPATCH_FAILED';
+const NETWORK_BLOCKED_MESSAGE = 'ARC_PRIVATE_NETWORK_BLOCKED';
 
 function fixedError(message) {
   const error = new Error(message);
@@ -9,8 +11,16 @@ function fixedError(message) {
   return error;
 }
 
-function blockedActionError() {
-  return fixedError(ACTION_BLOCKED_MESSAGE);
+function actionOffError() {
+  return fixedError(ACTION_OFF_MESSAGE);
+}
+
+function configurationInvalidError() {
+  return fixedError(CONFIGURATION_INVALID_MESSAGE);
+}
+
+function dispatchFailedError() {
+  return fixedError(DISPATCH_FAILED_MESSAGE);
 }
 
 function blockedNetworkError() {
@@ -18,8 +28,12 @@ function blockedNetworkError() {
 }
 
 module.exports = Object.freeze({
-  ACTION_BLOCKED_MESSAGE,
+  ACTION_OFF_MESSAGE,
+  CONFIGURATION_INVALID_MESSAGE,
+  DISPATCH_FAILED_MESSAGE,
   NETWORK_BLOCKED_MESSAGE,
-  blockedActionError,
-  blockedNetworkError
+  actionOffError,
+  blockedNetworkError,
+  configurationInvalidError,
+  dispatchFailedError
 });

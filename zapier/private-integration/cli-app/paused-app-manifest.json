@@ -2,7 +2,7 @@
   "schema": "arc-zapier-v11-private-app-manifest-v1",
   "release": "ARC V11",
   "integration_id": "arc-v11-private-integration",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "base_previews_commit": "293befc752bc0b3e650207a00a86b33fd3393982",
   "runtime": {
     "node": "22.x",
@@ -22,6 +22,26 @@
   "authentication_configured": false,
   "network_allowed": false,
   "environment_reads_allowed": false,
+  "source_mode": "DEFAULT_OFF_FIRST_PARTY_RUN_ONE_DISPATCH",
+  "target_environment": "sandbox",
+  "target_origin": "https://arc2-sandbox.netlify.app",
+  "allowed_origins": [
+    "https://arc2-sandbox.netlify.app",
+    "https://arcweb.onl"
+  ],
+  "production_origin_requires_new_reviewed_version": true,
+  "activation_environment_names": [
+    "ARC_ZAPIER_REVIEW_REVISION_RUN_ONE_ENABLED",
+    "ARC_ZAPIER_PAYMENT_ARC2_RUN_ONE_ENABLED"
+  ],
+  "activation_environment_defaults": {
+    "ARC_ZAPIER_REVIEW_REVISION_RUN_ONE_ENABLED": "false",
+    "ARC_ZAPIER_PAYMENT_ARC2_RUN_ONE_ENABLED": "false"
+  },
+  "secret_environment_names": [
+    "ARC_ZAPIER_REVIEW_REVISION_RUN_ONE_SECRET",
+    "ARC_ZAPIER_PAYMENT_ARC2_RUN_ONE_SECRET"
+  ],
   "provider_mutation_allowed": false,
   "provider_actions_allowed": false,
   "activation_allowed": false,
@@ -35,6 +55,9 @@
       "zapier_action_key": "arc1_review_revision",
       "input_fields": [],
       "clean_input_data": false,
+      "target_path": "/api/internal/review-revision/run-one",
+      "secret_environment_name": "ARC_ZAPIER_REVIEW_REVISION_RUN_ONE_SECRET",
+      "activation_environment_name": "ARC_ZAPIER_REVIEW_REVISION_RUN_ONE_ENABLED",
       "adapter_state": "BLOCKED_UNVERIFIED"
     },
     {
@@ -42,6 +65,9 @@
       "zapier_action_key": "arc2_payment_start",
       "input_fields": [],
       "clean_input_data": false,
+      "target_path": "/internal/payment-arc2/run-one",
+      "secret_environment_name": "ARC_ZAPIER_PAYMENT_ARC2_RUN_ONE_SECRET",
+      "activation_environment_name": "ARC_ZAPIER_PAYMENT_ARC2_RUN_ONE_ENABLED",
       "adapter_state": "BLOCKED_UNVERIFIED"
     }
   ],
@@ -56,11 +82,11 @@
     },
     {
       "path": "zapier/drafts/arc1-review-revision.json",
-      "sha256": "e1c76d686a75b78020051c0ac8f9a3c56061ea874d529d99b2847d1902233b0e"
+      "sha256": "0f73e7363a5119ba3fc2b24d2a8f5c8a05db771b692a34452bd870e4d335547c"
     },
     {
       "path": "zapier/drafts/arc2-payment-start.json",
-      "sha256": "dbdd2ea4c9ef621ba75cadc9d3c5dbe0eebc7bcff7e06c9229c4ee5c315db771"
+      "sha256": "ed5d747dc4a2601e09e9cc6fd801fc7a0e64e2b18f9196f2470af5a4f1619a55"
     },
     {
       "path": "zapier/drafts/review-checkout-revocation.json",

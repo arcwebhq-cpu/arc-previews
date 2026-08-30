@@ -72,55 +72,44 @@ queue.
 
 Recipe: `zapier/drafts/arc1-review-revision.json`.
 
-1. Keep `ARC1_REVIEW_REVISION_ZAP_ENABLED` false.
-2. The private action posts exactly `{"cursor":null}` to
-   `/api/internal/review-revision/claim` using only the dedicated revision
-   worker bearer. Browser-origin requests are forbidden.
-3. Keep `lease_token`, `revision_input`, revision notes, and recipient bindings
-   inside the private integration. Stop on `empty=true`; otherwise exhaust each
-   returned cursor without parallel claims.
-4. Generate the exact 58-key V11 response, validate all five pages, create a
-   pull request, pass the named GitHub Actions check, merge the immutable head,
-   verify GitHub Pages exact bytes, and reserve a successor invite. Direct main
-   pushes are forbidden.
-5. Post exactly the seven completion fields listed in the recipe to
-   `/api/internal/review-revision/complete`. Complete only after the durable
-   artifact and invite receipts exist. A timeout leaves the work retryable; an
-   exact completion replay may converge, but changed bytes must fail.
+1. Version `0.0.2` is sandbox-only. The action runs only when
+   `ARC_ZAPIER_REVIEW_REVISION_RUN_ONE_ENABLED` is exactly `true` and the
+   separately stored `ARC_ZAPIER_REVIEW_REVISION_RUN_ONE_SECRET` is valid.
+   Secret presence never enables the action; the gate defaults to false.
+2. The zero-input action ignores `bundle.inputData` and posts exactly `{}` to
+   `https://arc2-sandbox.netlify.app/api/internal/review-revision/run-one`.
+   It sends no Origin header, follows no redirects, and uses fixed request and
+   response bounds.
+3. The first-party worker owns the atomic claim, generation, validation,
+   immutable publication, invite reservation, and completion. Zapier never
+   receives revision notes, lease tokens, recipients, or raw worker results.
+4. Only `EMPTY`, `LEASE_ACTIVE`, and `COMPLETED` become fixed redacted output.
+   Every malformed, unexpected, or unavailable response becomes one fixed
+   secret-free error. Never replay automatically.
 
-This draft stays blocked until the private ARC1 revision integration, provider
-authorization leases, exact Pages readback, invite reservation, and task-history
-redaction are installed and receipt-tested.
+This draft stays blocked until the private version, exact per-version bearer,
+concurrency-one setting, site OFF gate, and task-history redaction are installed
+and sandbox receipt-tested.
 
 ## Draft 3: payment to ARC2 start
 
 Recipe: `zapier/drafts/arc2-payment-start.json`.
 
-1. Keep `ARC2_PAYMENT_START_ZAP_ENABLED`,
-   `arc2_checkout_session_adapter_enabled`, `payment_arc2_start_enabled`, and
-   `stripe_live_mode_enabled` false.
-2. Inside the private integration, generate at least 32 random bytes encoded as
-   base64url. Post only `claim_token` to `/internal/payment-arc2/claim` with the
-   dedicated payment worker bearer. Never show the token or private claim in
-   task history.
-3. Stop on `state=EMPTY`. Otherwise pass the full private claim and retained
-   signed ARC1 evidence to `arc2_checkout_session_artifact_adapter.js` without
-   ordinary field mapping.
-4. The adapter derives the exact six-to-nine deploy artifacts and posts the
-   exact eight-field request to `/internal/payment-arc2/start`. It never accepts
-   caller-created payment evidence.
-5. When reversal control is required, the first start is expected to return
-   HTTP 202. HTTP 202 is not complete: persist the identical operation, register
-   the signed Checkout Session-to-PaymentIntent binding, issue a fresh
-   authoritative no-reversal recheck, and replay the exact same start bytes
-   with the same claim token and outbox key.
-   Before signing, validate the Checkout Session-to-PaymentIntent relationship
-   against authoritative Stripe data. Persist the exact canonical binding body
-   and signature before the first write. Every retry must replay those
-   byte-identical values; never regenerate `issued_at` or re-sign.
-6. Post `/internal/payment-arc2/complete` only after the first-party worker
-   returns a durable signed completion receipt. A timeout or 202 stays
-   retryable; never replay automatically through Zapier.
+1. Version `0.0.2` is sandbox-only. The action runs only when
+   `ARC_ZAPIER_PAYMENT_ARC2_RUN_ONE_ENABLED` is exactly `true` and the
+   separately stored `ARC_ZAPIER_PAYMENT_ARC2_RUN_ONE_SECRET` is valid.
+   Secret presence never enables it. Stripe live mode remains false.
+2. The zero-input action ignores `bundle.inputData` and posts exactly `{}` to
+   `https://arc2-sandbox.netlify.app/internal/payment-arc2/run-one`, with no
+   Origin header, redirects, or caller-provided payload.
+3. The first-party worker owns claim tokens, artifact custody, authoritative
+   Stripe validation, reversal binding/recheck, byte-identical replay, ARC2
+   start, and durable completion. None enters Zapier task history.
+4. HTTP 202 is not complete. It maps only to fixed `RETRY_REQUIRED` output;
+   Zapier automatic replay remains disabled. HTTP 409 `REVIEW_REQUIRED` is a
+   terminal redacted state. IDLE and COMPLETED are the only accepted 200 states.
+5. Production requires a separately reviewed immutable private-app version
+   pinned to `https://arcweb.onl`; never retarget version `0.0.2`.
 
 This draft stays blocked until the private claim/adapter action, restricted
 Stripe recheck producer, reversal binding, atomic lease/exact replay behavior,
